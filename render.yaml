@@ -3,8 +3,8 @@ services:
   - type: web
     name: gravityx-api
     env: docker
-    dockerfilePath: backend/Dockerfile
-    plan: free
+    dockerContext: backend
+    dockerfilePath: Dockerfile
     envVars:
       - key: PORT
         value: 3001
@@ -21,17 +21,14 @@ services:
   - type: web
     name: gravityx-web
     env: docker
-    dockerfilePath: frontend/Dockerfile
-    plan: free
+    dockerContext: frontend
+    dockerfilePath: Dockerfile
     envVars:
       - key: NEXT_PUBLIC_API_URL
         fromService:
           name: gravityx-api
-          property: host
+          property: url
 
 # 3. Managed Database Instance
 databases:
   - name: gravityx-db
-    plan: free
-    databaseName: gravityx_prod
-    user: gravityx
