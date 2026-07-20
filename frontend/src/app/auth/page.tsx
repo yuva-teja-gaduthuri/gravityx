@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, User, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { getApiUrl } from '../../utils/api';
 
-export default function AuthPage() {
+function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'login';
@@ -344,5 +344,18 @@ export default function AuthPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">Syncing Auth Telemetry...</p>
+      </div>
+    }>
+      <AuthContent />
+    </Suspense>
   );
 }
