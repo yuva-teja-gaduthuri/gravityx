@@ -25,9 +25,11 @@ services:
     dockerfilePath: Dockerfile
     envVars:
       - key: NEXT_PUBLIC_API_URL
+        sync: false
         fromService:
           name: gravityx-api
-          property: url
+          type: web
+          property: host
 
 # 3. Managed Database Instance
 databases:
