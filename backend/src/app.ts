@@ -23,7 +23,11 @@ app.use(express.json());
 // API routing
 app.use('/api', apiRouter);
 
-// Health check
+// Health checks
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'GravityX API Gateway active.' });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', uptime: process.uptime() });
 });
