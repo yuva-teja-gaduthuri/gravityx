@@ -1,0 +1,133 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String            @id @default(uuid())
+  username       String            @unique
+  email          String?           @unique
+  passwordHash   String?
+  isGuest        Boolean           @default(false)
+  coins          Int               @default(1000)
+  xp             Int               @default(0)
+  level          Int               @default(1)
+  rank           String            @default("Bronze V")
+  avatar         String            @default("default_avatar")
+  diceSkin       String            @default("default_dice")
+  boardTheme     String            @default("default_board")
+  profileFrame   String            @default("default_frame")
+  victoryEffect  String            @default("default_victory")
+  isBanned       Boolean           @default(false)
+  role           String            @default("USER") // USER or ADMIN
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  
+  // Relations
+  sentFriends     Friend[]         @relation("SentRequests")
+  receivedFriends Friend[]         @relation("ReceivedRequests")
+  sentMessages    Message[]        @relation("SentMessages")
+  receivedMessages Message[]       @relation("ReceivedMessages")
+  matchPlayers    MatchPlayer[]
+  achievements    UserAchievement[]
+  inventory       UserInventory[]
+}
+
+model Friend {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  status    String   @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt DateTime @default(now())
+  
+  user      User     @relation("SentRequests", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User     @relation("ReceivedRequests", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String?  // Null if room message
+  roomId     String?  // Null if direct message
+  content    String
+  createdAt  DateTime @default(now())
+  
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model Match {
+  id              String        @id @default(uuid())
+  gameType        String        // RAMUDU_SEETHA or LUDO
+  status          String        @default("COMPLETED") // COMPLETED, ABANDONED
+  durationSeconds Int           @default(0)
+  winnerId        String?
+  createdAt       DateTime      @default(now())
+  
+  players         MatchPlayer[]
+}
+
+model MatchPlayer {
+  id          String   @id @default(uuid())
+  matchId     String
+  userId      String
+  score       Int      @default(0)
+  coinsEarned Int      @default(0)
+  placement   Int      @default(1)
+  createdAt   DateTime @default(now())
+  
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Achievement {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  description String
+  badgeUrl    String
+  xpReward    Int               @default(100)
+  coinsReward Int               @default(50)
+  
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  achievementId String
+  unlockedAt    DateTime    @default(now())
+  
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+model StoreItem {
+  id          String          @id @default(uuid())
+  type        String          // AVATAR, DICE, BOARD, FRAME, EFFECT
+  name        String          @unique
+  identifier  String          @unique // e.g. "neon_dice", "space_station_board"
+  price       Int
+  imageUrl    String
+  
+  owners      UserInventory[]
+}
+
+model UserInventory {
+  id           String    @id @default(uuid())
+  userId       String
+  itemId       String
+  purchasedAt  DateTime  @default(now())
+  
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item         StoreItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+}

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gravityx-db
+    restart: always
+    environment:
+      POSTGRES_USER: gravityx
+      POSTGRES_PASSWORD: gravityxpassword
+      POSTGRES_DB: gravityx_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: gravityx-api
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://gravityx:gravityxpassword@postgres:5432/gravityx_prod?schema=public
+      - JWT_SECRET=gravityx-secret-key-space-anti-gravity
+      - PORT=3001
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+
+  frontend:
+    build: ./frontend
+    container_name: gravityx-web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
