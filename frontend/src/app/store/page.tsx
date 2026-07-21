@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
-import { getApiUrl } from '../../utils/api';
+import { getApiUrl, fetchWithCache, invalidateCache } from '../../utils/api';
 import { Coins, ArrowLeft, ShieldAlert, Sparkles, Check } from 'lucide-react';
 
 interface StoreItem {
@@ -27,15 +27,9 @@ export default function StorePage() {
 
   // Fetch shop catalog
   const fetchStoreItems = async () => {
-    const token = localStorage.getItem('gravityx_token');
     try {
-      const res = await fetch(getApiUrl('/api/store/items'), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data);
-      }
+      const data = await fetchWithCache('/api/store/items', 120000); // 2-minute staleTime
+      setItems(data);
     } catch (err) {
       console.error(err);
     }
@@ -67,6 +61,7 @@ export default function StorePage() {
       if (!res.ok) throw new Error(data.error || 'Failed to complete transaction');
 
       setSuccess('Item added to inventory!');
+      invalidateCache('/api/auth/profile');
       refreshProfile(); // Refresh coins and inventory
     } catch (err: any) {
       setError(err.message);
@@ -95,6 +90,7 @@ export default function StorePage() {
       if (!res.ok) throw new Error(data.error || 'Failed to equip item');
 
       setSuccess('Item equipped successfully!');
+      invalidateCache('/api/auth/profile');
       refreshProfile();
     } catch (err: any) {
       setError(err.message);

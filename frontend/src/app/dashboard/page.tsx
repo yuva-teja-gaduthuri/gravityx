@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { useSocket } from '../../hooks/useSocket';
 import SocialDrawer from '../../components/SocialDrawer';
-import { getApiUrl } from '../../utils/api';
+import { getApiUrl, fetchWithCache } from '../../utils/api';
 import { 
   Trophy, Coins, LogOut, Settings, ShoppingBag, 
   Plus, Users, Flame, PlusCircle, HelpCircle, Gamepad2, ShieldAlert
@@ -36,15 +36,9 @@ export default function Dashboard() {
 
   // Fetch leaderboard
   const fetchLeaderboard = async () => {
-    const token = localStorage.getItem('gravityx_token');
     try {
-      const res = await fetch(getApiUrl(`/api/leaderboard?type=${leaderboardType}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLeaderboard(data);
-      }
+      const data = await fetchWithCache(`/api/leaderboard?type=${leaderboardType}`, 180000); // 3-minute staleTime
+      setLeaderboard(data);
     } catch (err) {
       console.error(err);
     }

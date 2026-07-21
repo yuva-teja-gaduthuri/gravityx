@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getApiUrl } from '../utils/api';
+import { getApiUrl, fetchWithCache, invalidateCache } from '../utils/api';
 
 export interface UserProfile {
   id: string;
@@ -47,17 +47,7 @@ export function useAuth(requireAuth = true) {
     }
 
     try {
-      const res = await fetch(getApiUrl('/api/auth/profile'), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to fetch profile');
-      }
-
-      const data = await res.json();
+      const data = await fetchWithCache('/api/auth/profile', 30000); // 30s stale time
       setUser(data.user);
       setStats(data.stats);
       setInventory(data.inventory);
@@ -81,6 +71,7 @@ export function useAuth(requireAuth = true) {
   }, [fetchProfile]);
 
   const logout = () => {
+    invalidateCache('/api/auth/profile');
     localStorage.removeItem('gravityx_token');
     localStorage.removeItem('gravityx_user');
     router.push('/');
