@@ -64,6 +64,17 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
 
     socket.on('rs_guess_result', (data: any) => {
       setRevealedIds(data.revealedIds);
+      
+      if (data.targetUserId) {
+        setPlayers((prev) =>
+          prev.map((pl) =>
+            pl.id === data.targetUserId
+              ? { ...pl, isRevealed: true, role: data.targetRole }
+              : pl
+          )
+        );
+      }
+
       const targetUser = players.find(p => p.id === data.targetUserId);
       if (targetUser) {
         setGuessResult({
