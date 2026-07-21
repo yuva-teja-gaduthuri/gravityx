@@ -210,26 +210,30 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
         <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative">
           
           {/* Top-Left Red Base */}
-          <div className="col-span-6 row-span-6 bg-cyberpink/10 border border-cyberpink/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cyberpink font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Yard</span>
+          <div className="col-span-6 row-span-6 bg-cybererror/10 border border-cybererror/20 rounded-xl relative flex items-center justify-center">
+            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Yard</span>
             <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberpink/30 bg-cyberpink/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberpink/30 bg-cyberpink/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberpink/30 bg-cyberpink/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberpink/30 bg-cyberpink/5"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
             </div>
           </div>
 
           {/* Top-Middle Green Column Track */}
           <div className="col-span-3 row-span-6 grid grid-cols-3 grid-rows-6 gap-0.5">
             {Array.from({ length: 18 }).map((_, idx) => {
-              // Color green stretch and green start cell
               const col = idx % 3;
               const row = Math.floor(idx / 3);
-              let bg = 'bg-white/5';
-              if (col === 1 && row > 0) bg = 'bg-cybersuccess/40'; // Home stretch
+              let bg = 'bg-white/5 border border-white/5';
+              if (col === 1 && row > 0) bg = 'bg-cybersuccess/40 border border-cybersuccess/20'; // Home stretch
               if (col === 2 && row === 1) bg = 'bg-cybersuccess/80 border border-white/20'; // Green start
-              return <div key={`g-${idx}`} className={`rounded ${bg}`}></div>;
+              const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
+              return (
+                <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
+                  {isStar ? '★' : ''}
+                </div>
+              );
             })}
           </div>
 
@@ -249,10 +253,15 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
-              let bg = 'bg-white/5';
-              if (row === 1 && col > 0) bg = 'bg-cyberpink/40'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-cyberpink/80 border border-white/20'; // Red start
-              return <div key={`r-${idx}`} className={`rounded ${bg}`}></div>;
+              let bg = 'bg-white/5 border border-white/5';
+              if (row === 1 && col > 0) bg = 'bg-cybererror/40 border border-cybererror/20'; // Home stretch
+              if (row === 0 && col === 1) bg = 'bg-cybererror/80 border border-white/20'; // Red start
+              const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
+              return (
+                <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
+                  {isStar ? '★' : ''}
+                </div>
+              );
             })}
           </div>
 
@@ -267,10 +276,15 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
-              let bg = 'bg-white/5';
-              if (row === 1 && col < 5) bg = 'bg-cybergold/40'; // Home stretch
+              let bg = 'bg-white/5 border border-white/5';
+              if (row === 1 && col < 5) bg = 'bg-cybergold/40 border border-cybergold/20'; // Home stretch
               if (row === 2 && col === 4) bg = 'bg-cybergold/80 border border-white/20'; // Yellow start
-              return <div key={`y-${idx}`} className={`rounded ${bg}`}></div>;
+              const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
+              return (
+                <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
+                  {isStar ? '★' : ''}
+                </div>
+              );
             })}
           </div>
 
@@ -290,10 +304,15 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 3;
               const row = Math.floor(idx / 3);
-              let bg = 'bg-white/5';
-              if (col === 1 && row < 5) bg = 'bg-cyberblue/40'; // Home stretch
+              let bg = 'bg-white/5 border border-white/5';
+              if (col === 1 && row < 5) bg = 'bg-cyberblue/40 border border-cyberblue/20'; // Home stretch
               if (col === 0 && row === 4) bg = 'bg-cyberblue/80 border border-white/20'; // Blue start
-              return <div key={`b-${idx}`} className={`rounded ${bg}`}></div>;
+              const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
+              return (
+                <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
+                  {isStar ? '★' : ''}
+                </div>
+              );
             })}
           </div>
 
@@ -308,36 +327,72 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
             </div>
           </div>
 
-          {/* Absolute Tokens Overlay Layer */}
-          {gameState.players.map((p) =>
-            p.tokens.map((t) => {
-              const [col, row] = getTokenCoords(p, t);
-              const isTokenEligible = isMyTurn && validTokens.includes(t.id);
-              
-              // Color styles
-              let tokenBg = 'bg-cyberpink shadow-neon-pink';
-              if (p.color === 'green') tokenBg = 'bg-cybersuccess shadow-neon-success';
-              else if (p.color === 'yellow') tokenBg = 'bg-cybergold shadow-neon-gold';
-              else if (p.color === 'blue') tokenBg = 'bg-cyberblue shadow-neon-blue';
+          {/* Absolute Tokens Overlay Layer with Stacking Displacement */}
+          {(() => {
+            const tokenGroups: { [coordKey: string]: { player: LudoPlayer; token: LudoToken; isEligible: boolean; playerIndex: number }[] } = {};
 
-              return (
-                <button
-                  key={`${p.color}-${t.id}`}
-                  onClick={() => handleMoveToken(t.id)}
-                  disabled={!isTokenEligible}
-                  className={`absolute w-5 h-5 sm:w-8 sm:h-8 rounded-full border-2 border-white/60 flex items-center justify-center font-bold text-[8px] sm:text-xs text-white z-20 transition-all duration-300 ${tokenBg} ${
-                    isTokenEligible ? 'animate-bounce cursor-pointer scale-110 border-cyberblue ring-4 ring-cyberblue/30' : 'cursor-default'
-                  }`}
-                  style={{
-                    left: `calc((${col} * 100% / 15) + 2px)`,
-                    top: `calc((${row} * 100% / 15) + 2px)`
-                  }}
-                >
-                  {t.id + 1}
-                </button>
-              );
-            })
-          )}
+            gameState.players.forEach((p, pIdx) => {
+              p.tokens.forEach((t) => {
+                const [col, row] = getTokenCoords(p, t);
+                const coordKey = `${col},${row}`;
+                const isTokenEligible = isMyTurn && validTokens.includes(t.id);
+                
+                if (!tokenGroups[coordKey]) {
+                  tokenGroups[coordKey] = [];
+                }
+                tokenGroups[coordKey].push({ player: p, token: t, isEligible: isTokenEligible, playerIndex: pIdx });
+              });
+            });
+
+            return Object.entries(tokenGroups).flatMap(([coordKey, tokensInGroup]) => {
+              const [colStr, rowStr] = coordKey.split(',');
+              const col = parseInt(colStr, 10);
+              const row = parseInt(rowStr, 10);
+              const count = tokensInGroup.length;
+
+              return tokensInGroup.map((item, idx) => {
+                const { player: p, token: t, isEligible: isTokenEligible } = item;
+                
+                let tokenBg = 'bg-cybererror shadow-neon-error';
+                if (p.color === 'green') tokenBg = 'bg-cybersuccess shadow-neon-success';
+                else if (p.color === 'yellow') tokenBg = 'bg-cybergold shadow-neon-gold';
+                else if (p.color === 'blue') tokenBg = 'bg-cyberblue shadow-neon-blue';
+
+                let dx = 0;
+                let dy = 0;
+                let sizeClass = 'w-5 h-5 sm:w-8 sm:h-8';
+                let textClass = 'text-[8px] sm:text-xs';
+
+                if (count > 1) {
+                  // Render smaller overlapping tokens and spread them out
+                  sizeClass = 'w-4 h-4 sm:w-6 sm:h-6';
+                  textClass = 'text-[6px] sm:text-[10px]';
+                  const angle = (idx * 2 * Math.PI) / count;
+                  const radius = count === 2 ? 6 : 8;
+                  dx = Math.round(Math.cos(angle) * radius);
+                  dy = Math.round(Math.sin(angle) * radius);
+                }
+
+                return (
+                  <button
+                    key={`${p.color}-${t.id}`}
+                    onClick={() => handleMoveToken(t.id)}
+                    disabled={!isTokenEligible}
+                    className={`absolute rounded-full border-2 border-white/60 flex items-center justify-center font-bold text-white z-20 transition-all duration-300 ${sizeClass} ${textClass} ${tokenBg} ${
+                      isTokenEligible ? 'animate-bounce cursor-pointer scale-110 border-cyberblue ring-2 ring-cyberblue/50 z-30' : 'cursor-default'
+                    }`}
+                    style={{
+                      left: `calc((${col} * 100% / 15) + 2px)`,
+                      top: `calc((${row} * 100% / 15) + 2px)`,
+                      transform: count > 1 ? `translate(${dx}px, ${dy}px)` : undefined,
+                    }}
+                  >
+                    {t.id + 1}
+                  </button>
+                );
+              });
+            });
+          })()}
         </div>
       </div>
 
@@ -348,14 +403,14 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
         <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Console Telemetry</span>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyberpink/10 border border-cyberpink/20 text-xs font-semibold text-cyberpink">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cybererror/10 border border-cybererror/20 text-xs font-semibold text-cybererror">
               <Timer size={12} /> {gameState.turnTimeLeft}s
             </div>
           </div>
 
           <div className="flex items-center gap-3 border-t border-white/5 pt-3">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border border-white/10 uppercase ${
-              activePlayer.color === 'red' ? 'bg-cyberpink/20 text-cyberpink' :
+              activePlayer.color === 'red' ? 'bg-cybererror/20 text-cybererror' :
               activePlayer.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess' :
               activePlayer.color === 'yellow' ? 'bg-cybergold/20 text-cybergold' : 'bg-cyberblue/20 text-cyberblue'
             }`}>
@@ -382,7 +437,7 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
               data-roll={rollingValue}
             >
               <div className={`dice-face bg-primary/30 text-white ${
-                activePlayer.color === 'red' ? 'border-cyberpink text-cyberpink' :
+                activePlayer.color === 'red' ? 'border-cybererror text-cybererror' :
                 activePlayer.color === 'green' ? 'border-cybersuccess text-cybersuccess' :
                 activePlayer.color === 'yellow' ? 'border-cybergold text-cybergold' : 'border-cyberblue text-cyberblue'
               }`}>

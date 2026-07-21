@@ -199,31 +199,65 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
               const isGuesserSelf = p.id === user.id;
               const isTargetRevealed = revealedIds.includes(p.id);
               const cardRole = isGuesserSelf ? myRole : isTargetRevealed ? p.role || 'Revealed' : null;
+              
+              // Styles based on revealed role
+              const isPlayerRamudu = p.id === ramuduId;
+              const isPlayerSeetha = cardRole === 'Seetha';
+              const isPlayerDeity = cardRole && cardRole !== 'Ramudu' && cardRole !== 'Seetha';
+
+              let cardBorderClass = 'border-white/5 bg-gradient-to-b from-white/5 to-transparent';
+              let subtitleColorClass = 'text-gray-500';
+              let roleName = 'MYSTIC DEITY';
+              let characterBadge = '✨';
+
+              if (isPlayerRamudu) {
+                cardBorderClass = 'border-cyberblue bg-cyberblue/5 shadow-neon-blue';
+                subtitleColorClass = 'text-cyberblue font-extrabold';
+                roleName = 'RAMUDU';
+                characterBadge = '🏹';
+              } else if (isPlayerSeetha) {
+                cardBorderClass = 'border-cyberpink bg-cyberpink/5 shadow-neon-pink';
+                subtitleColorClass = 'text-cyberpink font-extrabold';
+                roleName = 'SEETHA';
+                characterBadge = '🌸';
+              } else if (isPlayerDeity) {
+                cardBorderClass = 'border-cybergold bg-cybergold/5 shadow-neon-purple';
+                subtitleColorClass = 'text-cybergold font-extrabold';
+                roleName = cardRole.toUpperCase();
+                characterBadge = '⚡';
+              } else {
+                // Card Back (Gods Theme Back)
+                cardBorderClass = 'border-primary/20 bg-gradient-to-b from-primary/10 via-darkbg to-primary/5 hover:border-cyberpink/50 hover:shadow-neon-pink';
+                subtitleColorClass = 'text-primary/70';
+                roleName = 'UNKNOWN DEITY';
+                characterBadge = '🌀';
+              }
 
               return (
                 <div 
                   key={p.id}
                   onClick={() => handleCardClick(p.id)}
-                  className={`glass-card rounded-2xl p-5 border flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                    isRamudu && !isGuesserSelf && !isTargetRevealed ? 'hover:border-cyberblue hover:scale-105 active:scale-95' : 'cursor-default'
-                  } ${
-                    isTargetRevealed ? 'border-cybersuccess bg-cybersuccess/5 shadow-neon-blue' : 'border-white/5'
-                  }`}
+                  className={`glass-card rounded-2xl p-6 border flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                    isRamudu && !isGuesserSelf && !isTargetRevealed ? 'hover:scale-105 active:scale-95' : 'cursor-default'
+                  } ${cardBorderClass}`}
                 >
-                  <div className="relative mb-3">
-                    <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border border-white/10`}>
-                      {p.username[0]}
+                  {/* Card Front/Back Illustration */}
+                  <div className="relative mb-4">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl border ${
+                      cardRole ? 'bg-primary/20 border-white/20' : 'bg-darkbg border-primary/30 shadow-inner'
+                    }`}>
+                      {characterBadge}
                     </div>
                     {isTargetRevealed && (
-                      <span className="absolute -bottom-1 -right-1 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold">
+                      <span className="absolute -bottom-1.5 -right-1.5 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold shadow-md">
                         <ShieldCheck size={10} />
                       </span>
                     )}
                   </div>
 
-                  <h5 className="font-extrabold text-sm text-gray-200 truncate w-full">{p.username}</h5>
-                  <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-black">
-                    {p.id === ramuduId ? 'Ramudu' : cardRole ? cardRole : 'SECRET'}
+                  <h5 className="font-extrabold text-sm text-gray-200 truncate w-full tracking-wide">{p.username}</h5>
+                  <p className={`text-[9px] mt-1.5 uppercase tracking-widest font-black ${subtitleColorClass}`}>
+                    {roleName}
                   </p>
                 </div>
               );
