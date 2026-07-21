@@ -211,4 +211,39 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       socket.emit('error', err.message);
     }
   });
+
+  // Synchronize state for late joiners or reconnects
+  socket.on('rs_sync_state', (roomCode: string) => {
+    try {
+      const room = roomStore.getRoom(roomCode);
+      if (!room || room.status !== 'PLAYING' || !room.gameState) return;
+
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) return;
+
+      socket.emit('rs_game_started', {
+        roomCode,
+        myRole: room.gameState.roles[player.id],
+        ramuduId: room.gameState.ramuduId,
+        players: room.players.map((pl) => ({
+          id: pl.id,
+          username: pl.username,
+          avatar: pl.avatar,
+          profileFrame: pl.profileFrame,
+          isRevealed: room.gameState.revealedIds.includes(pl.id),
+          role: room.gameState.revealedIds.includes(pl.id) ? room.gameState.roles[pl.id] : undefined,
+        })),
+      });
+
+      // Synchronize the current guesses count
+      socket.emit('rs_guess_result', {
+        revealedIds: room.gameState.revealedIds,
+        targetUserId: '',
+        targetRole: '',
+        isSeetha: false,
+      });
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
 }

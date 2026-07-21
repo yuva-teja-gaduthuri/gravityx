@@ -26,6 +26,9 @@ const config: Config = {
         'neon-blue': '0 0 10px rgba(0, 245, 255, 0.5), 0 0 20px rgba(0, 245, 255, 0.3)',
         'neon-pink': '0 0 10px rgba(255, 94, 223, 0.5), 0 0 20px rgba(255, 94, 223, 0.3)',
         'neon-purple': '0 0 15px rgba(108, 99, 255, 0.6), 0 0 30px rgba(108, 99, 255, 0.4)',
+        'neon-error': '0 0 10px rgba(255, 77, 77, 0.5), 0 0 20px rgba(255, 77, 77, 0.3)',
+        'neon-success': '0 0 10px rgba(0, 208, 132, 0.5), 0 0 20px rgba(0, 208, 132, 0.3)',
+        'neon-gold': '0 0 10px rgba(255, 213, 79, 0.5), 0 0 20px rgba(255, 213, 79, 0.3)',
         'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
       },
       animation: {
