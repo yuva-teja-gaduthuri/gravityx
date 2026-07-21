@@ -169,7 +169,7 @@ export default function RoomPage() {
         {room.status === 'PLAYING' ? (
           // In Game Render
           room.gameType === 'RAMUDU_SEETHA' ? (
-            <RamuduSeethaGame roomCode={roomCode} user={user} socket={socket} />
+            <RamuduSeethaGame roomCode={roomCode} user={user} socket={socket} isHost={room.hostId === user.id} />
           ) : (
             <LudoGame roomCode={roomCode} user={user} socket={socket} />
           )

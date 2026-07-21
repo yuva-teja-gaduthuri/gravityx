@@ -403,8 +403,8 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
         <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Console Telemetry</span>
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cybererror/10 border border-cybererror/20 text-xs font-semibold text-cybererror">
-              <Timer size={12} /> {gameState.turnTimeLeft}s
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-cybersuccess/10 border border-cybersuccess/20 text-xs font-semibold text-cybersuccess animate-pulse">
+              LIVE MATCH
             </div>
           </div>
 

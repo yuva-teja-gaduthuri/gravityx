@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { HelpCircle, Star, Search, ShieldCheck, Flame, Timer } from 'lucide-react';
+import { HelpCircle, Star, Search, ShieldCheck, Timer } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -17,8 +17,8 @@ interface Player {
 interface ScoreboardRow {
   userId: string;
   username: string;
-  role: string;
   score: number;
+  xpEarned: number;
   coinsEarned: number;
   placement: number;
 }
@@ -27,30 +27,34 @@ interface RSGameProps {
   roomCode: string;
   user: { id: string; username: string };
   socket: Socket;
+  isHost: boolean;
 }
 
-export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps) {
+export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSGameProps) {
   const [myRole, setMyRole] = useState<string>('');
   const [ramuduId, setRamuduId] = useState<string>('');
   const [players, setPlayers] = useState<Player[]>([]);
   const [revealedIds, setRevealedIds] = useState<string[]>([]);
-  const [duration, setDuration] = useState<number>(0);
   const [guesses, setGuesses] = useState<number>(0);
   const [guessResult, setGuessResult] = useState<{ username: string; role: string; isCorrect: boolean } | null>(null);
+
+  // Multi-round session states
+  const [currentRound, setCurrentRound] = useState<number>(1);
+  const [maxRounds, setMaxRounds] = useState<number>(3);
+  const [sessionScoreboard, setSessionScoreboard] = useState<{ [userId: string]: { username: string; score: number } }>({});
+  const [roundEnded, setRoundEnded] = useState<boolean>(false);
+  const [roundData, setRoundData] = useState<any>(null);
 
   // Match ended state
   const [matchEnded, setMatchEnded] = useState(false);
   const [matchResults, setMatchResults] = useState<{
     winnerId: string;
     seethaId: string;
-    duration: number;
     guessCount: number;
     scoreboard: ScoreboardRow[];
   } | null>(null);
 
   useEffect(() => {
-    // Sync initial state upon game start message from parent routing if any,
-    // but the socket events are captured here:
     socket.on('rs_game_started', (data: any) => {
       setMyRole(data.myRole);
       setRamuduId(data.ramuduId);
@@ -58,8 +62,12 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
       setRevealedIds([]);
       setMatchEnded(false);
       setMatchResults(null);
+      setRoundEnded(false);
+      setRoundData(null);
       setGuesses(0);
-      setDuration(0);
+      setCurrentRound(data.currentRound || 1);
+      setMaxRounds(data.maxRounds || 3);
+      setSessionScoreboard(data.sessionScoreboard || {});
     });
 
     socket.on('rs_guess_result', (data: any) => {
@@ -87,41 +95,40 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
       setGuesses(prev => prev + 1);
     });
 
+    socket.on('rs_round_ended', (data: any) => {
+      setRoundEnded(true);
+      setRoundData(data);
+      setSessionScoreboard(data.sessionScoreboard || {});
+      confetti({
+        particleCount: 80,
+        spread: 50,
+        origin: { y: 0.7 }
+      });
+    });
+
     socket.on('rs_match_ended', (data: any) => {
       setMatchEnded(true);
       setMatchResults(data);
-      // Trigger Confetti!
       confetti({
-        particleCount: 150,
-        spread: 80,
+        particleCount: 200,
+        spread: 90,
         origin: { y: 0.6 }
       });
     });
 
-    // Handle initial state request
     socket.emit('rs_sync_state', roomCode);
 
     return () => {
       socket.off('rs_game_started');
       socket.off('rs_guess_result');
+      socket.off('rs_round_ended');
       socket.off('rs_match_ended');
     };
   }, [socket, players, roomCode]);
 
-  // Timer counter
-  useEffect(() => {
-    if (matchEnded) return;
-    const interval = setInterval(() => {
-      setDuration(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [matchEnded]);
-
   const handleCardClick = (targetPlayerId: string) => {
-    if (matchEnded) return;
-    // Only Ramudu can click to guess
+    if (matchEnded || roundEnded) return;
     if (user.id !== ramuduId) return;
-    // Cannot click self or already revealed
     if (targetPlayerId === user.id || revealedIds.includes(targetPlayerId)) return;
 
     socket.emit('rs_guess', {
@@ -131,23 +138,18 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
   };
 
   const isRamudu = user.id === ramuduId;
-  const formatTime = (sec: number) => {
-    const mins = Math.floor(sec / 60);
-    const secs = sec % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div className="flex flex-col flex-grow p-6 space-y-6 max-w-6xl mx-auto w-full">
-      {/* Top dashboard row: Timer and Identity status */}
+      {/* Top dashboard row: Session stats and Identity status */}
       <div className="flex flex-col sm:flex-row items-center justify-between glass-panel rounded-2xl p-5 border-white/5 gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyberpink/10 text-cyberpink flex items-center justify-center">
-            <Timer size={22} />
+          <div className="w-10 h-10 rounded-xl bg-cyberblue/10 text-cyberblue flex items-center justify-center">
+            <Star size={22} className="fill-cyberblue/20" />
           </div>
           <div>
-            <div className="text-[10px] uppercase font-bold text-gray-500">Duration</div>
-            <div className="text-xl font-black text-white">{formatTime(duration)}</div>
+            <div className="text-[10px] uppercase font-bold text-gray-500">Campaign Progress</div>
+            <div className="text-xl font-black text-white">Round {currentRound} / {maxRounds}</div>
           </div>
         </div>
 
@@ -185,12 +187,12 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
               If you are <strong className="text-cyberblue">Ramudu</strong>, click on player profile cards to guess their identities. 
             </p>
             <p>
-              Other crew members should coordinate chat logs to protect Seetha's index position.
+              Scans decrease score. Protect Seetha's identity via coordinates coordination in chat!
             </p>
           </div>
 
           <div className="border-t border-white/5 pt-4">
-            <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Guesses Submitted</div>
+            <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Round Scan Count</div>
             <span className="text-2xl font-black text-white">{guesses}</span>
           </div>
         </div>
@@ -198,8 +200,8 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
         {/* Player Cards Area */}
         <div className="md:col-span-3 space-y-6">
           {guessResult && (
-            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm animate-pulse-slow ${
-              guessResult.isCorrect ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess' : 'bg-cybererror/10 border-cybererror text-cybererror'
+            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm ${
+              guessResult.isCorrect ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess animate-bounce' : 'bg-cybererror/10 border-cybererror text-cybererror animate-shake'
             }`}>
               {guessResult.username} was revealed as: {guessResult.role}! {guessResult.isCorrect ? 'FOUND SEETHA!' : 'NOT SEETHA.'}
             </div>
@@ -211,7 +213,6 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
               const isTargetRevealed = revealedIds.includes(p.id);
               const cardRole = isGuesserSelf ? myRole : isTargetRevealed ? p.role || 'Revealed' : null;
               
-              // Styles based on revealed role
               const isPlayerRamudu = p.id === ramuduId;
               const isPlayerSeetha = cardRole === 'Seetha';
               const isPlayerDeity = cardRole && cardRole !== 'Ramudu' && cardRole !== 'Seetha';
@@ -237,7 +238,6 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
                 roleName = cardRole.toUpperCase();
                 characterBadge = '⚡';
               } else {
-                // Card Back (Gods Theme Back)
                 cardBorderClass = 'border-primary/20 bg-gradient-to-b from-primary/10 via-darkbg to-primary/5 hover:border-cyberpink/50 hover:shadow-neon-pink';
                 subtitleColorClass = 'text-primary/70';
                 roleName = 'UNKNOWN DEITY';
@@ -249,10 +249,9 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
                   key={p.id}
                   onClick={() => handleCardClick(p.id)}
                   className={`glass-card rounded-2xl p-6 border flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                    isRamudu && !isGuesserSelf && !isTargetRevealed ? 'hover:scale-105 active:scale-95' : 'cursor-default'
+                    isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded ? 'hover:scale-105 active:scale-95' : 'cursor-default'
                   } ${cardBorderClass}`}
                 >
-                  {/* Card Front/Back Illustration */}
                   <div className="relative mb-4">
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl border ${
                       cardRole ? 'bg-primary/20 border-white/20' : 'bg-darkbg border-primary/30 shadow-inner'
@@ -277,33 +276,82 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
         </div>
       </div>
 
-      {/* Match Results Overlay Modal */}
-      {matchEnded && matchResults && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-purple">
+      {/* Round End Modal Overlay */}
+      {roundEnded && roundData && !matchEnded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-blue">
             <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase text-cyberpink tracking-widest">Match Terminal Ended</span>
-              <h3 className="text-3xl font-extrabold text-white mt-1">Victory Finalized!</h3>
-              <p className="text-sm text-gray-400 mt-1">Ramudu located Seetha after {matchResults.guessCount} scans in {formatTime(matchResults.duration)}.</p>
+              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">Round {roundData.currentRound} Completed</span>
+              <h3 className="text-3xl font-black text-white mt-1">Seetha Located!</h3>
+              <p className="text-sm text-gray-400 mt-2">
+                Ramudu scanned Seetha in <span className="text-white font-bold">{roundData.guessCount}</span> attempts.
+              </p>
             </div>
 
-            <div className="space-y-3 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-500 tracking-wider">Scoreboard Breakdown</h4>
-              <div className="divide-y divide-white/5 max-h-60 overflow-y-auto pr-2">
+            <div className="space-y-4 mb-6">
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Session Leaderboard & Rankings</h4>
+              <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
+                {Object.entries(sessionScoreboard)
+                  .map(([userId, val]) => ({ userId, username: val.username, score: val.score }))
+                  .sort((a, b) => b.score - a.score)
+                  .map((row, idx) => {
+                    const roundScore = roundData.roundScores[row.userId] || 0;
+                    return (
+                      <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-gray-400 w-4">#{idx + 1}</span>
+                          <span className="font-extrabold text-gray-200">{row.username}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] text-cybersuccess font-bold">+{roundScore} this round</span>
+                          <span className="font-black text-white">{row.score} pts</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {isHost ? (
+              <button
+                onClick={() => socket.emit('rs_next_round', roomCode)}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center text-sm"
+              >
+                Launch Round {roundData.currentRound + 1}
+              </button>
+            ) : (
+              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
+                Waiting for Captain to launch the next round...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grand Finale Session End Overlay Modal */}
+      {matchEnded && matchResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-purple">
+            <div className="text-center mb-6">
+              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest">Campaign Complete</span>
+              <h3 className="text-3xl font-black text-white mt-1">Grand Placements</h3>
+              <p className="text-sm text-gray-400 mt-2">
+                All 3 rounds completed! Final campaign standings finalized:
+              </p>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Final Standings</h4>
+              <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                 {matchResults.scoreboard.map((row) => (
-                  <div key={row.userId} className="flex justify-between items-center py-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] uppercase font-bold text-cyberblue border border-white/10">
-                        {row.username[0]}
-                      </div>
-                      <div>
-                        <span className="font-bold text-gray-200">{row.username}</span>
-                        <span className="text-[9px] uppercase font-semibold text-gray-500 ml-2">({row.role})</span>
-                      </div>
+                  <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-3">
+                      <span className="font-black text-cybergold w-4">#{row.placement}</span>
+                      <span className="font-bold text-gray-200">{row.username}</span>
                     </div>
-                    <div className="flex gap-4 items-center">
-                      <span className="text-xs font-semibold text-gray-400">+{row.score} XP</span>
-                      <span className="text-xs font-extrabold text-cybergold">+{row.coinsEarned} 🪙</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] text-gray-400">+{row.xpEarned} XP &bull; +{row.coinsEarned} 🪙</span>
+                      <span className="font-black text-cyberpink">{row.score} pts</span>
                     </div>
                   </div>
                 ))}
@@ -311,10 +359,10 @@ export default function RamuduSeethaGame({ roomCode, user, socket }: RSGameProps
             </div>
 
             <button 
-              onClick={() => window.location.reload()} // Simply reloads to reload room states
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberpink font-bold shadow-neon-pink hover:opacity-90 transition-all text-center"
+              onClick={() => window.location.reload()}
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberpink font-bold shadow-neon-pink hover:opacity-90 active:scale-95 transition-all text-center text-sm"
             >
-              Return to Lobby deck
+              Return to Lobby
             </button>
           </div>
         </div>

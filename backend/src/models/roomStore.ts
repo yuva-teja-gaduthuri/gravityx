@@ -22,6 +22,9 @@ export interface Room {
   spectators: string[];
   gameState: any; // polymorphic game state representation
   createdAt: number;
+  currentRound?: number;
+  maxRounds?: number;
+  sessionScoreboard?: { [userId: string]: { username: string; score: number } };
 }
 
 class RoomStore {

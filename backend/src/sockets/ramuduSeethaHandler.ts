@@ -17,6 +17,73 @@ const OPTIONAL_CHARACTERS = [
 
 export function handleRamuduSeetha(io: Server, socket: Socket) {
   // Start Game (triggered by host)
+  // Helper to start a round
+  const startRSRound = (room: any, currentSocket: Socket) => {
+    const playerCount = room.players.length;
+    if (playerCount < 3) {
+      return currentSocket.emit('error', 'Minimum 3 players are required to start');
+    }
+
+    // Shuffle characters
+    const shuffledPlayers = [...room.players].sort(() => Math.random() - 0.5);
+    const roles: { [userId: string]: string } = {};
+
+    // Assign Ramudu and Seetha
+    const ramuduPlayer = shuffledPlayers[0];
+    const seethaPlayer = shuffledPlayers[1];
+
+    roles[ramuduPlayer.id] = 'Ramudu';
+    roles[seethaPlayer.id] = 'Seetha';
+
+    // Assign other characters
+    const shuffledOptional = [...OPTIONAL_CHARACTERS].sort(() => Math.random() - 0.5);
+    for (let i = 2; i < playerCount; i++) {
+      roles[shuffledPlayers[i].id] = shuffledOptional[i - 2] || `Villager ${i - 1}`;
+    }
+
+    // Apply roles to Player models in store
+    room.players.forEach((p: any) => {
+      p.role = roles[p.id];
+    });
+
+    // Update room state
+    room.gameState = {
+      roles,
+      ramuduId: ramuduPlayer.id,
+      seethaId: seethaPlayer.id,
+      guessCount: 0,
+      revealedIds: [] as string[],
+    };
+
+    room.status = 'PLAYING';
+
+    // Emit game started to all, but only send their OWN role privatised
+    room.players.forEach((p: any) => {
+      io.to(p.socketId).emit('rs_game_started', {
+        roomCode,
+        myRole: roles[p.id],
+        ramuduId: ramuduPlayer.id,
+        currentRound: room.currentRound || 1,
+        maxRounds: room.maxRounds || 3,
+        sessionScoreboard: room.sessionScoreboard,
+        players: room.players.map((pl: any) => ({
+          id: pl.id,
+          username: pl.username,
+          avatar: pl.avatar,
+          profileFrame: pl.profileFrame,
+          isRevealed: false,
+        })),
+      });
+    });
+
+    // Broadcast room update
+    io.to(roomCode).emit('room_state_updated', {
+      ...room,
+      players: room.players.map((p: any) => ({ ...p, role: undefined })), // hide roles
+    });
+  };
+
+  // Start Game (triggered by host)
   socket.on('rs_start_game', async (roomCode: string) => {
     try {
       const room = roomStore.getRoom(roomCode);
@@ -28,66 +95,38 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         return socket.emit('error', 'Only the host can start the game');
       }
 
-      const playerCount = room.players.length;
-      if (playerCount < 3) {
-        return socket.emit('error', 'Minimum 3 players are required to start');
+      // Initialize session variables
+      room.currentRound = 1;
+      room.maxRounds = 3;
+      room.sessionScoreboard = {};
+      room.players.forEach((pl) => {
+        room.sessionScoreboard![pl.id] = { username: pl.username, score: 0 };
+      });
+
+      startRSRound(room, socket);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  // Next Round (triggered by host after a round ends)
+  socket.on('rs_next_round', async (roomCode: string) => {
+    try {
+      const room = roomStore.getRoom(roomCode);
+      if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Room not found or game inactive');
+
+      // Check host permissions
+      const host = room.players.find((p) => p.socketId === socket.id);
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can advance rounds');
       }
 
-      // Shuffle characters
-      const shuffledPlayers = [...room.players].sort(() => Math.random() - 0.5);
-      const roles: { [userId: string]: string } = {};
-
-      // Assign Ramudu and Seetha
-      const ramuduPlayer = shuffledPlayers[0];
-      const seethaPlayer = shuffledPlayers[1];
-
-      roles[ramuduPlayer.id] = 'Ramudu';
-      roles[seethaPlayer.id] = 'Seetha';
-
-      // Assign other characters
-      const shuffledOptional = [...OPTIONAL_CHARACTERS].sort(() => Math.random() - 0.5);
-      for (let i = 2; i < playerCount; i++) {
-        roles[shuffledPlayers[i].id] = shuffledOptional[i - 2] || `Villager ${i - 1}`;
+      if (room.currentRound! < room.maxRounds!) {
+        room.currentRound! += 1;
+        startRSRound(room, socket);
+      } else {
+        socket.emit('error', 'Game session already completed');
       }
-
-      // Apply roles to Player models in store
-      room.players.forEach((p) => {
-        p.role = roles[p.id];
-      });
-
-      // Update room state
-      room.gameState = {
-        roles,
-        ramuduId: ramuduPlayer.id,
-        seethaId: seethaPlayer.id,
-        startTime: Date.now(),
-        guessCount: 0,
-        revealedIds: [] as string[],
-      };
-
-      roomStore.updateRoomStatus(roomCode, 'PLAYING');
-
-      // Emit game started to all, but only send their OWN role privatised
-      room.players.forEach((p) => {
-        io.to(p.socketId).emit('rs_game_started', {
-          roomCode,
-          myRole: roles[p.id],
-          ramuduId: ramuduPlayer.id,
-          players: room.players.map((pl) => ({
-            id: pl.id,
-            username: pl.username,
-            avatar: pl.avatar,
-            profileFrame: pl.profileFrame,
-            isRevealed: false,
-          })),
-        });
-      });
-
-      // Broadcast room update
-      io.to(roomCode).emit('room_state_updated', {
-        ...room,
-        players: room.players.map((p) => ({ ...p, role: undefined })), // hide roles
-      });
     } catch (err: any) {
       socket.emit('error', err.message);
     }
@@ -115,85 +154,109 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       const targetRole = gameState.roles[targetUserId];
 
       if (isSeetha) {
-        // Ramudu found Seetha! Game ends.
-        const duration = Math.floor((Date.now() - gameState.startTime) / 1000);
-
-        // Scoring Formula
-        // Ramudu gets more points if found fast. Max 1000, drops by 10 points per second, min 100.
-        const ramuduScore = Math.max(100, 1000 - duration * 10);
-        // Seetha gets more points if she stayed hidden. Max 1000, gains 10 points per second, min 100.
-        const seethaScore = Math.min(1000, 100 + duration * 10);
-        // Others get a base of 200 points
+        // Ramudu found Seetha! Round ends.
+        
+        // Scoring Formula (guess-based, no timers)
+        // Ramudu gets max 1000, drops by 200 per incorrect guess, min 100
+        const ramuduScore = Math.max(100, 1000 - (gameState.guessCount - 1) * 200);
+        // Seetha gets base 200 + 250 per incorrect guess, max 1000
+        const seethaScore = Math.min(1000, 200 + (gameState.guessCount - 1) * 250);
         const baseScore = 200;
 
-        // Record Match in DB
-        const match = await prisma.match.create({
-          data: {
-            gameType: 'RAMUDU_SEETHA',
-            durationSeconds: duration,
-            winnerId: gameState.ramuduId,
-          },
-        });
-
-        // Award XP and Coins & create MatchPlayer rows
-        const matchPlayersData = [];
-        for (const p of room.players) {
-          let score = baseScore;
-          let coinsEarned = 50; // base coins
-          let placement = 2;
-
-          if (p.id === gameState.ramuduId) {
-            score = ramuduScore;
-            coinsEarned = 150;
-            placement = 1;
-          } else if (p.id === gameState.seethaId) {
-            score = seethaScore;
-            coinsEarned = 100;
-          }
-
-          // Write stats
-          await awardUserStats(p.id, Math.round(score / 5), coinsEarned);
-
-          // Save player match record
-          await prisma.matchPlayer.create({
-            data: {
-              matchId: match.id,
-              userId: p.id,
-              score,
-              coinsEarned,
-              placement,
-            },
-          });
-
-          matchPlayersData.push({
-            userId: p.id,
-            username: p.username,
-            role: gameState.roles[p.id],
-            score,
-            coinsEarned,
-            placement,
+        // Ensure session scoreboard is present
+        if (!room.sessionScoreboard) {
+          room.sessionScoreboard = {};
+          room.players.forEach((pl) => {
+            room.sessionScoreboard![pl.id] = { username: pl.username, score: 0 };
           });
         }
 
-        // Return room to LOBBY status and reset ready states
-        roomStore.updateRoomStatus(roomCode, 'LOBBY');
-        room.players.forEach((p) => {
-          p.ready = false;
-          p.role = undefined;
-        });
-        room.gameState = null;
+        // Add round scores to running session totals
+        const roundScores: { [userId: string]: number } = {};
+        for (const p of room.players) {
+          let score = baseScore;
+          if (p.id === gameState.ramuduId) {
+            score = ramuduScore;
+          } else if (p.id === gameState.seethaId) {
+            score = seethaScore;
+          }
+          roundScores[p.id] = score;
 
-        // Broadcast match end details
-        io.to(roomCode).emit('rs_match_ended', {
-          winnerId: gameState.ramuduId,
-          seethaId: gameState.seethaId,
-          duration,
-          guessCount: gameState.guessCount,
-          scoreboard: matchPlayersData,
-        });
+          if (room.sessionScoreboard[p.id]) {
+            room.sessionScoreboard[p.id].score += score;
+          }
+        }
 
-        // Broadcast room update
-        io.to(roomCode).emit('room_state_updated', room);
+        const isLastRound = room.currentRound! >= room.maxRounds!;
+
+        if (!isLastRound) {
+          // Send round ended results (game continues, host can trigger next round)
+          io.to(roomCode).emit('rs_round_ended', {
+            currentRound: room.currentRound,
+            maxRounds: room.maxRounds,
+            winnerId: gameState.ramuduId,
+            seethaId: gameState.seethaId,
+            guessCount: gameState.guessCount,
+            roundScores,
+            sessionScoreboard: room.sessionScoreboard,
+          });
+        } else {
+          // Final round finished! Grand Finale.
+          const finalScoreboard = Object.entries(room.sessionScoreboard)
+            .map(([userId, val]) => ({
+              userId,
+              username: val.username,
+              score: val.score,
+            }))
+            .sort((a, b) => b.score - a.score)
+            .map((item, index) => ({
+              ...item,
+              placement: index + 1,
+              coinsEarned: item.placement === 1 ? 150 : item.placement === 2 ? 100 : 50,
+              xpEarned: Math.round(item.score / 5),
+            }));
+
+          // Record Match in DB & Award stats
+          const match = await prisma.match.create({
+            data: {
+              gameType: 'RAMUDU_SEETHA',
+              durationSeconds: 0, // timer-less
+              winnerId: finalScoreboard[0].userId, // highest score winner
+            },
+          });
+
+          for (const row of finalScoreboard) {
+            await awardUserStats(row.userId, row.xpEarned, row.coinsEarned);
+            await prisma.matchPlayer.create({
+              data: {
+                matchId: match.id,
+                userId: row.userId,
+                score: row.score,
+                coinsEarned: row.coinsEarned,
+                placement: row.placement,
+              },
+            });
+          }
+
+          // Return room status to lobby
+          roomStore.updateRoomStatus(roomCode, 'LOBBY');
+          room.players.forEach((p) => {
+            p.ready = false;
+            p.role = undefined;
+          });
+          room.gameState = null;
+
+          // Broadcast match ended details
+          io.to(roomCode).emit('rs_match_ended', {
+            winnerId: finalScoreboard[0].userId,
+            seethaId: gameState.seethaId,
+            guessCount: gameState.guessCount,
+            scoreboard: finalScoreboard,
+          });
+
+          // Broadcast room status update
+          io.to(roomCode).emit('room_state_updated', room);
+        }
       } else {
         // Guessed player is NOT Seetha. Reveal character role.
         if (!gameState.revealedIds.includes(targetUserId)) {
