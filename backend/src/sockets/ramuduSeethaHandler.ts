@@ -60,7 +60,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     // Emit game started to all, but only send their OWN role privatised
     room.players.forEach((p: any) => {
       io.to(p.socketId).emit('rs_game_started', {
-        roomCode,
+        roomCode: room.code,
         myRole: roles[p.id],
         ramuduId: ramuduPlayer.id,
         currentRound: room.currentRound || 1,
@@ -77,7 +77,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     });
 
     // Broadcast room update
-    io.to(roomCode).emit('room_state_updated', {
+    io.to(room.code).emit('room_state_updated', {
       ...room,
       players: room.players.map((p: any) => ({ ...p, role: undefined })), // hide roles
     });
@@ -203,18 +203,21 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         } else {
           // Final round finished! Grand Finale.
           const finalScoreboard = Object.entries(room.sessionScoreboard)
-            .map(([userId, val]) => ({
+            .map(([userId, val]: any) => ({
               userId,
               username: val.username,
               score: val.score,
             }))
             .sort((a, b) => b.score - a.score)
-            .map((item, index) => ({
-              ...item,
-              placement: index + 1,
-              coinsEarned: item.placement === 1 ? 150 : item.placement === 2 ? 100 : 50,
-              xpEarned: Math.round(item.score / 5),
-            }));
+            .map((item, index) => {
+              const placement = index + 1;
+              return {
+                ...item,
+                placement,
+                coinsEarned: placement === 1 ? 150 : placement === 2 ? 100 : 50,
+                xpEarned: Math.round(item.score / 5),
+              };
+            });
 
           // Record Match in DB & Award stats
           const match = await prisma.match.create({
