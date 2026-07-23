@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { getApiUrl } from '../utils/api';
 
 let socketInstance: Socket | null = null;
 
 export function useSocket() {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(socketInstance);
 
   useEffect(() => {
     if (!socketInstance) {
@@ -33,12 +33,8 @@ export function useSocket() {
       });
     }
 
-    socketRef.current = socketInstance;
-
-    return () => {
-      // We keep socketInstance alive across pages to avoid connecting/disconnecting repeatedly
-    };
+    setSocket(socketInstance);
   }, []);
 
-  return socketRef.current || socketInstance;
+  return socket;
 }

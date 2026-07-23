@@ -89,25 +89,29 @@ export function handleRoom(io: Server, socket: Socket) {
         return socket.emit('error', 'Game already in progress');
       }
 
-      if (room.players.length >= room.maxPlayers) {
+      // Synchronous check if player is already in room or room is full
+      const existingPlayer = room.players.find((p) => p.id === userId);
+      if (!existingPlayer && room.players.length >= room.maxPlayers) {
         return socket.emit('error', 'Room is full');
       }
-
-      // Fetch user profile info
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-      });
 
       const player: Player = {
         id: userId,
         username: username,
         socketId: socket.id,
-        avatar: user?.avatar || 'default_avatar',
-        profileFrame: user?.profileFrame || 'default_frame',
+        avatar: 'default_avatar',
+        profileFrame: 'default_frame',
         ready: false,
       };
 
-      const updatedRoom = roomStore.addPlayer(upperCode, player);
+      let updatedRoom: any = room;
+      if (!existingPlayer) {
+        updatedRoom = roomStore.addPlayer(upperCode, player);
+      } else {
+        // Re-use existing ready status and details but update socketId
+        existingPlayer.socketId = socket.id;
+      }
+
       if (!updatedRoom) {
         return socket.emit('error', 'Failed to join room');
       }
@@ -123,6 +127,26 @@ export function handleRoom(io: Server, socket: Socket) {
         content: `${username} joined the room.`,
         createdAt: new Date(),
       });
+
+      // Asynchronous background profile enrichment to eliminate database loading delays
+      prisma.user.findUnique({
+        where: { id: userId },
+      }).then((user) => {
+        if (user) {
+          const currentRoom = roomStore.getRoom(upperCode);
+          if (currentRoom) {
+            const p = currentRoom.players.find((pl) => pl.id === userId);
+            if (p) {
+              p.avatar = user.avatar;
+              p.profileFrame = user.profileFrame;
+              io.to(upperCode).emit('room_state_updated', currentRoom);
+            }
+          }
+        }
+      }).catch((err) => {
+        console.error("Error fetching user profile for socket join:", err);
+      });
+
     } catch (err: any) {
       socket.emit('error', err.message);
     }

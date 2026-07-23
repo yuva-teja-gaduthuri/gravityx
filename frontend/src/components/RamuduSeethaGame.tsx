@@ -45,6 +45,9 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
   const [roundEnded, setRoundEnded] = useState<boolean>(false);
   const [roundData, setRoundData] = useState<any>(null);
 
+  // In-Game Live Scoreboard toggle
+  const [showLiveScore, setShowLiveScore] = useState<boolean>(false);
+
   // Match ended state
   const [matchEnded, setMatchEnded] = useState(false);
   const [matchResults, setMatchResults] = useState<{
@@ -140,33 +143,33 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
   const isRamudu = user.id === ramuduId;
 
   return (
-    <div className="flex flex-col flex-grow p-6 space-y-6 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col flex-grow p-4 md:p-6 space-y-6 max-w-6xl mx-auto w-full relative">
       {/* Top dashboard row: Session stats and Identity status */}
-      <div className="flex flex-col sm:flex-row items-center justify-between glass-panel rounded-2xl p-5 border-white/5 gap-4">
+      <div className="flex flex-col md:flex-row items-center justify-between glass-panel rounded-2xl p-5 border-cybergold/20 gap-4 shadow-neon-gold">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyberblue/10 text-cyberblue flex items-center justify-center">
-            <Star size={22} className="fill-cyberblue/20" />
+          <div className="w-10 h-10 rounded-xl bg-cybergold/10 text-cybergold flex items-center justify-center border border-cybergold/30 shadow-[0_0_8px_rgba(255,213,79,0.2)]">
+            <Star size={22} className="fill-cybergold/20" />
           </div>
           <div>
-            <div className="text-[10px] uppercase font-bold text-gray-500">Campaign Progress</div>
-            <div className="text-xl font-black text-white">Round {currentRound} / {maxRounds}</div>
+            <div className="text-[10px] uppercase font-bold text-gray-400">Divine Quest</div>
+            <div className="text-xl font-black text-cybergold">Round {currentRound} / {maxRounds}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-[10px] uppercase font-bold text-gray-500">Your secret role</div>
-            <div className="text-lg font-black text-cyberpink tracking-wide uppercase">{myRole || 'Distributing...'}</div>
+            <div className="text-[10px] uppercase font-bold text-gray-400">Secret Identity</div>
+            <div className="text-lg font-black text-cybergold tracking-wider uppercase">{myRole || 'Chosen By Destiny...'}</div>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-cyberpink flex items-center justify-center font-bold text-white shadow-neon-pink">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ffd54f] to-[#b8860b] flex items-center justify-center font-black text-darkbg shadow-neon-gold border border-white/20">
             {myRole ? myRole[0] : '?'}
           </div>
         </div>
 
-        <div className="text-center sm:text-right">
-          <div className="text-[10px] uppercase font-bold text-gray-500">Ramudu Guesser</div>
-          <div className="text-sm font-bold text-cyberblue">
-            {players.find(p => p.id === ramuduId)?.username || 'Selecting...'}
+        <div className="text-center md:text-right">
+          <div className="text-[10px] uppercase font-bold text-gray-400">Guesser (Ramudu)</div>
+          <div className="text-sm font-extrabold text-cybergold">
+            {players.find(p => p.id === ramuduId)?.username || 'Calibrating...'}
           </div>
         </div>
       </div>
@@ -174,36 +177,72 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
       {/* Main Deduction Table */}
       <div className="grid md:grid-cols-4 gap-6">
         {/* Game Info Panel */}
-        <div className="md:col-span-1 glass-card rounded-2xl p-5 border-white/5 space-y-5 h-fit">
-          <h4 className="font-extrabold text-sm uppercase text-gray-400 tracking-wider flex items-center gap-2">
-            <HelpCircle size={16} className="text-cyberblue" /> Mission Log
+        <div className="md:col-span-1 glass-card rounded-2xl p-5 border-cybergold/20 space-y-5 h-fit shadow-neon-gold">
+          <h4 className="font-extrabold text-sm uppercase text-cybergold tracking-wider flex items-center gap-2">
+            <HelpCircle size={16} /> Celestial Scroll
           </h4>
           
-          <div className="space-y-3 text-xs text-gray-400 leading-relaxed">
+          <div className="space-y-3 text-xs text-gray-300 leading-relaxed border-b border-white/5 pb-4">
             <p>
-              <strong className="text-white">Objective:</strong> Ramudu must identify <span className="text-cyberpink font-bold">Seetha</span>.
+              <strong className="text-white">Quest:</strong> Ramudu must find <span className="text-cybergold font-bold">Seetha</span> among the deities.
             </p>
             <p>
-              If you are <strong className="text-cyberblue">Ramudu</strong>, click on player profile cards to guess their identities. 
+              Only <strong className="text-cybergold">Ramudu</strong> makes guesses. Each scan reduces the score.
             </p>
             <p>
-              Scans decrease score. Protect Seetha's identity via coordinates coordination in chat!
+              Use lobby chat coordination to protect or identify identities!
             </p>
           </div>
 
-          <div className="border-t border-white/5 pt-4">
-            <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Round Scan Count</div>
-            <span className="text-2xl font-black text-white">{guesses}</span>
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-500 mb-0.5">Attempted Scans</div>
+              <span className="text-2xl font-black text-white">{guesses}</span>
+            </div>
           </div>
+
+          <div className="pt-2 border-t border-white/5">
+            <button
+              onClick={() => setShowLiveScore(!showLiveScore)}
+              className="w-full py-2.5 rounded-xl border border-cybergold/45 bg-cybergold/10 hover:bg-cybergold text-cybergold hover:text-darkbg transition-all text-xs font-black uppercase tracking-wider"
+            >
+              {showLiveScore ? 'Hide Live Scores' : 'View Live Scores'}
+            </button>
+          </div>
+
+          {showLiveScore && (
+            <div className="space-y-2 pt-2 animate-fade-in">
+              <h5 className="text-[10px] uppercase font-black text-cybergold/80 tracking-widest">Running Standings</h5>
+              <div className="space-y-2 bg-black/40 border border-white/5 rounded-xl p-3">
+                {Object.entries(sessionScoreboard).length > 0 ? (
+                  Object.entries(sessionScoreboard)
+                    .map(([userId, val]) => ({ userId, username: val.username, score: val.score }))
+                    .sort((a, b) => b.score - a.score)
+                    .map((row, idx) => (
+                      <div key={row.userId} className="flex justify-between items-center text-xs">
+                        <span className="text-gray-300 truncate max-w-[120px] font-bold">
+                          #{idx + 1} {row.username}
+                        </span>
+                        <span className="text-cybergold font-black">{row.score} pts</span>
+                      </div>
+                    ))
+                ) : (
+                  <p className="text-[10px] text-gray-500">Waiting for round end...</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Player Cards Area */}
         <div className="md:col-span-3 space-y-6">
           {guessResult && (
-            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm ${
-              guessResult.isCorrect ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess animate-bounce' : 'bg-cybererror/10 border-cybererror text-cybererror animate-shake'
+            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm transition-all ${
+              guessResult.isCorrect 
+                ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess shadow-neon-success animate-bounce' 
+                : 'bg-cybererror/10 border-cybererror text-cybererror shadow-neon-error animate-shake'
             }`}>
-              {guessResult.username} was revealed as: {guessResult.role}! {guessResult.isCorrect ? 'FOUND SEETHA!' : 'NOT SEETHA.'}
+              ⚔️ {guessResult.username} was revealed as: {guessResult.role}! {guessResult.isCorrect ? 'SEETHA FOUND!' : 'NOT SEETHA.'}
             </div>
           )}
 
@@ -217,31 +256,39 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
               const isPlayerSeetha = cardRole === 'Seetha';
               const isPlayerDeity = cardRole && cardRole !== 'Ramudu' && cardRole !== 'Seetha';
 
-              let cardBorderClass = 'border-white/5 bg-gradient-to-b from-white/5 to-transparent';
+              let cardBorderClass = 'border-white/5 bg-[#050816]/70';
               let subtitleColorClass = 'text-gray-500';
               let roleName = 'MYSTIC DEITY';
               let characterBadge = '✨';
 
-              if (isPlayerRamudu) {
-                cardBorderClass = 'border-cyberblue bg-cyberblue/5 shadow-neon-blue';
-                subtitleColorClass = 'text-cyberblue font-extrabold';
+              // Assign custom emblems based on role names
+              if (cardRole === 'Ramudu' || isPlayerRamudu) {
+                cardBorderClass = 'border-cybergold bg-gradient-to-b from-[#ffd54f]/15 to-transparent shadow-neon-gold';
+                subtitleColorClass = 'text-cybergold font-black';
                 roleName = 'RAMUDU';
                 characterBadge = '🏹';
               } else if (isPlayerSeetha) {
-                cardBorderClass = 'border-cyberpink bg-cyberpink/5 shadow-neon-pink';
-                subtitleColorClass = 'text-cyberpink font-extrabold';
+                cardBorderClass = 'border-cyberpink bg-gradient-to-b from-[#ff5edf]/15 to-transparent shadow-neon-pink';
+                subtitleColorClass = 'text-cyberpink font-black';
                 roleName = 'SEETHA';
                 characterBadge = '🌸';
               } else if (isPlayerDeity) {
-                cardBorderClass = 'border-cybergold bg-cybergold/5 shadow-neon-purple';
-                subtitleColorClass = 'text-cybergold font-extrabold';
+                cardBorderClass = 'border-purple-400 bg-gradient-to-b from-purple-500/15 to-transparent shadow-neon-purple';
+                subtitleColorClass = 'text-purple-300 font-bold';
                 roleName = cardRole.toUpperCase();
-                characterBadge = '⚡';
+                
+                // Emblems per specific deity
+                if (cardRole.includes('Hanuman')) characterBadge = '🔱';
+                else if (cardRole.includes('Lakshmana')) characterBadge = '⚔️';
+                else if (cardRole.includes('Krishna')) characterBadge = '🪈';
+                else if (cardRole.includes('Shiva')) characterBadge = '🔱';
+                else if (cardRole.includes('Ganesha')) characterBadge = '🐘';
+                else characterBadge = '⚡';
               } else {
-                cardBorderClass = 'border-primary/20 bg-gradient-to-b from-primary/10 via-darkbg to-primary/5 hover:border-cyberpink/50 hover:shadow-neon-pink';
-                subtitleColorClass = 'text-primary/70';
-                roleName = 'UNKNOWN DEITY';
-                characterBadge = '🌀';
+                cardBorderClass = 'border-cybergold/30 bg-gradient-to-b from-cybergold/5 to-transparent hover:border-cybergold/70 hover:shadow-neon-gold';
+                subtitleColorClass = 'text-gray-400';
+                roleName = 'UNREVEALED';
+                characterBadge = '🛡️';
               }
 
               return (
@@ -249,24 +296,22 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
                   key={p.id}
                   onClick={() => handleCardClick(p.id)}
                   className={`glass-card rounded-2xl p-6 border flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                    isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded ? 'hover:scale-105 active:scale-95' : 'cursor-default'
+                    isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded ? 'hover:scale-[1.03] active:scale-95' : 'cursor-default'
                   } ${cardBorderClass}`}
                 >
                   <div className="relative mb-4">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl border ${
-                      cardRole ? 'bg-primary/20 border-white/20' : 'bg-darkbg border-primary/30 shadow-inner'
-                    }`}>
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border border-cybergold/20 bg-darkbg shadow-[0_0_12px_rgba(255,213,79,0.1)]`}>
                       {characterBadge}
                     </div>
                     {isTargetRevealed && (
-                      <span className="absolute -bottom-1.5 -right-1.5 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold shadow-md">
-                        <ShieldCheck size={10} />
+                      <span className="absolute -bottom-1 -right-1 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold shadow-md">
+                        <ShieldCheck size={12} />
                       </span>
                     )}
                   </div>
 
                   <h5 className="font-extrabold text-sm text-gray-200 truncate w-full tracking-wide">{p.username}</h5>
-                  <p className={`text-[9px] mt-1.5 uppercase tracking-widest font-black ${subtitleColorClass}`}>
+                  <p className={`text-[10px] mt-2 uppercase tracking-widest font-black ${subtitleColorClass}`}>
                     {roleName}
                   </p>
                 </div>
@@ -278,18 +323,18 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
 
       {/* Round End Modal Overlay */}
       {roundEnded && roundData && !matchEnded && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-blue">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-cybergold/30 relative overflow-hidden shadow-neon-gold">
             <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">Round {roundData.currentRound} Completed</span>
+              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest">Round {roundData.currentRound} Completed</span>
               <h3 className="text-3xl font-black text-white mt-1">Seetha Located!</h3>
-              <p className="text-sm text-gray-400 mt-2">
-                Ramudu scanned Seetha in <span className="text-white font-bold">{roundData.guessCount}</span> attempts.
+              <p className="text-sm text-gray-300 mt-2">
+                Ramudu successfully searched Seetha in <span className="text-cybergold font-bold">{roundData.guessCount}</span> scans.
               </p>
             </div>
 
             <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Session Leaderboard & Rankings</h4>
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Session Leaderboard</h4>
               <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                 {Object.entries(sessionScoreboard)
                   .map(([userId, val]) => ({ userId, username: val.username, score: val.score }))
@@ -299,7 +344,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
                     return (
                       <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
                         <div className="flex items-center gap-3">
-                          <span className="font-bold text-gray-400 w-4">#{idx + 1}</span>
+                          <span className="font-black text-cybergold/75 w-4">#{idx + 1}</span>
                           <span className="font-extrabold text-gray-200">{row.username}</span>
                         </div>
                         <div className="flex items-center gap-3">
@@ -315,12 +360,12 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
             {isHost ? (
               <button
                 onClick={() => socket.emit('rs_next_round', roomCode)}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center text-sm"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-cybergold to-amber-600 text-darkbg font-bold shadow-neon-gold hover:opacity-90 active:scale-95 transition-all text-center text-sm"
               >
                 Launch Round {roundData.currentRound + 1}
               </button>
             ) : (
-              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
+              <div className="text-center py-3 text-xs text-cybergold font-bold animate-pulse">
                 Waiting for Captain to launch the next round...
               </div>
             )}
@@ -330,18 +375,18 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
 
       {/* Grand Finale Session End Overlay Modal */}
       {matchEnded && matchResults && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-purple">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-cybergold/40 relative overflow-hidden shadow-neon-gold">
             <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest">Campaign Complete</span>
-              <h3 className="text-3xl font-black text-white mt-1">Grand Placements</h3>
-              <p className="text-sm text-gray-400 mt-2">
-                All 3 rounds completed! Final campaign standings finalized:
+              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest animate-pulse">Campaign Complete</span>
+              <h3 className="text-3xl font-black text-white mt-1">Grand Standings</h3>
+              <p className="text-sm text-gray-300 mt-2">
+                All rounds completed! The final standings are synchronized:
               </p>
             </div>
 
             <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Final Standings</h4>
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Campaign Leaderboard</h4>
               <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                 {matchResults.scoreboard.map((row) => (
                   <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
@@ -351,7 +396,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-[10px] text-gray-400">+{row.xpEarned} XP &bull; +{row.coinsEarned} 🪙</span>
-                      <span className="font-black text-cyberpink">{row.score} pts</span>
+                      <span className="font-black text-cybergold">{row.score} pts</span>
                     </div>
                   </div>
                 ))}
@@ -360,7 +405,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
 
             <button 
               onClick={() => window.location.reload()}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberpink font-bold shadow-neon-pink hover:opacity-90 active:scale-95 transition-all text-center text-sm"
+              className="w-full py-4 rounded-xl bg-gradient-to-r from-cybergold to-amber-600 text-darkbg font-bold shadow-neon-gold hover:opacity-90 active:scale-95 transition-all text-center text-sm"
             >
               Return to Lobby
             </button>

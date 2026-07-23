@@ -84,8 +84,17 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
   };
 
   // Start Game (triggered by host)
-  socket.on('rs_start_game', async (roomCode: string) => {
+  socket.on('rs_start_game', async (payload: string | { roomCode: string; maxRounds: number }) => {
     try {
+      let roomCode = '';
+      let maxRounds = 3;
+      if (typeof payload === 'string') {
+        roomCode = payload;
+      } else {
+        roomCode = payload.roomCode;
+        maxRounds = payload.maxRounds || 3;
+      }
+
       const room = roomStore.getRoom(roomCode);
       if (!room) return socket.emit('error', 'Room not found');
 
@@ -97,7 +106,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
 
       // Initialize session variables
       room.currentRound = 1;
-      room.maxRounds = 3;
+      room.maxRounds = maxRounds;
       room.sessionScoreboard = {};
       room.players.forEach((pl) => {
         room.sessionScoreboard![pl.id] = { username: pl.username, score: 0 };

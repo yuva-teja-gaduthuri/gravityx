@@ -169,14 +169,11 @@ export const resendVerification = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email is already verified' });
     }
 
-    let token = user.verificationToken;
-    if (!token) {
-      token = crypto.randomBytes(32).toString('hex');
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { verificationToken: token },
-      });
-    }
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { verificationToken: token },
+    });
 
     await sendVerificationEmail(user.email!, token, user.username);
     res.json({ message: 'Verification email resent successfully! Please check your inbox.' });

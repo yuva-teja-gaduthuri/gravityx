@@ -79,7 +79,7 @@ export default function Dashboard() {
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
-    if (!user) return;
+    if (!user || !socket) return;
 
     socket.emit('create_room', {
       userId: user.id,
@@ -96,7 +96,7 @@ export default function Dashboard() {
   const handleJoinRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setJoinError('');
-    if (!user || !joinCode.trim()) return;
+    if (!user || !socket || !joinCode.trim()) return;
 
     socket.emit('join_room', {
       roomCode: joinCode.trim().toUpperCase(),

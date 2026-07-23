@@ -50,6 +50,7 @@ export default function RoomPage() {
   const [chatInput, setChatInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [rounds, setRounds] = useState(3);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,7 +126,7 @@ export default function RoomPage() {
     if (room.gameType === 'LUDO') {
       socket.emit('ludo_start_game', room.code);
     } else {
-      socket.emit('rs_start_game', room.code);
+      socket.emit('rs_start_game', { roomCode: room.code, maxRounds: rounds });
     }
   };
 
@@ -147,7 +148,7 @@ export default function RoomPage() {
     router.push('/dashboard');
   };
 
-  if (loading || !user || !room) {
+  if (loading || !user || !room || !socket) {
     return (
       <div className="flex-grow flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
@@ -258,28 +259,47 @@ export default function RoomPage() {
                 )}
               </div>
 
-              {isHost ? (
-                <button
-                  onClick={handleStartGame}
-                  disabled={!canStart}
-                  className={`px-8 py-3.5 rounded-xl font-bold shadow-neon-blue bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 transition-all ${
-                    !canStart ? 'opacity-30 cursor-default' : 'active:scale-95 hover:scale-[1.01]'
-                  }`}
-                >
-                  Start Match
-                </button>
-              ) : (
-                <button
-                  onClick={handleToggleReady}
-                  className={`px-8 py-3.5 rounded-xl font-bold transition-all hover:scale-[1.01] ${
-                    isReady 
-                      ? 'bg-cybersuccess text-white border border-cybersuccess/30 shadow-neon-success' 
-                      : 'glass-card border-white/10 hover:border-cyberblue text-white'
-                  }`}
-                >
-                  {isReady ? 'Ready' : 'Not Ready'}
-                </button>
-              )}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
+                {isHost && room.gameType === 'RAMUDU_SEETHA' && (
+                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+                    <label className="text-xs font-bold text-gray-400 whitespace-nowrap">Rounds:</label>
+                    <select
+                      value={rounds}
+                      onChange={(e) => setRounds(Number(e.target.value))}
+                      className="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer"
+                    >
+                      <option value={1} className="bg-[#0b0f19] text-white">1 Round</option>
+                      <option value={3} className="bg-[#0b0f19] text-white">3 Rounds</option>
+                      <option value={5} className="bg-[#0b0f19] text-white">5 Rounds</option>
+                      <option value={7} className="bg-[#0b0f19] text-white">7 Rounds</option>
+                      <option value={10} className="bg-[#0b0f19] text-white">10 Rounds</option>
+                    </select>
+                  </div>
+                )}
+
+                {isHost ? (
+                  <button
+                    onClick={handleStartGame}
+                    disabled={!canStart}
+                    className={`px-8 py-3.5 rounded-xl font-bold shadow-neon-blue bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 transition-all ${
+                      !canStart ? 'opacity-30 cursor-default' : 'active:scale-95 hover:scale-[1.01]'
+                    }`}
+                  >
+                    Start Match
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleToggleReady}
+                    className={`px-8 py-3.5 rounded-xl font-bold transition-all hover:scale-[1.01] ${
+                      isReady 
+                        ? 'bg-cybersuccess text-white border border-cybersuccess/30 shadow-neon-success' 
+                        : 'glass-card border-white/10 hover:border-cyberblue text-white'
+                    }`}
+                  >
+                    {isReady ? 'Ready' : 'Not Ready'}
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>

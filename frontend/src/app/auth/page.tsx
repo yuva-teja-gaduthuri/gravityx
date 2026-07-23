@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, User, ShieldAlert, ArrowLeft, CheckCircle2 } from 'lucide-react';
@@ -29,13 +29,18 @@ function AuthContent() {
   // Sync tab state from URL params
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t) setTab(t);
-  }, [searchParams]);
+    if (t && t !== tab) {
+      setTab(t);
+    }
+  }, [searchParams, tab]);
+
+  const verifyDispatched = useRef(false);
 
   // Handle auto email verification when entering /auth?tab=verify&token=XYZ
   useEffect(() => {
     const token = searchParams.get('token');
-    if (tab === 'verify' && token) {
+    if (tab === 'verify' && token && !verifyDispatched.current) {
+      verifyDispatched.current = true;
       const verifyToken = async () => {
         setError('');
         setSuccess('');
@@ -49,6 +54,9 @@ function AuthContent() {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Verification failed');
           setSuccess(data.message || 'Email verified successfully! You can now log in.');
+          
+          // Clear URL search params to avoid infinite loops and re-verifying
+          router.replace('/auth?tab=login');
           setTab('login');
         } catch (err: any) {
           setError(err.message);
@@ -58,7 +66,7 @@ function AuthContent() {
       };
       verifyToken();
     }
-  }, [tab, searchParams]);
+  }, [tab, searchParams, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,6 +220,9 @@ function AuthContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to reset password');
       setSuccess(data.message || 'Password reset successfully! You can now log in.');
+      
+      // Clear URL search params to avoid token reuse and sync tab issues
+      router.replace('/auth?tab=login');
       setTab('login');
       setNewPassword('');
       setConfirmPassword('');
