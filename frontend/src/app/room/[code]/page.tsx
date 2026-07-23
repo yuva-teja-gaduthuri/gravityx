@@ -57,13 +57,7 @@ export default function RoomPage() {
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
 
-    // Join room socket emit
-    socket.emit('join_room', {
-      roomCode,
-      userId: user.id,
-      username: user.username,
-    });
-
+    // 1. Register event listeners first to prevent missing quick responses
     socket.on('room_joined', (roomData: RoomData) => {
       setRoom(roomData);
       const myPlayer = roomData.players.find((p) => p.id === user.id);
@@ -92,6 +86,13 @@ export default function RoomPage() {
     socket.on('error', (msg: string) => {
       setErrorMsg(msg);
       setTimeout(() => setErrorMsg(''), 5000);
+    });
+
+    // 2. Emit join room event
+    socket.emit('join_room', {
+      roomCode,
+      userId: user.id,
+      username: user.username,
     });
 
     return () => {
@@ -148,7 +149,34 @@ export default function RoomPage() {
     router.push('/dashboard');
   };
 
-  if (loading || !user || !room || !socket) {
+  if (loading || !user || !socket) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center">
+        <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Entering Lobby Matrix...</p>
+      </div>
+    );
+  }
+
+  if (errorMsg && !room) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center p-6">
+        <div className="p-6 max-w-md rounded-2xl bg-cybererror/10 border border-cybererror/30 text-cybererror text-center shadow-neon-error">
+          <ShieldAlert className="mx-auto mb-3 text-cybererror" size={32} />
+          <h3 className="font-extrabold text-white text-lg mb-1">Lobby Entry Failed</h3>
+          <p className="text-xs text-gray-400 mb-4">{errorMsg}</p>
+          <button 
+            onClick={() => router.push('/dashboard')}
+            className="w-full px-5 py-2.5 bg-cybererror hover:opacity-90 text-white font-bold text-xs rounded-xl transition-all"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!room) {
     return (
       <div className="flex-grow flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>

@@ -58,7 +58,7 @@ export function handleRoom(io: Server, socket: Socket) {
       });
 
       roomStore.addPlayer(code, hostPlayer);
-      socket.join(code);
+      await socket.join(code);
 
       socket.emit('room_created', room);
       io.to(code).emit('room_state_updated', room);
@@ -116,7 +116,7 @@ export function handleRoom(io: Server, socket: Socket) {
         return socket.emit('error', 'Failed to join room');
       }
 
-      socket.join(upperCode);
+      await socket.join(upperCode);
       socket.emit('room_joined', updatedRoom);
       io.to(upperCode).emit('room_state_updated', updatedRoom);
 
@@ -153,7 +153,7 @@ export function handleRoom(io: Server, socket: Socket) {
   });
 
   // Leave Room
-  socket.on('leave_room', ({ roomCode, userId }: { roomCode: string; userId: string }) => {
+  socket.on('leave_room', async ({ roomCode, userId }: { roomCode: string; userId: string }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
       const room = roomStore.getRoom(upperCode);
@@ -163,7 +163,7 @@ export function handleRoom(io: Server, socket: Socket) {
       const username = player?.username || 'A player';
 
       const updatedRoom = roomStore.removePlayer(upperCode, userId);
-      socket.leave(upperCode);
+      await socket.leave(upperCode);
 
       if (updatedRoom) {
         io.to(upperCode).emit('room_state_updated', updatedRoom);

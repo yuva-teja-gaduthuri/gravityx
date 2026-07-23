@@ -78,8 +78,8 @@ io.on('connection', (socket: Socket) => {
     if (userId) {
       const activeRooms = roomStore.getAllRooms();
       for (const room of activeRooms) {
-        const hasPlayer = room.players.some((p) => p.id === userId);
-        if (hasPlayer) {
+        const player = room.players.find((p) => p.id === userId);
+        if (player && player.socketId === socket.id) {
           const updated = roomStore.removePlayer(room.code, userId);
           if (updated) {
             io.to(room.code).emit('room_state_updated', updated);
