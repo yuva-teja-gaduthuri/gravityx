@@ -242,7 +242,7 @@ export default function ProfilePage() {
       </header>
 
       {/* Main Console Layout */}
-      <main className="relative z-10 flex-grow max-w-3xl mx-auto w-full p-6 md:p-8 flex flex-col gap-8 overflow-y-auto max-h-[calc(100vh-120px)] pr-2">
+      <main className="relative z-10 flex-grow max-w-3xl mx-auto w-full p-6 md:p-8 flex flex-col gap-8 pb-16">
         
         {/* TOP PANEL: Identity Telemetry picker */}
         <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink relative overflow-hidden w-full">
