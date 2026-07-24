@@ -13,6 +13,17 @@ import {
   Volume2, Lock
 } from 'lucide-react';
 
+const AVATAR_GRAPHICS: { [key: string]: string } = {
+  astronaut: '👨‍🚀',
+  cyborg: '🤖',
+  alien: '👽',
+  nebula: '🌌',
+  cyberpunk: '👾',
+  captain: '🧑‍✈️',
+  commander: '🧑‍🚀',
+  destiny: '💫'
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const socket = useSocket();
@@ -292,8 +303,8 @@ export default function Dashboard() {
               user.profileFrame === 'neon_glow' ? 'border-cyberblue shadow-neon-blue' : 
               user.profileFrame === 'event_horizon' ? 'border-cyberpink shadow-neon-pink' : 'border-white/10'
             }`}>
-              <div className="w-11 h-11 rounded-full bg-darkbg flex items-center justify-center font-bold text-lg uppercase text-cyberblue">
-                {user.username[0]}
+              <div className="w-11 h-11 rounded-full bg-darkbg flex items-center justify-center text-2xl">
+                {AVATAR_GRAPHICS[user.avatar] || '👽'}
               </div>
             </div>
             <span className="absolute -bottom-1.5 -right-1.5 px-2 py-0.5 rounded-full bg-primary text-[10px] font-black border border-darkbg">
