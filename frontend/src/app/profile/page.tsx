@@ -230,9 +230,10 @@ export default function ProfilePage() {
       <header className="relative z-10 w-full glass-panel py-5 px-6 md:px-12 flex items-center justify-between border-b border-white/5">
         <button 
           onClick={() => router.push('/dashboard')}
-          className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all uppercase tracking-wider bg-white/5 border border-white/10 px-4 py-2 rounded-xl"
+          className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:border-cyberpink transition-all"
+          title="Back to Dashboard"
         >
-          <ArrowLeft size={14} /> Back to Terminal
+          <ArrowLeft size={18} />
         </button>
 
         <div className="flex items-center gap-4">
