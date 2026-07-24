@@ -35,6 +35,7 @@ function AuthContent() {
   }, [searchParams, tab]);
 
   const verifyDispatched = useRef(false);
+  const guestLoginDispatched = useRef(false);
 
   // Handle auto email verification when entering /auth?tab=verify&token=XYZ
   useEffect(() => {
@@ -169,10 +170,18 @@ function AuthContent() {
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.message);
+      setTab('login');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (tab === 'guest' && !guestLoginDispatched.current) {
+      guestLoginDispatched.current = true;
+      handleGuestLogin();
+    }
+  }, [tab]);
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -546,6 +555,14 @@ function AuthContent() {
           <div className="flex flex-col items-center justify-center py-6 space-y-4">
             <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin"></div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verifying Identity Token...</p>
+          </div>
+        )}
+
+        {/* Auto guest login state loader */}
+        {tab === 'guest' && (
+          <div className="flex flex-col items-center justify-center py-6 space-y-4">
+            <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin"></div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Deploying Guest Telemetry...</p>
           </div>
         )}
       </div>

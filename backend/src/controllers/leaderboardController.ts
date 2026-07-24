@@ -4,12 +4,65 @@ import { AuthenticatedRequest } from '../middleware/auth';
 
 export const getLeaderboard = async (req: Request, res: Response) => {
   try {
-    const { type } = req.query; // 'global', 'daily', 'weekly', 'friends'
+    const { type, gameType } = req.query; // type: 'global', 'friends'; gameType: 'RAMUDU_SEETHA', 'LUDO'
     const limit = 20;
-
-    // Filter by daily or weekly or monthly could use match history stats or creation date, let's pull top users sorted by XP
-    // For friends leaderboard, we would check the request's user ID and filter to user + their accepted friends.
     const userId = (req as AuthenticatedRequest).user?.id;
+
+    // Check if game-specific leaderboard is requested
+    if (gameType && (gameType === 'RAMUDU_SEETHA' || gameType === 'LUDO')) {
+      const matchPlayersGroup = await prisma.matchPlayer.groupBy({
+        by: ['userId'],
+        where: {
+          match: {
+            gameType: gameType as string
+          }
+        },
+        _sum: {
+          score: true
+        },
+        _count: {
+          id: true
+        },
+        orderBy: {
+          _sum: {
+            score: 'desc'
+          }
+        },
+        take: limit
+      });
+
+      const userIds = matchPlayersGroup.map((m) => m.userId);
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          username: true,
+          level: true,
+          xp: true,
+          rank: true,
+          avatar: true,
+          profileFrame: true,
+        },
+      });
+
+      const rankedUsers = matchPlayersGroup.map((group, idx) => {
+        const u = users.find((user) => user.id === group.userId);
+        return {
+          id: group.userId,
+          username: u?.username || 'Unknown Operator',
+          level: u?.level || 1,
+          xp: u?.xp || 0,
+          rank: u?.rank || 'Bronze V',
+          avatar: u?.avatar || 'default_avatar',
+          profileFrame: u?.profileFrame || 'default_frame',
+          score: group._sum.score || 0,
+          gamesPlayed: group._count.id || 0,
+          placement: idx + 1
+        };
+      });
+
+      return res.json(rankedUsers);
+    }
 
     if (type === 'friends' && userId) {
       // Find accepted friend IDs

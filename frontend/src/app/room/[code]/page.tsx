@@ -44,20 +44,21 @@ export default function RoomPage() {
 
   const socket = useSocket();
   const { user, loading } = useAuth(true);
-
   const [room, setRoom] = useState<RoomData | null>(null);
   const [chatList, setChatList] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [rounds, setRounds] = useState(3);
+  const [matchEndedData, setMatchEndedData] = useState<any | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
 
-    // 1. Register event listeners first to prevent missing quick responses
     socket.on('room_joined', (roomData: RoomData) => {
       setRoom(roomData);
       const myPlayer = roomData.players.find((p) => p.id === user.id);
@@ -88,25 +89,41 @@ export default function RoomPage() {
       setTimeout(() => setErrorMsg(''), 5000);
     });
 
-    // 2. Emit join room event
-    socket.emit('join_room', {
-      roomCode,
-      userId: user.id,
-      username: user.username,
+    socket.on('rs_match_ended', (data: any) => {
+      setMatchEndedData({ gameType: 'RAMUDU_SEETHA', data });
     });
 
+    socket.on('ludo_match_ended', (data: any) => {
+      setMatchEndedData({ gameType: 'LUDO', data });
+    });
+
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current);
+      leaveTimeoutRef.current = null;
+    } else {
+      socket.emit('join_room', {
+        roomCode,
+        userId: user.id,
+        username: user.username,
+      });
+    }
+
     return () => {
-      // Clean room signals
-      socket.emit('leave_room', { roomCode, userId: user.id });
+      leaveTimeoutRef.current = setTimeout(() => {
+        socket.emit('leave_room', { roomCode, userId: user.id });
+        leaveTimeoutRef.current = null;
+      }, 300);
+
       socket.off('room_joined');
       socket.off('room_state_updated');
       socket.off('chat_message');
       socket.off('room_deleted');
       socket.off('error');
+      socket.off('rs_match_ended');
+      socket.off('ludo_match_ended');
     };
   }, [socket, user, roomCode, router]);
 
-  // Scroll chat list automatically
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatList]);
@@ -124,13 +141,13 @@ export default function RoomPage() {
 
   const handleStartGame = () => {
     if (!socket || !room) return;
+    setMatchEndedData(null);
     if (room.gameType === 'LUDO') {
       socket.emit('ludo_start_game', room.code);
     } else {
       socket.emit('rs_start_game', { roomCode: room.code, maxRounds: rounds });
     }
   };
-
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !socket || !user) return;
@@ -147,6 +164,15 @@ export default function RoomPage() {
     if (!user || !socket) return;
     socket.emit('leave_room', { roomCode, userId: user.id });
     router.push('/dashboard');
+  };
+
+  const handleCopyLink = () => {
+    if (typeof window !== 'undefined') {
+      const shareLink = `${window.location.origin}/room/${roomCode}`;
+      navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   if (loading || !user || !socket) {
@@ -194,13 +220,24 @@ export default function RoomPage() {
     <div className="flex-1 flex flex-col lg:flex-row h-screen overflow-hidden">
       {/* Game gameplay layout OR waiting room layout */}
       <div className="flex-grow flex flex-col overflow-y-auto max-h-[calc(100vh-160px)] lg:max-h-screen p-6">
-        
-        {room.status === 'PLAYING' ? (
-          // In Game Render
+                {room.status === 'PLAYING' || matchEndedData !== null ? (
           room.gameType === 'RAMUDU_SEETHA' ? (
-            <RamuduSeethaGame roomCode={roomCode} user={user} socket={socket} isHost={room.hostId === user.id} />
+            <RamuduSeethaGame 
+              roomCode={roomCode} 
+              user={user} 
+              socket={socket} 
+              isHost={room.hostId === user.id} 
+              matchEndedData={matchEndedData?.gameType === 'RAMUDU_SEETHA' ? matchEndedData.data : null}
+              onReturnToLobby={() => setMatchEndedData(null)}
+            />
           ) : (
-            <LudoGame roomCode={roomCode} user={user} socket={socket} />
+            <LudoGame 
+              roomCode={roomCode} 
+              user={user} 
+              socket={socket} 
+              matchEndedData={matchEndedData?.gameType === 'LUDO' ? matchEndedData.data : null}
+              onReturnToLobby={() => setMatchEndedData(null)}
+            />
           )
         ) : (
           // Lobby Waiting Room UI
@@ -211,8 +248,16 @@ export default function RoomPage() {
               <div>
                 <span className="text-[10px] font-black uppercase text-cyberblue tracking-wider">Lobby terminal ready</span>
                 <h2 className="text-2xl font-black text-white mt-0.5">{room.name}</h2>
-                <div className="text-xs text-gray-400 mt-1">
-                  Game: <strong className="text-cyberpink">{room.gameType === 'LUDO' ? 'Cosmic Ludo' : 'Ramudu-Seetha'}</strong> &bull; Code: <strong className="text-white tracking-widest">{room.code}</strong>
+                <div className="text-xs text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
+                  <span>Game: <strong className="text-cyberpink">{room.gameType === 'LUDO' ? 'Cosmic Ludo' : 'Ramudu-Seetha'}</strong></span>
+                  <span>&bull;</span>
+                  <span>Code: <strong className="text-white tracking-widest">{room.code}</strong></span>
+                  <button
+                    onClick={handleCopyLink}
+                    className="ml-2 px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberblue text-[10px] font-black text-gray-400 hover:text-white transition-all flex items-center gap-1 active:scale-95 uppercase tracking-wider"
+                  >
+                    {copied ? 'Link Copied!' : 'Share Lobby'}
+                  </button>
                 </div>
               </div>
 
@@ -352,6 +397,20 @@ export default function RoomPage() {
             </div>
           ))}
           <div ref={chatEndRef} />
+        </div>
+
+        {/* Quick Emoji bar */}
+        <div className="flex gap-1.5 px-3 py-1.5 border-t border-white/5 bg-white/5 overflow-x-auto scrollbar-none">
+          {['🔥', '🎮', '👑', '😂', '😮', '😢', '🎉', '👍', '👎', '💀'].map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => setChatInput((prev) => prev + emoji)}
+              className="text-sm p-1 rounded hover:bg-white/10 transition-all hover:scale-105 active:scale-95"
+            >
+              {emoji}
+            </button>
+          ))}
         </div>
 
         {/* Chat Input */}

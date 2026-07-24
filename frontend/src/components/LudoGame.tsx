@@ -32,6 +32,8 @@ interface LudoGameProps {
   roomCode: string;
   user: { id: string; username: string };
   socket: Socket;
+  matchEndedData?: any;
+  onReturnToLobby: () => void;
 }
 
 // Map 52 outer track indexes to [col, row] indexes (0-based) on a 15x15 grid
@@ -75,13 +77,20 @@ const BASE_COORDINATES: { [color: string]: [number, number][] } = {
   blue: [[2, 11], [3, 11], [2, 12], [3, 12]]
 };
 
-export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
+export default function LudoGame({ roomCode, user, socket, matchEndedData, onReturnToLobby }: LudoGameProps) {
   const [gameState, setGameState] = useState<LudoState | null>(null);
   const [validTokens, setValidTokens] = useState<number[]>([]);
   const [isRolling, setIsRolling] = useState(false);
   const [rollingValue, setRollingValue] = useState<number>(1);
-  const [matchEnded, setMatchEnded] = useState(false);
-  const [scoreboard, setScoreboard] = useState<any[]>([]);
+  const [matchEnded, setMatchEnded] = useState(matchEndedData ? true : false);
+  const [scoreboard, setScoreboard] = useState<any[]>(matchEndedData?.scoreboard || []);
+
+  useEffect(() => {
+    if (matchEndedData) {
+      setMatchEnded(true);
+      setScoreboard(matchEndedData.scoreboard || []);
+    }
+  }, [matchEndedData]);
 
   useEffect(() => {
     socket.on('ludo_game_started', (data: any) => {
@@ -187,6 +196,9 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
   const activePlayer = gameState.players[gameState.activePlayerIndex];
   const isMyTurn = activePlayer.id === user.id;
 
+  const hasGreenPlayer = gameState.players.some((p) => p.color === 'green');
+  const hasBluePlayer = gameState.players.some((p) => p.color === 'blue');
+
   // Get absolute grid placement [col, row] for a token
   const getTokenCoords = (player: LudoPlayer, token: LudoToken): [number, number] => {
     if (token.position === -1) {
@@ -210,13 +222,12 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
         <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative">
           
           {/* Top-Left Red Base */}
-          <div className="col-span-6 row-span-6 bg-cybererror/10 border border-cybererror/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5"></div>
+          <div className="col-span-6 row-span-6 bg-[#ff3b30] border-4 border-[#050816] rounded-xl relative flex items-center justify-center p-3">
+            <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-2 gap-2 grid grid-cols-2">
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ff3b30] bg-[#ff3b30]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ff3b30] bg-[#ff3b30]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ff3b30] bg-[#ff3b30]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ff3b30] bg-[#ff3b30]/10 shadow-inner"></div>
             </div>
           </div>
 
@@ -226,8 +237,8 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
               const col = idx % 3;
               const row = Math.floor(idx / 3);
               let bg = 'bg-white/5 border border-white/5';
-              if (col === 1 && row > 0) bg = 'bg-cybersuccess/40 border border-cybersuccess/20'; // Home stretch
-              if (col === 2 && row === 1) bg = 'bg-cybersuccess/80 border border-white/20'; // Green start
+              if (col === 1 && row > 0) bg = 'bg-[#34c759] border border-white/20'; // Home stretch
+              if (col === 2 && row === 1) bg = 'bg-[#34c759] border-2 border-white/40 shadow-inner'; // Green start
               const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
               return (
                 <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -238,13 +249,12 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
           </div>
 
           {/* Top-Right Green Base */}
-          <div className="col-span-6 row-span-6 bg-cybersuccess/10 border border-cybersuccess/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybersuccess font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 right-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5"></div>
+          <div className={`col-span-6 row-span-6 bg-[#34c759] border-4 border-[#050816] rounded-xl relative flex items-center justify-center p-3 transition-all duration-300 ${!hasGreenPlayer ? 'opacity-25 grayscale' : ''}`}>
+            <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-2 gap-2 grid grid-cols-2">
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#34c759] bg-[#34c759]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#34c759] bg-[#34c759]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#34c759] bg-[#34c759]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#34c759] bg-[#34c759]/10 shadow-inner"></div>
             </div>
           </div>
 
@@ -254,8 +264,8 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
               let bg = 'bg-white/5 border border-white/5';
-              if (row === 1 && col > 0) bg = 'bg-cybererror/40 border border-cybererror/20'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-cybererror/80 border border-white/20'; // Red start
+              if (row === 1 && col > 0) bg = 'bg-[#ff3b30] border border-white/20'; // Home stretch
+              if (row === 0 && col === 1) bg = 'bg-[#ff3b30] border-2 border-white/40 shadow-inner'; // Red start
               const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
               return (
                 <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -266,9 +276,17 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
           </div>
 
           {/* Center Goal Terminal */}
-          <div className="col-span-3 row-span-3 bg-gradient-to-br from-primary to-darkbg border border-white/10 rounded-xl flex items-center justify-center flex-col">
-            <Trophy className="text-cybergold sm:w-8 sm:h-8 w-5 h-5 animate-bounce" />
-            <span className="text-[8px] sm:text-[10px] uppercase font-black tracking-widest mt-1 text-cyberblue">Home</span>
+          <div className="col-span-3 row-span-3 bg-gradient-to-br from-primary to-darkbg border border-white/10 rounded-xl flex items-center justify-center flex-col relative overflow-hidden">
+            {/* Split triangles for traditional center */}
+            <div className="absolute inset-0 bg-[#050816]">
+              <div className="absolute inset-0 bg-[#ff3b30]" style={{ clipPath: 'polygon(50% 50%, 0 0, 0 100%)' }}></div>
+              <div className="absolute inset-0 bg-[#34c759]" style={{ clipPath: 'polygon(50% 50%, 0 0, 100% 0)' }}></div>
+              <div className="absolute inset-0 bg-[#ffcc00]" style={{ clipPath: 'polygon(50% 50%, 100% 0, 100% 100%)' }}></div>
+              <div className="absolute inset-0 bg-[#007aff]" style={{ clipPath: 'polygon(50% 50%, 0 100%, 100% 100%)' }}></div>
+            </div>
+            <div className="relative z-10 flex flex-col items-center justify-center bg-[#050816]/30 w-10 h-10 rounded-full border border-white/20">
+              <Trophy className="text-white sm:w-5 sm:h-5 w-4 h-4" />
+            </div>
           </div>
 
           {/* Right-Middle Yellow Column Track */}
@@ -277,8 +295,8 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
               let bg = 'bg-white/5 border border-white/5';
-              if (row === 1 && col < 5) bg = 'bg-cybergold/40 border border-cybergold/20'; // Home stretch
-              if (row === 2 && col === 4) bg = 'bg-cybergold/80 border border-white/20'; // Yellow start
+              if (row === 1 && col < 5) bg = 'bg-[#ffcc00] border border-white/20'; // Home stretch
+              if (row === 2 && col === 4) bg = 'bg-[#ffcc00] border-2 border-white/40 shadow-inner'; // Yellow start
               const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
               return (
                 <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -289,13 +307,12 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
           </div>
 
           {/* Bottom-Left Blue Base */}
-          <div className="col-span-6 row-span-6 bg-cyberblue/10 border border-cyberblue/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cyberblue font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 left-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5"></div>
+          <div className={`col-span-6 row-span-6 bg-[#007aff] border-4 border-[#050816] rounded-xl relative flex items-center justify-center p-3 transition-all duration-300 ${!hasBluePlayer ? 'opacity-25 grayscale' : ''}`}>
+            <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-2 gap-2 grid grid-cols-2">
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#007aff] bg-[#007aff]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#007aff] bg-[#007aff]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#007aff] bg-[#007aff]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#007aff] bg-[#007aff]/10 shadow-inner"></div>
             </div>
           </div>
 
@@ -305,8 +322,8 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
               const col = idx % 3;
               const row = Math.floor(idx / 3);
               let bg = 'bg-white/5 border border-white/5';
-              if (col === 1 && row < 5) bg = 'bg-cyberblue/40 border border-cyberblue/20'; // Home stretch
-              if (col === 0 && row === 4) bg = 'bg-cyberblue/80 border border-white/20'; // Blue start
+              if (col === 1 && row < 5) bg = 'bg-[#007aff] border border-white/20'; // Home stretch
+              if (col === 0 && row === 4) bg = 'bg-[#007aff] border-2 border-white/40 shadow-inner'; // Blue start
               const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
               return (
                 <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -317,13 +334,12 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
           </div>
 
           {/* Bottom-Right Yellow Base */}
-          <div className="col-span-6 row-span-6 bg-cybergold/10 border border-cybergold/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybergold font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 right-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5"></div>
+          <div className="col-span-6 row-span-6 bg-[#ffcc00] border-4 border-[#050816] rounded-xl relative flex items-center justify-center p-3">
+            <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-2 gap-2 grid grid-cols-2">
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ffcc00] bg-[#ffcc00]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ffcc00] bg-[#ffcc00]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ffcc00] bg-[#ffcc00]/10 shadow-inner"></div>
+              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border-2 border-[#ffcc00] bg-[#ffcc00]/10 shadow-inner"></div>
             </div>
           </div>
 
@@ -516,7 +532,7 @@ export default function LudoGame({ roomCode, user, socket }: LudoGameProps) {
             </div>
 
             <button 
-              onClick={() => window.location.reload()}
+              onClick={onReturnToLobby}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 transition-all text-center"
             >
               Return to Lobby deck

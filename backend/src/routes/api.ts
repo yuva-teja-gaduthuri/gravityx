@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, guestLogin, getProfile, verifyEmail, resendVerification, forgotPassword, resetPassword } from '../controllers/authController';
+import { register, login, guestLogin, getProfile, updateProfile, verifyEmail, resendVerification, forgotPassword, resetPassword } from '../controllers/authController';
 import {
   getFriends,
   getPendingRequests,
@@ -21,6 +21,7 @@ router.post('/auth/register', register);
 router.post('/auth/login', login);
 router.post('/auth/guest', guestLogin);
 router.get('/auth/profile', authenticateJWT, getProfile);
+router.put('/auth/profile', authenticateJWT, updateProfile);
 router.post('/auth/verify', verifyEmail);
 router.post('/auth/resend-verification', resendVerification);
 router.post('/auth/forgot-password', forgotPassword);
@@ -42,6 +43,26 @@ router.post('/store/equip', authenticateJWT, equipItem);
 
 // Leaderboard Route
 router.get('/leaderboard', authenticateJWT, getLeaderboard);
+
+// Public Lobby Rooms
+router.get('/rooms', authenticateJWT, (req, res) => {
+  try {
+    const rooms = roomStore.getAllRooms();
+    const publicLobbies = rooms
+      .filter((r) => r.type === 'PUBLIC' && r.status === 'LOBBY')
+      .map((r) => ({
+        code: r.code,
+        name: r.name,
+        gameType: r.gameType,
+        maxPlayers: r.maxPlayers,
+        playerCount: r.players.length,
+        hostName: r.players.find(p => p.id === r.hostId)?.username || r.players[0]?.username || 'Captain',
+      }));
+    res.json(publicLobbies);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // Admin Routes
 router.get('/admin/users', authenticateJWT, requireAdmin, getUsers);

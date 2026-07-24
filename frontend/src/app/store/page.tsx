@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { getApiUrl, fetchWithCache, invalidateCache } from '../../utils/api';
-import { Coins, ArrowLeft, ShieldAlert, Sparkles, Check } from 'lucide-react';
+import { Coins, ArrowLeft, ShieldAlert, Sparkles, Check, User } from 'lucide-react';
 
 interface StoreItem {
   id: string;
@@ -192,10 +192,77 @@ export default function StorePage() {
               >
                 <div>
                   <div className="w-full h-32 rounded-2xl bg-white/5 flex items-center justify-center relative overflow-hidden border border-white/5 mb-4">
-                    {/* Simulated skin icons */}
-                    <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center font-bold text-xl text-cyberblue border border-cyberblue/30 uppercase shadow-neon-blue">
-                      {item.name[0]}
-                    </div>
+                    {(() => {
+                      const type = item.type;
+                      const id = item.identifier;
+
+                      if (type === 'AVATAR') {
+                        const avatarEmojis: { [key: string]: string } = {
+                          astronaut: '👨‍🚀',
+                          cyborg: '🤖',
+                          alien: '👽',
+                          nebula: '🌌',
+                          cyberpunk: '👾'
+                        };
+                        const emoji = avatarEmojis[id] || '🛸';
+                        return (
+                          <div className="w-16 h-16 rounded-full bg-primary/10 border-2 border-cyberpink flex items-center justify-center text-3xl shadow-neon-pink">
+                            {emoji}
+                          </div>
+                        );
+                      }
+
+                      if (type === 'DICE') {
+                        const colors: { [key: string]: string } = {
+                          neon_red: 'border-cybererror bg-cybererror/10 text-cybererror shadow-neon-error',
+                          neon_blue: 'border-cyberblue bg-cyberblue/10 text-cyberblue shadow-neon-blue',
+                          gold_luxe: 'border-cybergold bg-cybergold/10 text-cybergold shadow-neon-gold'
+                        };
+                        const colorClass = colors[id] || 'border-cyberblue bg-cyberblue/10 text-cyberblue shadow-neon-blue';
+                        return (
+                          <div className={`w-14 h-14 rounded-xl border-2 flex items-center justify-center font-black text-2xl ${colorClass}`}>
+                            ⚅
+                          </div>
+                        );
+                      }
+
+                      if (type === 'BOARD') {
+                        const boardThemes: { [key: string]: string } = {
+                          cosmo_dark: 'from-[#050816] to-[#0b0f19] border-cyberblue/40 shadow-neon-blue',
+                          neon_light: 'from-white to-[#f4f6fc] border-[#6C63FF]/30 text-darkbg shadow-lg',
+                          retro_synth: 'from-[#1e0b36] to-[#050014] border-cyberpink/40 shadow-neon-pink'
+                        };
+                        const bg = boardThemes[id] || 'from-[#050816] to-[#0b0f19] border-cyberblue/40';
+                        return (
+                          <div className={`w-20 h-20 rounded-xl bg-gradient-to-br border p-1 grid grid-cols-2 gap-1 ${bg}`}>
+                            <div className="bg-[#ff3b30] rounded-sm opacity-80"></div>
+                            <div className="bg-[#34c759] rounded-sm opacity-80"></div>
+                            <div className="bg-[#007aff] rounded-sm opacity-80"></div>
+                            <div className="bg-[#ffcc00] rounded-sm opacity-80"></div>
+                          </div>
+                        );
+                      }
+
+                      if (type === 'FRAME') {
+                        const frames: { [key: string]: string } = {
+                          neon_glow: 'border-cyberblue shadow-neon-blue animate-pulse',
+                          event_horizon: 'border-cyberpink shadow-neon-pink animate-pulse',
+                          gold_crest: 'border-cybergold shadow-neon-gold'
+                        };
+                        const border = frames[id] || 'border-white/20';
+                        return (
+                          <div className={`w-16 h-16 rounded-full border-4 flex items-center justify-center bg-white/5 ${border}`}>
+                            <User className="text-gray-400" size={20} />
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center font-bold text-xl text-cyberblue border border-cyberblue/30 uppercase shadow-neon-blue">
+                          {item.name[0]}
+                        </div>
+                      );
+                    })()}
                     <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-black/40 text-[9px] font-bold text-gray-400 uppercase">
                       {item.type}
                     </span>

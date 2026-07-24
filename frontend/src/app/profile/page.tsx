@@ -1,0 +1,477 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../../hooks/useAuth';
+import ThemeToggle from '../../components/ThemeToggle';
+import { getApiUrl } from '../../utils/api';
+import { 
+  Trophy, Coins, LogOut, Settings, ShieldAlert, CheckCircle2,
+  Volume2, ArrowLeft, Zap, Shield, Sparkles, User, PlayCircle, BarChart2
+} from 'lucide-react';
+
+const AVATAR_GRAPHICS: { [key: string]: string } = {
+  astronaut: '👨‍🚀',
+  cyborg: '🤖',
+  alien: '👽',
+  nebula: '🌌',
+  cyberpunk: '👾',
+  captain: '🧑‍✈️',
+  commander: '🧑‍🚀',
+  destiny: '💫'
+};
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const { user, loading, refreshProfile, logout } = useAuth(true);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Profile Edit states
+  const [editUsername, setEditUsername] = useState('');
+  const [editAvatar, setEditAvatar] = useState('astronaut');
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
+
+  // Consolidate settings states
+  const [music, setMusic] = useState(true);
+  const [sound, setSound] = useState(true);
+  const [volume, setVolume] = useState(80);
+  const [notifications, setNotifications] = useState(true);
+  const [language, setLanguage] = useState('English');
+  const [privacy, setPrivacy] = useState('Public');
+
+  // Profile Statistics
+  const [stats, setStats] = useState({
+    matchesPlayed: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0
+  });
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [achievements, setAchievements] = useState<any[]>([]);
+
+  // Fetch full profile stats
+  useEffect(() => {
+    if (!user) return;
+    setEditUsername(user.username);
+    setEditAvatar(user.avatar || 'astronaut');
+
+    const fetchStats = async () => {
+      const token = localStorage.getItem('gravityx_token');
+      try {
+        const res = await fetch(getApiUrl('/api/auth/profile'), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStats(data.stats || { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0 });
+          setInventory(data.inventory || []);
+          setAchievements(data.achievements || []);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchStats();
+  }, [user]);
+
+  // Load settings on mount
+  useEffect(() => {
+    try {
+      const savedMusic = localStorage.getItem('gravityx_setting_music');
+      const savedSound = localStorage.getItem('gravityx_setting_sound');
+      const savedVolume = localStorage.getItem('gravityx_setting_volume');
+      const savedNotifications = localStorage.getItem('gravityx_setting_notifications');
+      const savedLanguage = localStorage.getItem('gravityx_setting_language');
+      const savedPrivacy = localStorage.getItem('gravityx_setting_privacy');
+
+      if (savedMusic !== null) setMusic(savedMusic === 'true');
+      if (savedSound !== null) setSound(savedSound === 'true');
+      if (savedVolume !== null) setVolume(Number(savedVolume));
+      if (savedNotifications !== null) setNotifications(savedNotifications === 'true');
+      if (savedLanguage !== null) setLanguage(savedLanguage);
+      if (savedPrivacy !== null) setPrivacy(savedPrivacy);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // 3D background animation canvas loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId: number;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Particle class
+    class Particle {
+      x: number;
+      y: number;
+      z: number;
+      size: number;
+      color: string;
+
+      constructor() {
+        this.x = Math.random() * width - width / 2;
+        this.y = Math.random() * height - height / 2;
+        this.z = Math.random() * width;
+        this.size = 1.5;
+        this.color = Math.random() > 0.5 ? '#6C63FF' : '#FF5EDF';
+      }
+
+      update() {
+        this.z -= 1.5;
+        if (this.z <= 0) {
+          this.z = width;
+          this.x = Math.random() * width - width / 2;
+          this.y = Math.random() * height - height / 2;
+        }
+      }
+
+      draw(c: CanvasRenderingContext2D) {
+        const px = (this.x / this.z) * width + width / 2;
+        const py = (this.y / this.z) * height + height / 2;
+        const size = (1 - this.z / width) * 4;
+
+        if (px >= 0 && px <= width && py >= 0 && py <= height) {
+          c.fillStyle = this.color;
+          c.beginPath();
+          c.arc(px, py, size, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    }
+
+    const particles: Particle[] = Array.from({ length: 120 }, () => new Particle());
+
+    const renderLoop = () => {
+      ctx.fillStyle = 'rgba(5, 8, 22, 0.15)';
+      ctx.fillRect(0, 0, width, height);
+
+      particles.forEach((p) => {
+        p.update();
+        p.draw(ctx);
+      });
+
+      animationFrameId = requestAnimationFrame(renderLoop);
+    };
+    renderLoop();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError('');
+    setProfileSuccess('');
+    const token = localStorage.getItem('gravityx_token');
+    try {
+      localStorage.setItem('gravityx_setting_music', String(music));
+      localStorage.setItem('gravityx_setting_sound', String(sound));
+      localStorage.setItem('gravityx_setting_volume', String(volume));
+      localStorage.setItem('gravityx_setting_notifications', String(notifications));
+      localStorage.setItem('gravityx_setting_language', language);
+      localStorage.setItem('gravityx_setting_privacy', privacy);
+
+      const res = await fetch(getApiUrl('/api/auth/profile'), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ username: editUsername, avatar: editAvatar })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update profile');
+
+      localStorage.setItem('gravityx_user', JSON.stringify(data.user));
+      refreshProfile();
+      setProfileSuccess('Telemetry parameters committed successfully!');
+      setTimeout(() => {
+        setProfileSuccess('');
+      }, 2000);
+    } catch (err: any) {
+      setProfileError(err.message);
+    }
+  };
+
+  if (loading || !user) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-[#050816]">
+        <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
+        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Opening Identity File...</p>
+      </div>
+    );
+  }
+
+  const nextLevelXp = user.level * 200;
+  const xpPercent = Math.round((user.xp / nextLevelXp) * 100);
+
+  return (
+    <div className="min-h-screen bg-[#050816] text-white relative overflow-x-hidden flex flex-col font-sans">
+      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0 opacity-45" />
+
+      {/* Top Header */}
+      <header className="relative z-10 w-full glass-panel py-5 px-6 md:px-12 flex items-center justify-between border-b border-white/5">
+        <button 
+          onClick={() => router.push('/dashboard')}
+          className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-white transition-all uppercase tracking-wider bg-white/5 border border-white/10 px-4 py-2 rounded-xl"
+        >
+          <ArrowLeft size={14} /> Back to Terminal
+        </button>
+
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] font-black uppercase text-cyberpink tracking-wider">identity unit: authenticated</span>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      {/* Main Console Layout */}
+      <main className="relative z-10 flex-grow max-w-7xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        {/* LEFT COLUMN: Identity Telemetry picker */}
+        <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink">
+          <div className="flex flex-col items-center text-center">
+            {/* Visual Avatar display */}
+            <div className="w-24 h-24 rounded-full bg-primary/10 border-2 border-cyberpink flex items-center justify-center text-5xl shadow-neon-pink relative">
+              <span>{AVATAR_GRAPHICS[editAvatar] || '👽'}</span>
+              <span className="absolute -bottom-1 -right-1 px-2.5 py-0.5 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816]">
+                {user.level}
+              </span>
+            </div>
+            <h2 className="text-xl font-black text-white mt-4">{user.username}</h2>
+            <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider mt-1">Level {user.level} Operator</p>
+            
+            {/* XP progress */}
+            <div className="w-full mt-4">
+              <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1">
+                <span>XP PROGRESS</span>
+                <span>{user.xp}/{nextLevelXp} XP</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary to-cyberpink" style={{ width: `${xpPercent}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleUpdateProfile} className="space-y-4 pt-4 border-t border-white/5">
+            {profileError && (
+              <div className="p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
+                <ShieldAlert size={16} /> <span>{profileError}</span>
+              </div>
+            )}
+            {profileSuccess && (
+              <div className="p-3 rounded-lg bg-cybersuccess/10 border border-cybersuccess/30 text-cybersuccess text-xs flex gap-2">
+                <CheckCircle2 size={16} /> <span>{profileSuccess}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Change Username Alias</label>
+              <input 
+                type="text" 
+                required
+                value={editUsername}
+                onChange={(e) => setEditUsername(e.target.value)}
+                className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Select Identity Avatar</label>
+              <div className="grid grid-cols-4 gap-2 mt-2">
+                {Object.keys(AVATAR_GRAPHICS).map((av) => (
+                  <button
+                    key={av}
+                    type="button"
+                    onClick={() => setEditAvatar(av)}
+                    className={`p-2 rounded-xl border transition-all flex flex-col items-center gap-1 ${
+                      editAvatar === av 
+                        ? 'border-cyberpink bg-cyberpink/10 text-white shadow-neon-pink' 
+                        : 'border-white/5 bg-white/5 text-gray-400 hover:text-white hover:border-white/10'
+                    }`}
+                  >
+                    <span className="text-xl">{AVATAR_GRAPHICS[av]}</span>
+                    <span className="text-[8px] uppercase tracking-tighter truncate w-full text-center">{av}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all mt-4"
+            >
+              Commit Telemetry Upgrades
+            </button>
+          </form>
+        </div>
+
+        {/* MIDDLE COLUMN: Statistics & Items */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Stats card */}
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 shadow-neon-blue">
+            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+              <BarChart2 size={14} /> Mission Performance
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+                <span className="text-2xl font-black text-white">{stats.matchesPlayed}</span>
+                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Matches Played</span>
+              </div>
+              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+                <span className="text-2xl font-black text-cybersuccess">{stats.wins}</span>
+                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Victories</span>
+              </div>
+              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+                <span className="text-2xl font-black text-cybererror">{stats.losses}</span>
+                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Defeats</span>
+              </div>
+              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+                <span className="text-2xl font-black text-cyberblue">{stats.winRate}%</span>
+                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Win Ratio</span>
+              </div>
+            </div>
+
+            {/* Division Rank */}
+            <div className="bg-gradient-to-r from-cyberpink/10 to-cyberblue/10 border border-[#FF5EDF]/20 p-4 rounded-2xl flex items-center justify-between w-full mt-4">
+              <div className="flex items-center gap-3">
+                <Trophy className="text-cybergold" size={20} />
+                <span className="text-xs uppercase font-extrabold text-gray-300">Division Rank</span>
+              </div>
+              <span className="text-lg font-black text-cybergold">{user.rank}</span>
+            </div>
+          </div>
+
+          {/* Equipped Skins / Inventory */}
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4">
+            <h3 className="text-xs uppercase font-extrabold text-cyberpink tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+              <Zap size={14} /> Equipped Inventory
+            </h3>
+            {inventory.length === 0 ? (
+              <p className="text-xs text-gray-500 italic py-2">No equipped skins found. Purchase telemetry overrides in the store.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3.5">
+                {inventory.map((item, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col">
+                    <span className="text-xs font-bold text-white truncate">{item.name}</span>
+                    <span className="text-[8px] uppercase font-bold text-cyberpink mt-1">{item.type}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: Console Hardware parameters */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-blue">
+            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+              <Volume2 size={14} /> Hardware Parameters
+            </h3>
+
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-gray-300">Ambient Background Music</span>
+                <button 
+                  type="button"
+                  onClick={() => setMusic(!music)}
+                  className={`w-10 h-5 rounded-full p-0.5 transition-all ${music ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-all ${music ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                </button>
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-gray-300">Interactive Game Sound Effects</span>
+                <button 
+                  type="button"
+                  onClick={() => setSound(!sound)}
+                  className={`w-10 h-5 rounded-full p-0.5 transition-all ${sound ? 'bg-primary' : 'bg-white/10'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-all ${sound ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold text-gray-400">
+                  <span>Console Volume</span>
+                  <span>{volume}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min={0} 
+                  max={100}
+                  value={volume}
+                  onChange={(e) => setVolume(Number(e.target.value))}
+                  className="w-full h-1 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-gray-300">Lobby Language</span>
+                <select 
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer"
+                >
+                  <option value="English">English</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="Hindi">Hindi</option>
+                  <option value="Telugu">Telugu</option>
+                </select>
+              </div>
+
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-gray-300">Profile Privacy</span>
+                <select 
+                  value={privacy}
+                  onChange={(e) => setPrivacy(e.target.value)}
+                  className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer"
+                >
+                  <option value="Public">Public (Global Boards)</option>
+                  <option value="Friends">Friends Only</option>
+                  <option value="Private">Private</option>
+                </select>
+              </div>
+            </div>
+
+            <button 
+              onClick={handleUpdateProfile}
+              className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-wider hover:border-cyberblue transition-all"
+            >
+              Apply Configurations
+            </button>
+          </div>
+
+          {/* Destructive Logout button */}
+          <div className="glass-panel rounded-3xl p-6 border-white/5">
+            <button
+              onClick={() => {
+                logout();
+              }}
+              className="w-full py-3 bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-2 uppercase tracking-wider"
+            >
+              <LogOut size={14} /> Terminate Connection (Sign Out)
+            </button>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  );
+}

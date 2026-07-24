@@ -32,7 +32,7 @@ export const register = async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         username,
         email,
@@ -43,11 +43,19 @@ export const register = async (req: Request, res: Response) => {
       },
     });
 
-    // Send verification email asynchronously
-    await sendVerificationEmail(email, verificationToken, username);
+    try {
+      // Send verification email
+      await sendVerificationEmail(email, verificationToken, username);
+    } catch (emailError: any) {
+      // Rollback user creation if email fails so registration can be retried
+      await prisma.user.delete({
+        where: { id: user.id },
+      });
+      throw emailError;
+    }
 
     res.status(201).json({
-      message: 'Verification email sent. Please check your inbox to confirm your identity.'
+      message: 'Verification email sent successfully. Please check your inbox to confirm your identity.'
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -371,6 +379,59 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         date: mp.match.createdAt,
         status: mp.match.status,
       })),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Update Profile parameters (username, avatar)
+ */
+export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { username, avatar } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (username) {
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          username,
+          NOT: { id: userId },
+        },
+      });
+
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already exists' });
+      }
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(username && { username }),
+        ...(avatar && { avatar }),
+      },
+    });
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        isGuest: updatedUser.isGuest,
+        avatar: updatedUser.avatar,
+        profileFrame: updatedUser.profileFrame,
+        coins: updatedUser.coins,
+        xp: updatedUser.xp,
+        level: updatedUser.level,
+        rank: updatedUser.rank,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

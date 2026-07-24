@@ -28,9 +28,11 @@ interface RSGameProps {
   user: { id: string; username: string };
   socket: Socket;
   isHost: boolean;
+  matchEndedData?: any;
+  onReturnToLobby: () => void;
 }
 
-export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSGameProps) {
+export default function RamuduSeethaGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: RSGameProps) {
   const [myRole, setMyRole] = useState<string>('');
   const [ramuduId, setRamuduId] = useState<string>('');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -49,13 +51,20 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
   const [showLiveScore, setShowLiveScore] = useState<boolean>(false);
 
   // Match ended state
-  const [matchEnded, setMatchEnded] = useState(false);
+  const [matchEnded, setMatchEnded] = useState(matchEndedData ? true : false);
   const [matchResults, setMatchResults] = useState<{
     winnerId: string;
     seethaId: string;
     guessCount: number;
     scoreboard: ScoreboardRow[];
-  } | null>(null);
+  } | null>(matchEndedData || null);
+
+  useEffect(() => {
+    if (matchEndedData) {
+      setMatchEnded(true);
+      setMatchResults(matchEndedData);
+    }
+  }, [matchEndedData]);
 
   useEffect(() => {
     socket.on('rs_game_started', (data: any) => {
@@ -404,7 +413,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost }: RSG
             </div>
 
             <button 
-              onClick={() => window.location.reload()}
+              onClick={onReturnToLobby}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-cybergold to-amber-600 text-darkbg font-bold shadow-neon-gold hover:opacity-90 active:scale-95 transition-all text-center text-sm"
             >
               Return to Lobby

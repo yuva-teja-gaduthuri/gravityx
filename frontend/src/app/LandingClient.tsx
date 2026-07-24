@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Gamepad2, Users, Rocket, Trophy, MessageSquare, ShieldAlert, ChevronDown, Activity, Star } from 'lucide-react';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LandingClient() {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
@@ -51,6 +52,7 @@ export default function LandingClient() {
         </nav>
 
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <Link href="/auth" className="px-5 py-2 text-sm font-semibold rounded-xl glass-card text-white hover:border-cyberpink transition-all">
             Login
           </Link>
