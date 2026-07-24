@@ -59,7 +59,7 @@ export default function SpaceBackground() {
 
         if (px >= 0 && px <= width && py >= 0 && py <= height) {
           c.fillStyle = isLightMode 
-            ? (this.color === '#6C63FF' ? '#4A42FF' : '#D122AC') 
+            ? (this.color === '#6C63FF' ? 'rgba(74, 66, 255, 0.35)' : 'rgba(209, 34, 172, 0.35)') 
             : this.color;
           c.beginPath();
           c.arc(px, py, size, 0, Math.PI * 2);
@@ -72,7 +72,7 @@ export default function SpaceBackground() {
 
     const renderLoop = () => {
       const isLightMode = document.documentElement.classList.contains('light');
-      ctx.fillStyle = isLightMode ? 'rgba(244, 246, 252, 0.2)' : 'rgba(5, 8, 22, 0.2)';
+      ctx.fillStyle = isLightMode ? 'rgba(244, 246, 252, 0.92)' : 'rgba(5, 8, 22, 0.2)';
       ctx.fillRect(0, 0, width, height);
 
       stars.forEach((s) => {
