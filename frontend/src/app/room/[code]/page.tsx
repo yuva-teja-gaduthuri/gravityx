@@ -97,22 +97,14 @@ export default function RoomPage() {
       setMatchEndedData({ gameType: 'LUDO', data });
     });
 
-    if (leaveTimeoutRef.current) {
-      clearTimeout(leaveTimeoutRef.current);
-      leaveTimeoutRef.current = null;
-    } else {
-      socket.emit('join_room', {
-        roomCode,
-        userId: user.id,
-        username: user.username,
-      });
-    }
+    socket.emit('join_room', {
+      roomCode,
+      userId: user.id,
+      username: user.username,
+    });
 
     return () => {
-      leaveTimeoutRef.current = setTimeout(() => {
-        socket.emit('leave_room', { roomCode, userId: user.id });
-        leaveTimeoutRef.current = null;
-      }, 300);
+      socket.emit('leave_room', { roomCode, userId: user.id });
 
       socket.off('room_joined');
       socket.off('room_state_updated');
@@ -278,9 +270,19 @@ export default function RoomPage() {
 
             {/* Crew Members Grid */}
             <div className="space-y-4">
-              <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 flex items-center gap-2">
-                <Users size={16} /> Joined Crew ({room.players.length}/{room.maxPlayers})
-              </h3>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 flex items-center gap-2">
+                  <Users size={16} /> Joined Crew ({room.players.length}/{room.maxPlayers})
+                </h3>
+                {isHost && room.players.length < room.maxPlayers && (
+                  <button
+                    onClick={() => socket.emit('add_bot', { roomCode })}
+                    className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all active:scale-95 flex items-center gap-1 shadow-sm"
+                  >
+                    Add AI Crew
+                  </button>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                 {room.players.map((player) => {
@@ -288,10 +290,20 @@ export default function RoomPage() {
                   return (
                     <div 
                       key={player.id} 
-                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-center relative ${
+                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-center relative group ${
                         player.ready ? 'border-cybersuccess shadow-neon-success' : 'border-white/5'
                       }`}
                     >
+                      {isHost && player.id !== user.id && (
+                        <button
+                          onClick={() => socket.emit('leave_room', { roomCode, userId: player.id })}
+                          className="absolute top-2 right-2 p-1.5 rounded bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white transition-all duration-200 z-30 opacity-0 group-hover:opacity-100 flex items-center justify-center animate-fade-in"
+                          title="Remove Crew Member"
+                        >
+                          <LogOut size={10} className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+
                       <div className="relative mb-3">
                         <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border border-white/10`}>
                           {player.username[0]}
@@ -308,7 +320,14 @@ export default function RoomPage() {
                         )}
                       </div>
 
-                      <h4 className="font-extrabold text-sm text-gray-200 truncate w-full">{player.username}</h4>
+                      <h4 className="font-extrabold text-sm text-gray-200 truncate w-full flex items-center justify-center gap-1">
+                        {player.username}
+                        {player.isBot && (
+                          <span className="px-1 py-0.5 rounded bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black text-cyberpink uppercase">
+                            AI
+                          </span>
+                        )}
+                      </h4>
                       <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
                         {isPlayerHost ? 'Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
                       </p>

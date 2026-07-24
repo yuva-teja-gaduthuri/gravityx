@@ -3,23 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --bg-color: #f4f6fc;
-  --text-color: #1a202c;
-  --text-muted: #4a5568;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-card-bg: rgba(0, 0, 0, 0.03);
-  --glass-card-border: rgba(0, 0, 0, 0.05);
-  --glass-card-hover-bg: rgba(0, 0, 0, 0.06);
-  --glass-input-bg: rgba(0, 0, 0, 0.04);
-  --glass-input-border: rgba(0, 0, 0, 0.1);
-  --glass-input-focus-bg: rgba(0, 0, 0, 0.06);
-  --glass-input-text: #1a202c;
-  --body-bg-gradient: linear-gradient(to bottom, #f0f4f8, #d9e2ec);
-  --radial-glow-1: rgba(108, 99, 255, 0.08);
-  --radial-glow-2: rgba(0, 245, 255, 0.08);
-  --radial-glow-3: rgba(255, 94, 223, 0.05);
-  --star-opacity: 0.15;
+  --bg-color: #fafaff;
+  --text-color: #0c0e1a;
+  --text-muted: #4b526d;
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(108, 99, 255, 0.12);
+  --glass-card-bg: rgba(255, 255, 255, 0.4);
+  --glass-card-border: rgba(108, 99, 255, 0.08);
+  --glass-card-hover-bg: rgba(255, 255, 255, 0.6);
+  --glass-input-bg: rgba(108, 99, 255, 0.04);
+  --glass-input-border: rgba(108, 99, 255, 0.15);
+  --glass-input-focus-bg: rgba(255, 255, 255, 0.95);
+  --glass-input-text: #0c0e1a;
+  --body-bg-gradient: linear-gradient(to bottom, #f3f0ff, #e2e8f0);
+  --radial-glow-1: rgba(108, 99, 255, 0.15);
+  --radial-glow-2: rgba(0, 245, 255, 0.12);
+  --radial-glow-3: rgba(255, 94, 223, 0.12);
+  --star-opacity: 0.3;
 }
 
 .dark {

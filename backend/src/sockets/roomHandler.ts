@@ -209,6 +209,52 @@ export function handleRoom(io: Server, socket: Socket) {
     });
   });
 
+  // Add Bot Player (triggered by host)
+  socket.on('add_bot', ({ roomCode }: { roomCode: string }) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      // Only host can add bots
+      const host = room.players.find((p) => p.socketId === socket.id);
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can add bots');
+      }
+
+      if (room.players.length >= room.maxPlayers) {
+        return socket.emit('error', 'Room is full');
+      }
+
+      const botNames = ['AlphaBot', 'NovaBot', 'NebulaAI', 'CosmoBot', 'OrbitAI', 'CyberBot'];
+      const unusedNames = botNames.filter(name => !room.players.some(p => p.username === name));
+      const botName = unusedNames.length > 0 ? unusedNames[Math.floor(Math.random() * unusedNames.length)] : `Bot_${Math.floor(100 + Math.random() * 900)}`;
+
+      const botPlayer: Player = {
+        id: `bot_${Math.random().toString(36).substring(2, 9)}`,
+        username: botName,
+        socketId: 'BOT_SOCKET',
+        avatar: 'cyborg',
+        profileFrame: 'default_frame',
+        ready: true, // Bots are always ready to start
+        isBot: true,
+      };
+
+      const updatedRoom = roomStore.addPlayer(upperCode, botPlayer);
+      if (updatedRoom) {
+        io.to(upperCode).emit('room_state_updated', updatedRoom);
+        io.to(upperCode).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${botName} joined the crew.`,
+          createdAt: new Date(),
+        });
+      }
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
   // Simple RTC voice chat signaling placeholder
   socket.on('voice_signal', ({ roomCode, targetSocketId, signal }: { roomCode: string; targetSocketId: string; signal: any }) => {
     io.to(targetSocketId).emit('voice_signal_received', {

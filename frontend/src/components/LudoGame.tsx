@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { Trophy, Timer, Play, ShieldAlert, Sparkles } from 'lucide-react';
+import { playDiceRoll, playTokenMove, playTokenCapture, playVictory } from '../utils/soundEffects';
 
 interface LudoToken {
   id: number;
@@ -108,6 +109,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
 
     socket.on('ludo_dice_rolled', (data: any) => {
       setIsRolling(true);
+      playDiceRoll();
       // Simulate random dice cycles
       let count = 0;
       const interval = setInterval(() => {
@@ -128,6 +130,11 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     });
 
     socket.on('ludo_token_moved', (data: any) => {
+      if (data.captured) {
+        playTokenCapture();
+      } else {
+        playTokenMove();
+      }
       setGameState(prev => prev ? { 
         ...prev, 
         players: data.players,
@@ -148,9 +155,14 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     });
 
     socket.on('ludo_match_ended', (data: any) => {
+      playVictory();
       setMatchEnded(true);
-      setScoreboard(data.scoreboard);
-      confetti({ particleCount: 150, spread: 80 });
+      setScoreboard(data.scoreboard || []);
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
     });
 
     // Send initial request to sync
@@ -238,11 +250,12 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
               const row = Math.floor(idx / 3);
               let bg = 'bg-white/5 border border-white/5';
               if (col === 1 && row > 0) bg = 'bg-[#34c759] border border-white/20'; // Home stretch
-              if (col === 2 && row === 1) bg = 'bg-[#34c759] border-2 border-white/40 shadow-inner'; // Green start
+              if (col === 2 && row === 1) bg = 'bg-[#34c759] border-2 border-white/40 shadow-inner relative'; // Green start
               const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
               return (
                 <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
                   {isStar ? '★' : ''}
+                  {col === 2 && row === 1 && <span className="absolute text-[8px] sm:text-xs text-white/95 font-black">▼</span>}
                 </div>
               );
             })}
@@ -265,11 +278,12 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
               const row = Math.floor(idx / 6);
               let bg = 'bg-white/5 border border-white/5';
               if (row === 1 && col > 0) bg = 'bg-[#ff3b30] border border-white/20'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-[#ff3b30] border-2 border-white/40 shadow-inner'; // Red start
+              if (row === 0 && col === 1) bg = 'bg-[#ff3b30] border-2 border-white/40 shadow-inner relative'; // Red start
               const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
               return (
                 <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
                   {isStar ? '★' : ''}
+                  {row === 0 && col === 1 && <span className="absolute text-[8px] sm:text-xs text-white/95 font-black">➜</span>}
                 </div>
               );
             })}
@@ -296,11 +310,12 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
               const row = Math.floor(idx / 6);
               let bg = 'bg-white/5 border border-white/5';
               if (row === 1 && col < 5) bg = 'bg-[#ffcc00] border border-white/20'; // Home stretch
-              if (row === 2 && col === 4) bg = 'bg-[#ffcc00] border-2 border-white/40 shadow-inner'; // Yellow start
+              if (row === 2 && col === 4) bg = 'bg-[#ffcc00] border-2 border-white/40 shadow-inner relative'; // Yellow start
               const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
               return (
                 <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
                   {isStar ? '★' : ''}
+                  {row === 2 && col === 4 && <span className="absolute text-[8px] sm:text-xs text-white/95 font-black">◀</span>}
                 </div>
               );
             })}
@@ -323,11 +338,12 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
               const row = Math.floor(idx / 3);
               let bg = 'bg-white/5 border border-white/5';
               if (col === 1 && row < 5) bg = 'bg-[#007aff] border border-white/20'; // Home stretch
-              if (col === 0 && row === 4) bg = 'bg-[#007aff] border-2 border-white/40 shadow-inner'; // Blue start
+              if (col === 0 && row === 4) bg = 'bg-[#007aff] border-2 border-white/40 shadow-inner relative'; // Blue start
               const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
               return (
                 <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
                   {isStar ? '★' : ''}
+                  {col === 0 && row === 4 && <span className="absolute text-[8px] sm:text-xs text-white/95 font-black">▲</span>}
                 </div>
               );
             })}

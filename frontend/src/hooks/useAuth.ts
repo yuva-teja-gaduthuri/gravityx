@@ -77,6 +77,11 @@ export function useAuth(requireAuth = true) {
     router.push('/');
   };
 
+  const refreshProfile = useCallback(async () => {
+    invalidateCache('/api/auth/profile');
+    await fetchProfile();
+  }, [fetchProfile]);
+
   return {
     user,
     stats,
@@ -85,6 +90,7 @@ export function useAuth(requireAuth = true) {
     matchHistory,
     loading,
     logout,
-    refreshProfile: fetchProfile,
+    refreshProfile,
   };
 }
+

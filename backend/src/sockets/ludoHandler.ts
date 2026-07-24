@@ -46,9 +46,11 @@ const activeTimers: { [roomCode: string]: NodeJS.Timeout } = {};
 
 export function handleLudo(io: Server, socket: Socket) {
   // Start Ludo Game
-  socket.on('ludo_start_game', async (roomCode: string) => {
+  socket.on('ludo_start_game', async (payload: string | { roomCode: string }) => {
     try {
-      const room = roomStore.getRoom(roomCode);
+      const roomCode = typeof payload === 'string' ? payload : payload.roomCode;
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
       if (!room) return socket.emit('error', 'Room not found');
 
       // Check permissions
@@ -107,17 +109,24 @@ export function handleLudo(io: Server, socket: Socket) {
         consecutiveSixes: 0,
       };
 
-      roomStore.updateGameState(roomCode, gameState);
-      roomStore.updateRoomStatus(roomCode, 'PLAYING');
+      roomStore.updateGameState(upperCode, gameState);
+      roomStore.updateRoomStatus(upperCode, 'PLAYING');
 
       // Notify clients and send initial state
-      io.to(roomCode).emit('ludo_game_started', {
-        roomCode,
+      io.to(upperCode).emit('ludo_game_started', {
+        roomCode: upperCode,
         gameState,
       });
 
       // Start turn timer
-      startTurnTimer(io, roomCode);
+      startTurnTimer(io, upperCode);
+
+      // Check if first player is a bot
+      const activePlayer = gameState.players[0];
+      const roomPlayer = room.players.find((p) => p.id === activePlayer.id);
+      if (roomPlayer && roomPlayer.isBot) {
+        triggerBotTurn(io, upperCode, 0);
+      }
     } catch (err: any) {
       socket.emit('error', err.message);
     }
@@ -126,7 +135,8 @@ export function handleLudo(io: Server, socket: Socket) {
   // Roll Dice
   socket.on('ludo_roll_dice', async (roomCode: string) => {
     try {
-      const room = roomStore.getRoom(roomCode);
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
       if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Game not active');
 
       const state = room.gameState as LudoState;
@@ -155,7 +165,7 @@ export function handleLudo(io: Server, socket: Socket) {
           state.consecutiveSixes = 0;
           state.diceValue = null;
           state.hasRolled = false;
-          nextTurn(io, roomCode);
+          nextTurn(io, upperCode);
           return;
         }
       } else {
@@ -165,19 +175,19 @@ export function handleLudo(io: Server, socket: Socket) {
       // Calculate if player has any valid moves
       const validMoves = getValidTokensToMove(activePlayer, roll);
 
-      io.to(roomCode).emit('ludo_dice_rolled', {
+      io.to(upperCode).emit('ludo_dice_rolled', {
         diceValue: roll,
         activePlayerIndex: state.activePlayerIndex,
         validTokens: validMoves,
       });
 
       // Reset turn timer for movement decision
-      resetTurnTimer(io, roomCode);
+      resetTurnTimer(io, upperCode);
 
       // If no valid moves, automatically switch turns after 2 seconds
       if (validMoves.length === 0) {
         setTimeout(() => {
-          nextTurn(io, roomCode);
+          nextTurn(io, upperCode);
         }, 1500);
       }
     } catch (err: any) {
@@ -188,7 +198,8 @@ export function handleLudo(io: Server, socket: Socket) {
   // Move Token
   socket.on('ludo_move_token', async ({ roomCode, tokenId }: { roomCode: string; tokenId: number }) => {
     try {
-      const room = roomStore.getRoom(roomCode);
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
       if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Game not active');
 
       const state = room.gameState as LudoState;
@@ -301,14 +312,21 @@ export function handleLudo(io: Server, socket: Socket) {
         // Reset dice rolled state and stay on same player turn
         state.diceValue = null;
         state.hasRolled = false;
-        io.to(roomCode).emit('ludo_new_turn', {
+        io.to(upperCode).emit('ludo_new_turn', {
           activePlayerIndex: state.activePlayerIndex,
           diceValue: null,
           hasRolled: false,
         });
-        resetTurnTimer(io, roomCode);
+        resetTurnTimer(io, upperCode);
+
+        // If the player is a bot, trigger their bonus turn
+        const activePl = state.players[state.activePlayerIndex];
+        const roomPlayer = room.players.find((p) => p.id === activePl.id);
+        if (roomPlayer && roomPlayer.isBot) {
+          triggerBotTurn(io, upperCode, state.activePlayerIndex);
+        }
       } else {
-        nextTurn(io, roomCode);
+        nextTurn(io, upperCode);
       }
     } catch (err: any) {
       socket.emit('error', err.message);
@@ -317,7 +335,8 @@ export function handleLudo(io: Server, socket: Socket) {
 
   // Reconnection Sync
   socket.on('ludo_sync_state', (roomCode: string) => {
-    const room = roomStore.getRoom(roomCode);
+    const upperCode = roomCode.trim().toUpperCase();
+    const room = roomStore.getRoom(upperCode);
     if (room && room.status === 'PLAYING') {
       socket.emit('ludo_state_sync', room.gameState);
     }
@@ -378,6 +397,13 @@ function nextTurn(io: Server, roomCode: string) {
   });
 
   resetTurnTimer(io, roomCode);
+
+  // Check if next player is a bot
+  const activePlayer = state.players[nextIndex];
+  const roomPlayer = room.players.find((p) => p.id === activePlayer.id);
+  if (roomPlayer && roomPlayer.isBot) {
+    triggerBotTurn(io, roomCode, nextIndex);
+  }
 }
 
 function startTurnTimer(io: Server, roomCode: string) {
@@ -571,4 +597,203 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
   });
 
   io.to(roomCode).emit('room_state_updated', room);
+}
+
+function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
+  // Wait 1.5 seconds for bot to "think" before rolling the dice
+  setTimeout(() => {
+    const room = roomStore.getRoom(roomCode);
+    if (!room || room.status !== 'PLAYING') return;
+    const state = room.gameState as LudoState;
+    if (!state || state.activePlayerIndex !== botIndex || state.hasRolled) return;
+
+    // Roll dice
+    const roll = Math.floor(Math.random() * 6) + 1;
+    state.diceValue = roll;
+    state.hasRolled = true;
+
+    // Check consecutive sixes
+    if (roll === 6) {
+      state.consecutiveSixes += 1;
+      if (state.consecutiveSixes === 3) {
+        state.consecutiveSixes = 0;
+        state.diceValue = null;
+        state.hasRolled = false;
+        io.to(roomCode).emit('ludo_dice_rolled', {
+          diceValue: roll,
+          activePlayerIndex: botIndex,
+          validTokens: [],
+        });
+        setTimeout(() => {
+          nextTurn(io, roomCode);
+        }, 1500);
+        return;
+      }
+    } else {
+      state.consecutiveSixes = 0;
+    }
+
+    const activePlayer = state.players[botIndex];
+    const validMoves = getValidTokensToMove(activePlayer, roll);
+
+    io.to(roomCode).emit('ludo_dice_rolled', {
+      diceValue: roll,
+      activePlayerIndex: botIndex,
+      validTokens: validMoves,
+    });
+
+    // If no valid moves, switch turn after 1.5 seconds
+    if (validMoves.length === 0) {
+      setTimeout(() => {
+        nextTurn(io, roomCode);
+      }, 1500);
+      return;
+    }
+
+    // If there are valid moves, select the best move and execute it after 1.5 seconds
+    setTimeout(() => {
+      const currentRoom = roomStore.getRoom(roomCode);
+      if (!currentRoom || currentRoom.status !== 'PLAYING') return;
+      const curState = currentRoom.gameState as LudoState;
+      if (!curState || curState.activePlayerIndex !== botIndex) return;
+
+      // Bot strategy:
+      // 1. Prefer moving a token that can capture an opponent.
+      // 2. Prefer moving a token from yard (releasing a 6).
+      // 3. Prefer moving a token that is close to winning (highest position).
+      // 4. Default: first valid token.
+      let selectedTokenId = validMoves[0];
+      let bestScore = -100;
+
+      for (const tokenId of validMoves) {
+        const token = activePlayer.tokens.find(t => t.id === tokenId)!;
+        let score = 0;
+
+        // Calculate new position
+        let newPos = token.position;
+        if (token.position === -1 && roll === 6) {
+          newPos = activePlayer.startCell;
+          score += 50; // Releasing is good
+        } else if (token.position >= 0 && token.position <= 51) {
+          let temp = token.position;
+          let entered = false;
+          for (let i = 0; i < roll; i++) {
+            if (temp === activePlayer.lastCell) { temp = activePlayer.stretchStart; entered = true; }
+            else if (entered) temp += 1;
+            else temp = (temp + 1) % 52;
+          }
+          newPos = temp;
+          score += newPos; // Encourage moving forward
+        } else if (token.position >= 52 && token.position <= 57) {
+          newPos = token.position + roll;
+          score += newPos * 1.5;
+        }
+
+        if (newPos === 58) {
+          score += 100; // Winning a token is excellent
+        }
+
+        // Check if this move captures someone
+        if (newPos >= 0 && newPos <= 51 && !SAFE_CELLS.includes(newPos)) {
+          let captures = false;
+          curState.players.forEach(p => {
+            if (p.id !== activePlayer.id) {
+              p.tokens.forEach(t => {
+                if (t.position === newPos) captures = true;
+              });
+            }
+          });
+          if (captures) {
+            score += 80; // Capturing is highly prioritized
+          }
+        }
+
+        if (score > bestScore) {
+          bestScore = score;
+          selectedTokenId = tokenId;
+        }
+      }
+
+      // Apply bot token move
+      const token = activePlayer.tokens.find(t => t.id === selectedTokenId)!;
+      let finalPos = token.position;
+      if (token.position === -1 && roll === 6) finalPos = activePlayer.startCell;
+      else if (token.position >= 0 && token.position <= 51) {
+        let temp = token.position;
+        let entered = false;
+        for (let i = 0; i < roll; i++) {
+          if (temp === activePlayer.lastCell) { temp = activePlayer.stretchStart; entered = true; }
+          else if (entered) temp += 1;
+          else temp = (temp + 1) % 52;
+        }
+        finalPos = temp;
+      } else if (token.position >= 52 && token.position <= 57) {
+        finalPos = token.position + roll;
+      }
+
+      token.position = finalPos;
+
+      // Check capture
+      let captured = false;
+      if (finalPos >= 0 && finalPos <= 51 && !SAFE_CELLS.includes(finalPos)) {
+        curState.players.forEach(p => {
+          if (p.id !== activePlayer.id) {
+            p.tokens.forEach(t => {
+              if (t.position === finalPos) {
+                t.position = -1;
+                captured = true;
+              }
+            });
+          }
+        });
+      }
+
+      // Check if player won
+      if (finalPos === 58) {
+        const allFinished = activePlayer.tokens.every(t => t.position === 58);
+        if (allFinished && !activePlayer.isWinner) {
+          activePlayer.isWinner = true;
+          const winnersCount = curState.players.filter(p => p.isWinner).length;
+          activePlayer.placement = winnersCount;
+
+          io.to(roomCode).emit('ludo_player_won', {
+            playerId: activePlayer.id,
+            placement: winnersCount,
+          });
+
+          const activePlayersCount = curState.players.filter(p => !p.isWinner).length;
+          if (activePlayersCount <= 1) {
+            endLudoGame(io, roomCode, curState);
+            return;
+          }
+        }
+      }
+
+      io.to(roomCode).emit('ludo_token_moved', {
+        activePlayerIndex: botIndex,
+        tokenId: selectedTokenId,
+        newPosition: finalPos,
+        captured,
+        players: curState.players,
+      });
+
+      // Rule: Rolling a 6 or capturing a token awards a bonus turn
+      const awardBonus = (roll === 6 || captured) && !activePlayer.isWinner;
+      if (awardBonus) {
+        curState.diceValue = null;
+        curState.hasRolled = false;
+        io.to(roomCode).emit('ludo_new_turn', {
+          activePlayerIndex: botIndex,
+          diceValue: null,
+          hasRolled: false,
+        });
+        // Bot plays again!
+        triggerBotTurn(io, roomCode, botIndex);
+      } else {
+        nextTurn(io, roomCode);
+      }
+
+    }, 1500);
+
+  }, 1500);
 }

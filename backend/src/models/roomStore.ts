@@ -6,6 +6,7 @@ export interface Player {
   profileFrame: string;
   ready: boolean;
   role?: string; // used for Ramudu-Seetha role names
+  isBot?: boolean;
 }
 
 export interface Room {

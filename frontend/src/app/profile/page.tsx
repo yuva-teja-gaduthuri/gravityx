@@ -156,7 +156,8 @@ export default function ProfilePage() {
     const particles: Particle[] = Array.from({ length: 120 }, () => new Particle());
 
     const renderLoop = () => {
-      ctx.fillStyle = 'rgba(5, 8, 22, 0.15)';
+      const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+      ctx.fillStyle = isDark ? 'rgba(5, 8, 22, 0.15)' : 'rgba(250, 250, 255, 0.15)';
       ctx.fillRect(0, 0, width, height);
 
       particles.forEach((p) => {
@@ -212,7 +213,7 @@ export default function ProfilePage() {
 
   if (loading || !user) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-[#050816]">
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen bg-[var(--bg-color)] text-[var(--text-color)]">
         <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
         <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Opening Identity File...</p>
       </div>
@@ -223,7 +224,7 @@ export default function ProfilePage() {
   const xpPercent = Math.round((user.xp / nextLevelXp) * 100);
 
   return (
-    <div className="min-h-screen bg-[#050816] text-white relative overflow-x-hidden flex flex-col font-sans">
+    <div className="min-h-screen bg-[var(--bg-color)] text-[var(--text-color)] relative overflow-x-hidden flex flex-col font-sans">
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0 opacity-45" />
 
       {/* Top Header */}
@@ -254,7 +255,7 @@ export default function ProfilePage() {
                 {/* Visual Avatar display */}
                 <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-cyberpink/20 to-primary/20 border-2 border-cyberpink flex items-center justify-center text-6xl shadow-neon-pink relative overflow-hidden">
                   <span>{AVATAR_GRAPHICS[editAvatar] || '👽'}</span>
-                  <span className="absolute -bottom-1 -right-1 px-3 py-1 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816] shadow-md text-white">
+                  <span className="absolute -bottom-1 -right-1 px-3 py-1 rounded-full bg-cyberpink text-xs font-black border-2 border-[var(--bg-color)] shadow-md text-white">
                     {user.level}
                   </span>
                 </div>
@@ -471,31 +472,55 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-700 dark:text-gray-300">Lobby Language</span>
-              <select 
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer bg-white dark:bg-[#050816] text-slate-800 dark:text-white border-slate-200 dark:border-white/5"
-              >
-                <option value="English">English</option>
-                <option value="Spanish">Spanish</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Telugu">Telugu</option>
-              </select>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Lobby Language</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { code: 'English', label: 'English', flag: '🇺🇸' },
+                  { code: 'Spanish', label: 'Español', flag: '🇪🇸' },
+                  { code: 'Hindi', label: 'हिन्दी', flag: '🇮🇳' },
+                  { code: 'Telugu', label: 'తెలుగు', flag: '🇮🇳' },
+                ].map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => setLanguage(lang.code)}
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col items-center gap-1 ${
+                      language === lang.code
+                        ? 'border-cyberblue bg-cyberblue/10 text-slate-800 dark:text-white shadow-neon-blue'
+                        : 'border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-800 hover:dark:text-white hover:border-slate-300 hover:dark:border-white/10'
+                    }`}
+                  >
+                    <span className="text-xl">{lang.flag}</span>
+                    <span className="text-[8.5px] font-black uppercase tracking-tighter truncate w-full text-center">{lang.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-slate-700 dark:text-gray-300">Profile Privacy</span>
-              <select 
-                value={privacy}
-                onChange={(e) => setPrivacy(e.target.value)}
-                className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer bg-white dark:bg-[#050816] text-slate-800 dark:text-white border-slate-200 dark:border-white/5"
-              >
-                <option value="Public">Public (Global Boards)</option>
-                <option value="Friends">Friends Only</option>
-                <option value="Private">Private</option>
-              </select>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Profile Privacy</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { code: 'Public', label: 'Public', desc: 'Global Boards' },
+                  { code: 'Friends', label: 'Friends Only', desc: 'Friends feed' },
+                  { code: 'Private', label: 'Private', desc: 'Hidden mode' },
+                ].map((priv) => (
+                  <button
+                    key={priv.code}
+                    type="button"
+                    onClick={() => setPrivacy(priv.code)}
+                    className={`p-2.5 rounded-xl border transition-all flex flex-col items-center justify-center text-center ${
+                      privacy === priv.code
+                        ? 'border-cyberpink bg-cyberpink/10 text-slate-800 dark:text-white shadow-neon-pink'
+                        : 'border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-800 hover:dark:text-white hover:border-slate-300 hover:dark:border-white/10'
+                    }`}
+                  >
+                    <span className="text-[10px] font-black uppercase tracking-tight">{priv.label}</span>
+                    <span className="text-[7.5px] text-gray-500 lowercase mt-0.5">{priv.desc}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
