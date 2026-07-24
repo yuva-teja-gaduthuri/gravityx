@@ -31,6 +31,7 @@ export default function ProfilePage() {
   const [editAvatar, setEditAvatar] = useState('astronaut');
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   // Consolidate settings states
   const [music, setMusic] = useState(true);
@@ -200,6 +201,7 @@ export default function ProfilePage() {
       localStorage.setItem('gravityx_user', JSON.stringify(data.user));
       refreshProfile();
       setProfileSuccess('Telemetry parameters committed successfully!');
+      setIsEditing(false);
       setTimeout(() => {
         setProfileSuccess('');
       }, 2000);
@@ -243,81 +245,128 @@ export default function ProfilePage() {
       <main className="relative z-10 flex-grow max-w-7xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* LEFT COLUMN: Identity Telemetry picker */}
-        <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink">
-          <div className="flex flex-col items-center text-center">
-            {/* Visual Avatar display */}
-            <div className="w-24 h-24 rounded-full bg-primary/10 border-2 border-cyberpink flex items-center justify-center text-5xl shadow-neon-pink relative">
-              <span>{AVATAR_GRAPHICS[editAvatar] || '👽'}</span>
-              <span className="absolute -bottom-1 -right-1 px-2.5 py-0.5 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816]">
-                {user.level}
-              </span>
-            </div>
-            <h2 className="text-xl font-black text-white mt-4">{user.username}</h2>
-            <p className="text-[10px] uppercase text-gray-400 font-bold tracking-wider mt-1">Level {user.level} Operator</p>
-            
-            {/* XP progress */}
-            <div className="w-full mt-4">
-              <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1">
-                <span>XP PROGRESS</span>
-                <span>{user.xp}/{nextLevelXp} XP</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-cyberpink" style={{ width: `${xpPercent}%` }}></div>
-              </div>
-            </div>
-          </div>
+        <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink relative overflow-hidden flex flex-col justify-between min-h-[500px]">
+          {!isEditing ? (
+            // View Profile Card Mode
+            <div className="space-y-6 flex-grow flex flex-col justify-between">
+              <div className="flex flex-col items-center text-center space-y-4">
+                {/* Visual Avatar display */}
+                <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-cyberpink/20 to-primary/20 border-2 border-cyberpink flex items-center justify-center text-6xl shadow-neon-pink relative overflow-hidden">
+                  <span>{AVATAR_GRAPHICS[editAvatar] || '👽'}</span>
+                  <span className="absolute -bottom-1 -right-1 px-3 py-1 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816] shadow-md">
+                    {user.level}
+                  </span>
+                </div>
 
-          <form onSubmit={handleUpdateProfile} className="space-y-4 pt-4 border-t border-white/5">
-            {profileError && (
-              <div className="p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
-                <ShieldAlert size={16} /> <span>{profileError}</span>
-              </div>
-            )}
-            {profileSuccess && (
-              <div className="p-3 rounded-lg bg-cybersuccess/10 border border-cybersuccess/30 text-cybersuccess text-xs flex gap-2">
-                <CheckCircle2 size={16} /> <span>{profileSuccess}</span>
-              </div>
-            )}
+                <div>
+                  <h2 className="text-2xl font-extrabold text-white tracking-tight">{user.username}</h2>
+                  <p className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mt-1">Level {user.level} Operator</p>
+                </div>
 
-            <div>
-              <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Change Username Alias</label>
-              <input 
-                type="text" 
-                required
-                value={editUsername}
-                onChange={(e) => setEditUsername(e.target.value)}
-                className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink"
-              />
-            </div>
+                {/* XP progress */}
+                <div className="w-full">
+                  <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1">
+                    <span>XP PROGRESS</span>
+                    <span>{user.xp}/{nextLevelXp} XP</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-white/5 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-primary to-cyberpink" style={{ width: `${xpPercent}%` }}></div>
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Select Identity Avatar</label>
-              <div className="grid grid-cols-4 gap-2 mt-2">
-                {Object.keys(AVATAR_GRAPHICS).map((av) => (
-                  <button
-                    key={av}
-                    type="button"
-                    onClick={() => setEditAvatar(av)}
-                    className={`p-2 rounded-xl border transition-all flex flex-col items-center gap-1 ${
-                      editAvatar === av 
-                        ? 'border-cyberpink bg-cyberpink/10 text-white shadow-neon-pink' 
-                        : 'border-white/5 bg-white/5 text-gray-400 hover:text-white hover:border-white/10'
-                    }`}
-                  >
-                    <span className="text-xl">{AVATAR_GRAPHICS[av]}</span>
-                    <span className="text-[8px] uppercase tracking-tighter truncate w-full text-center">{av}</span>
-                  </button>
-                ))}
+              <div className="space-y-3 pt-6 border-t border-white/5">
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
+                >
+                  Configure Operator Identity
+                </button>
+                
+                <button 
+                  onClick={() => {
+                    logout();
+                    router.push('/auth');
+                  }}
+                  className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-cybererror/10 hover:border-cybererror/30 hover:text-cybererror font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  Log Out Session
+                </button>
               </div>
             </div>
+          ) : (
+            // Edit Profile Mode
+            <div className="space-y-6 flex-grow flex flex-col justify-between">
+              <div>
+                <h3 className="text-lg font-black text-white border-b border-white/5 pb-2 mb-4">Edit Telemetry Profile</h3>
+                
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  {profileError && (
+                    <div className="p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
+                      <ShieldAlert size={16} /> <span>{profileError}</span>
+                    </div>
+                  )}
+                  {profileSuccess && (
+                    <div className="p-3 rounded-lg bg-cybersuccess/10 border border-cybersuccess/30 text-cybersuccess text-xs flex gap-2">
+                      <CheckCircle2 size={16} /> <span>{profileSuccess}</span>
+                    </div>
+                  )}
 
-            <button 
-              type="submit" 
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all mt-4"
-            >
-              Commit Telemetry Upgrades
-            </button>
-          </form>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Change Username Alias</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value)}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Select Identity Avatar</label>
+                    <div className="grid grid-cols-4 gap-2 mt-2">
+                      {Object.keys(AVATAR_GRAPHICS).map((av) => (
+                        <button
+                          key={av}
+                          type="button"
+                          onClick={() => setEditAvatar(av)}
+                          className={`p-2 rounded-xl border transition-all flex flex-col items-center gap-1 ${
+                            editAvatar === av 
+                              ? 'border-cyberpink bg-cyberpink/10 text-white shadow-neon-pink' 
+                              : 'border-white/5 bg-white/5 text-gray-400 hover:text-white hover:border-white/10'
+                          }`}
+                        >
+                          <span className="text-xl">{AVATAR_GRAPHICS[av]}</span>
+                          <span className="text-[8px] uppercase tracking-tighter truncate w-full text-center">{av}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setEditUsername(user.username);
+                        setEditAvatar(user.avatar || 'astronaut');
+                        setIsEditing(false);
+                      }}
+                      className="flex-1 py-3 rounded-xl bg-white/5 border border-white/5 text-gray-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* MIDDLE COLUMN: Statistics & Items */}
