@@ -15,6 +15,7 @@ interface Player {
   avatar: string;
   profileFrame: string;
   ready: boolean;
+  isBot?: boolean;
 }
 
 interface RoomData {

@@ -13,6 +13,7 @@ import { getItems, buyItem, equipItem } from '../controllers/storeController';
 import { getLeaderboard } from '../controllers/leaderboardController';
 import { getUsers, banUser, unbanUser, getSystemStats } from '../controllers/adminController';
 import { authenticateJWT, requireAdmin } from '../middleware/auth';
+import { roomStore } from '../models/roomStore';
 
 const router = Router();
 
@@ -49,14 +50,14 @@ router.get('/rooms', authenticateJWT, (req, res) => {
   try {
     const rooms = roomStore.getAllRooms();
     const publicLobbies = rooms
-      .filter((r) => r.type === 'PUBLIC' && r.status === 'LOBBY')
-      .map((r) => ({
+      .filter((r: any) => r.type === 'PUBLIC' && r.status === 'LOBBY')
+      .map((r: any) => ({
         code: r.code,
         name: r.name,
         gameType: r.gameType,
         maxPlayers: r.maxPlayers,
         playerCount: r.players.length,
-        hostName: r.players.find(p => p.id === r.hostId)?.username || r.players[0]?.username || 'Captain',
+        hostName: r.players.find((p: any) => p.id === r.hostId)?.username || r.players[0]?.username || 'Captain',
       }));
     res.json(publicLobbies);
   } catch (err: any) {

@@ -83,8 +83,8 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     });
 
     // Check if Ramudu is a bot
-    const ramuduPlayer = room.players.find((pl: any) => pl.id === gameState.ramuduId);
-    if (ramuduPlayer && ramuduPlayer.isBot) {
+    const botRamuduPlayer = room.players.find((pl: any) => pl.id === room.gameState.ramuduId);
+    if (botRamuduPlayer && botRamuduPlayer.isBot) {
       triggerRSBotGuess(room);
     }
   };
@@ -92,7 +92,8 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
   // Start Game (triggered by host)
   socket.on('rs_start_game', async (payload: string | { roomCode: string; maxRounds: number }) => {
     try {
-      let roomCode = typeof payload === 'string' ? payload : payload.roomCode;
+      const roomCode = typeof payload === 'string' ? payload : payload.roomCode;
+      const maxRounds = typeof payload === 'string' ? 3 : (payload.maxRounds || 3);
       const upperCode = roomCode.trim().toUpperCase();
       const room = roomStore.getRoom(upperCode);
       if (!room) return socket.emit('error', 'Room not found');
@@ -116,8 +117,6 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       socket.emit('error', err.message);
     }
   });
-
-  // Next Round (triggered by host after a round ends)
   socket.on('rs_next_round', async (roomCode: string) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
