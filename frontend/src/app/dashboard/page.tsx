@@ -24,6 +24,7 @@ export default function Dashboard() {
   // Modals state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showSocialDrawer, setShowSocialDrawer] = useState(false);
 
   // Form states
   const [roomName, setRoomName] = useState('');
@@ -334,6 +335,13 @@ export default function Dashboard() {
               title="Store"
             >
               <ShoppingBag size={18} />
+            </button>
+            <button 
+              onClick={() => setShowSocialDrawer(!showSocialDrawer)} 
+              className={`p-3 rounded-xl glass-card border-white/10 text-gray-400 hover:text-white hover:border-cyberpink transition-all ${showSocialDrawer ? 'border-cyberpink text-white shadow-neon-pink ring-1 ring-cyberpink bg-cyberpink/10' : ''}`}
+              title="Add Friends & Social Console"
+            >
+              <Users size={18} />
             </button>
             {user.role === 'ADMIN' && (
               <button 
@@ -659,7 +667,9 @@ export default function Dashboard() {
         </div>
 
         {/* Right side Social Drawer */}
-        <SocialDrawer currentUserId={user.id} />
+        {showSocialDrawer && (
+          <SocialDrawer currentUserId={user.id} />
+        )}
       </div>
 
       {/* Create Room Modal */}
