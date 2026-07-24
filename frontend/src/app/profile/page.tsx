@@ -242,10 +242,10 @@ export default function ProfilePage() {
       </header>
 
       {/* Main Console Layout */}
-      <main className="relative z-10 flex-grow max-w-7xl mx-auto w-full p-6 md:p-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <main className="relative z-10 flex-grow max-w-3xl mx-auto w-full p-6 md:p-8 flex flex-col gap-8 overflow-y-auto max-h-[calc(100vh-120px)] pr-2">
         
-        {/* LEFT COLUMN: Identity Telemetry picker */}
-        <div className="lg:col-span-4 glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink relative overflow-hidden flex flex-col justify-between min-h-[500px]">
+        {/* TOP PANEL: Identity Telemetry picker */}
+        <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-pink relative overflow-hidden w-full">
           {!isEditing ? (
             // View Profile Card Mode
             <div className="space-y-6 flex-grow flex flex-col justify-between">
@@ -253,32 +253,32 @@ export default function ProfilePage() {
                 {/* Visual Avatar display */}
                 <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-cyberpink/20 to-primary/20 border-2 border-cyberpink flex items-center justify-center text-6xl shadow-neon-pink relative overflow-hidden">
                   <span>{AVATAR_GRAPHICS[editAvatar] || '👽'}</span>
-                  <span className="absolute -bottom-1 -right-1 px-3 py-1 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816] shadow-md">
+                  <span className="absolute -bottom-1 -right-1 px-3 py-1 rounded-full bg-cyberpink text-xs font-black border-2 border-[#050816] shadow-md text-white">
                     {user.level}
                   </span>
                 </div>
 
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white tracking-tight">{user.username}</h2>
-                  <p className="text-[10px] uppercase text-gray-400 font-bold tracking-widest mt-1">Level {user.level} Operator</p>
+                  <h2 className="text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight">{user.username}</h2>
+                  <p className="text-[10px] uppercase text-slate-500 dark:text-gray-400 font-bold tracking-widest mt-1">Level {user.level} Operator</p>
                 </div>
 
                 {/* XP progress */}
                 <div className="w-full">
-                  <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1">
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1">
                     <span>XP PROGRESS</span>
                     <span>{user.xp}/{nextLevelXp} XP</span>
                   </div>
-                  <div className="w-full h-2.5 rounded-full bg-white/5 overflow-hidden">
+                  <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden">
                     <div className="h-full bg-gradient-to-r from-primary to-cyberpink" style={{ width: `${xpPercent}%` }}></div>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-3 pt-6 border-t border-white/5">
+              <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-200 dark:border-white/5">
                 <button 
                   onClick={() => setIsEditing(true)}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
                 >
                   Configure Operator Identity
                 </button>
@@ -288,7 +288,7 @@ export default function ProfilePage() {
                     logout();
                     router.push('/auth');
                   }}
-                  className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-cybererror/10 hover:border-cybererror/30 hover:text-cybererror font-bold text-xs uppercase tracking-wider transition-all"
+                  className="flex-1 py-3 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:bg-cybererror/10 hover:border-cybererror/30 hover:text-cybererror font-bold text-xs uppercase tracking-wider transition-all"
                 >
                   Log Out Session
                 </button>
@@ -298,7 +298,7 @@ export default function ProfilePage() {
             // Edit Profile Mode
             <div className="space-y-6 flex-grow flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-black text-white border-b border-white/5 pb-2 mb-4">Edit Telemetry Profile</h3>
+                <h3 className="text-lg font-black text-slate-800 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2 mb-4">Edit Telemetry Profile</h3>
                 
                 <form onSubmit={handleUpdateProfile} className="space-y-4">
                   {profileError && (
@@ -313,18 +313,18 @@ export default function ProfilePage() {
                   )}
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Change Username Alias</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Change Username Alias</label>
                     <input 
                       type="text" 
                       required
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
-                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink"
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink text-slate-800 dark:text-white bg-slate-50 dark:bg-white/5"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Select Identity Avatar</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Select Identity Avatar</label>
                     <div className="grid grid-cols-4 gap-2 mt-2">
                       {Object.keys(AVATAR_GRAPHICS).map((av) => (
                         <button
@@ -333,8 +333,8 @@ export default function ProfilePage() {
                           onClick={() => setEditAvatar(av)}
                           className={`p-2 rounded-xl border transition-all flex flex-col items-center gap-1 ${
                             editAvatar === av 
-                              ? 'border-cyberpink bg-cyberpink/10 text-white shadow-neon-pink' 
-                              : 'border-white/5 bg-white/5 text-gray-400 hover:text-white hover:border-white/10'
+                              ? 'border-cyberpink bg-cyberpink/10 text-slate-800 dark:text-white shadow-neon-pink' 
+                              : 'border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-800 hover:dark:text-white hover:border-slate-300 hover:dark:border-white/10'
                           }`}
                         >
                           <span className="text-xl">{AVATAR_GRAPHICS[av]}</span>
@@ -352,7 +352,7 @@ export default function ProfilePage() {
                         setEditAvatar(user.avatar || 'astronaut');
                         setIsEditing(false);
                       }}
-                      className="flex-1 py-3 rounded-xl bg-white/5 border border-white/5 text-gray-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all"
+                      className="flex-1 py-3 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-800 dark:hover:text-white font-bold text-xs uppercase tracking-wider transition-all"
                     >
                       Cancel
                     </button>
@@ -369,30 +369,30 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* MIDDLE COLUMN: Statistics & Items */}
-        <div className="lg:col-span-4 space-y-6">
+        {/* MIDDLE PANEL: Statistics & Equipped Items */}
+        <div className="space-y-6 w-full">
           {/* Stats card */}
           <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 shadow-neon-blue">
-            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">
               <BarChart2 size={14} /> Mission Performance
             </h3>
             
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
-                <span className="text-2xl font-black text-white">{stats.matchesPlayed}</span>
-                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Matches Played</span>
+              <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
+                <span className="text-2xl font-black text-slate-800 dark:text-white">{stats.matchesPlayed}</span>
+                <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Matches Played</span>
               </div>
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+              <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
                 <span className="text-2xl font-black text-cybersuccess">{stats.wins}</span>
-                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Victories</span>
+                <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Victories</span>
               </div>
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+              <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
                 <span className="text-2xl font-black text-cybererror">{stats.losses}</span>
-                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Defeats</span>
+                <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Defeats</span>
               </div>
-              <div className="bg-white/5 border border-white/5 p-4 rounded-2xl flex flex-col items-center">
+              <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
                 <span className="text-2xl font-black text-cyberblue">{stats.winRate}%</span>
-                <span className="text-[9px] uppercase font-bold text-gray-400 mt-1">Win Ratio</span>
+                <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Win Ratio</span>
               </div>
             </div>
 
@@ -400,24 +400,24 @@ export default function ProfilePage() {
             <div className="bg-gradient-to-r from-cyberpink/10 to-cyberblue/10 border border-[#FF5EDF]/20 p-4 rounded-2xl flex items-center justify-between w-full mt-4">
               <div className="flex items-center gap-3">
                 <Trophy className="text-cybergold" size={20} />
-                <span className="text-xs uppercase font-extrabold text-gray-300">Division Rank</span>
+                <span className="text-xs uppercase font-extrabold text-slate-700 dark:text-gray-300">Division Rank</span>
               </div>
               <span className="text-lg font-black text-cybergold">{user.rank}</span>
             </div>
           </div>
 
           {/* Equipped Skins / Inventory */}
-          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4">
-            <h3 className="text-xs uppercase font-extrabold text-cyberpink tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 w-full">
+            <h3 className="text-xs uppercase font-extrabold text-cyberpink tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">
               <Zap size={14} /> Equipped Inventory
             </h3>
             {inventory.length === 0 ? (
-              <p className="text-xs text-gray-500 italic py-2">No equipped skins found. Purchase telemetry overrides in the store.</p>
+              <p className="text-xs text-slate-500 dark:text-gray-400 italic py-2">No equipped skins found. Purchase telemetry overrides in the store.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
                 {inventory.map((item, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 flex flex-col">
-                    <span className="text-xs font-bold text-white truncate">{item.name}</span>
+                  <div key={idx} className="p-3 rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white truncate">{item.name}</span>
                     <span className="text-[8px] uppercase font-bold text-cyberpink mt-1">{item.type}</span>
                   </div>
                 ))}
@@ -426,98 +426,84 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Console Hardware parameters */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-blue">
-            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
-              <Volume2 size={14} /> Hardware Parameters
-            </h3>
+        {/* BOTTOM PANEL: Settings Panel */}
+        <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-6 shadow-neon-blue w-full">
+          <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">
+            <Volume2 size={14} /> Hardware Parameters
+          </h3>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-gray-300">Ambient Background Music</span>
-                <button 
-                  type="button"
-                  onClick={() => setMusic(!music)}
-                  className={`w-10 h-5 rounded-full p-0.5 transition-all ${music ? 'bg-primary' : 'bg-white/10'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-all ${music ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-gray-300">Interactive Game Sound Effects</span>
-                <button 
-                  type="button"
-                  onClick={() => setSound(!sound)}
-                  className={`w-10 h-5 rounded-full p-0.5 transition-all ${sound ? 'bg-primary' : 'bg-white/10'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-all ${sound ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                  <span>Console Volume</span>
-                  <span>{volume}%</span>
-                </div>
-                <input 
-                  type="range" 
-                  min={0} 
-                  max={100}
-                  value={volume}
-                  onChange={(e) => setVolume(Number(e.target.value))}
-                  className="w-full h-1 bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
-                />
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-gray-300">Lobby Language</span>
-                <select 
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer"
-                >
-                  <option value="English">English</option>
-                  <option value="Spanish">Spanish</option>
-                  <option value="Hindi">Hindi</option>
-                  <option value="Telugu">Telugu</option>
-                </select>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-gray-300">Profile Privacy</span>
-                <select 
-                  value={privacy}
-                  onChange={(e) => setPrivacy(e.target.value)}
-                  className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer"
-                >
-                  <option value="Public">Public (Global Boards)</option>
-                  <option value="Friends">Friends Only</option>
-                  <option value="Private">Private</option>
-                </select>
-              </div>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 dark:text-gray-300">Ambient Background Music</span>
+              <button 
+                type="button"
+                onClick={() => setMusic(!music)}
+                className={`w-10 h-5 rounded-full p-0.5 transition-all ${music ? 'bg-primary' : 'bg-slate-200 dark:bg-white/10'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white transition-all ${music ? 'translate-x-5' : 'translate-x-0'}`}></div>
+              </button>
             </div>
 
-            <button 
-              onClick={handleUpdateProfile}
-              className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-wider hover:border-cyberblue transition-all"
-            >
-              Apply Configurations
-            </button>
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 dark:text-gray-300">Interactive Game Sound Effects</span>
+              <button 
+                type="button"
+                onClick={() => setSound(!sound)}
+                className={`w-10 h-5 rounded-full p-0.5 transition-all ${sound ? 'bg-primary' : 'bg-slate-200 dark:bg-white/10'}`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white transition-all ${sound ? 'translate-x-5' : 'translate-x-0'}`}></div>
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-bold text-slate-500 dark:text-gray-400">
+                <span>Console Volume</span>
+                <span>{volume}%</span>
+              </div>
+              <input 
+                type="range" 
+                min={0} 
+                max={100}
+                value={volume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                className="w-full h-1 bg-slate-200 dark:bg-white/5 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 dark:text-gray-300">Lobby Language</span>
+              <select 
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer bg-white dark:bg-[#050816] text-slate-800 dark:text-white border-slate-200 dark:border-white/5"
+              >
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Telugu">Telugu</option>
+              </select>
+            </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-slate-700 dark:text-gray-300">Profile Privacy</span>
+              <select 
+                value={privacy}
+                onChange={(e) => setPrivacy(e.target.value)}
+                className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue cursor-pointer bg-white dark:bg-[#050816] text-slate-800 dark:text-white border-slate-200 dark:border-white/5"
+              >
+                <option value="Public">Public (Global Boards)</option>
+                <option value="Friends">Friends Only</option>
+                <option value="Private">Private</option>
+              </select>
+            </div>
           </div>
 
-          {/* Destructive Logout button */}
-          <div className="glass-panel rounded-3xl p-6 border-white/5">
-            <button
-              onClick={() => {
-                logout();
-              }}
-              className="w-full py-3 bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-2 uppercase tracking-wider"
-            >
-              <LogOut size={14} /> Terminate Connection (Sign Out)
-            </button>
-          </div>
+          <button 
+            onClick={handleUpdateProfile}
+            className="w-full py-3 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 hover:border-cyberblue transition-all"
+          >
+            Apply Configurations
+          </button>
         </div>
 
       </main>
