@@ -60,8 +60,8 @@ export function handleLudo(io: Server, socket: Socket) {
       }
 
       const playerCount = room.players.length;
-      if (playerCount < 2 || playerCount > 6) {
-        return socket.emit('error', 'Ludo requires between 2 and 6 players');
+      if (playerCount < 2 || playerCount > 4) {
+        return socket.emit('error', 'Ludo requires between 2 and 4 players');
       }
 
       // Assign colors and initialize tokens
@@ -70,12 +70,8 @@ export function handleLudo(io: Server, socket: Socket) {
         colors.push('red', 'yellow');
       } else if (playerCount === 3) {
         colors.push('red', 'green', 'yellow');
-      } else if (playerCount === 4) {
-        colors.push('red', 'green', 'yellow', 'blue');
-      } else if (playerCount === 5) {
-        colors.push('red', 'green', 'yellow', 'blue', 'red');
       } else {
-        colors.push('red', 'green', 'yellow', 'blue', 'red', 'green');
+        colors.push('red', 'green', 'yellow', 'blue');
       }
 
       const ludoPlayers: LudoPlayer[] = room.players.map((p, idx) => {

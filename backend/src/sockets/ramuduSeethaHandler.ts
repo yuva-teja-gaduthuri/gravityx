@@ -431,7 +431,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
 
         if (!isLastRound) {
           io.to(currentRoom.code).emit('rs_round_ended', {
-            currentRound: currentRoom.currentRoom,
+            currentRound: currentRoom.currentRound,
             maxRounds: currentRoom.maxRounds,
             winnerId: gameState.ramuduId,
             seethaId: gameState.seethaId,

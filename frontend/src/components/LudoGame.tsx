@@ -751,6 +751,11 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     }
   };
 
+  const gameStateRef = useRef<LudoState | null>(null);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   useEffect(() => {
     socket.on('ludo_game_started', (data: any) => {
       setGameState(data.gameState);
@@ -781,7 +786,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           setIsRolling(false);
           setRollingValue(data.diceValue);
 
-          // Dice stop glow thud sound
+          // Dice thud sound
           audioRef.current?.playImpact();
 
           // Rule: Lucky 6 visual alert
@@ -794,7 +799,8 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
 
           setGameState(prev => prev ? { ...prev, diceValue: data.diceValue, hasRolled: true } : null);
           
-          const isMyTurnNow = gameState?.players[gameState.activePlayerIndex]?.id === user.id;
+          const currentGS = gameStateRef.current;
+          const isMyTurnNow = currentGS?.players[currentGS.activePlayerIndex]?.id === user.id;
           if (isMyTurnNow) {
             setValidTokens(data.validTokens);
           }
@@ -803,8 +809,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     });
 
     socket.on('ludo_token_moved', (data: any) => {
-      if (!gameState) return;
-      const activePlayer = gameState.players[gameState.activePlayerIndex];
+      const currentGS = gameStateRef.current;
+      if (!currentGS) return;
+      const activePlayer = currentGS.players[currentGS.activePlayerIndex];
       
       const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
       const startPos = currentToken ? currentToken.position : -1;
@@ -827,7 +834,8 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
       setValidTokens([]);
 
       // Play turn transitions chime
-      const nextActivePlayer = gameState?.players[data.activePlayerIndex];
+      const currentGS = gameStateRef.current;
+      const nextActivePlayer = currentGS?.players[data.activePlayerIndex];
       if (nextActivePlayer && nextActivePlayer.id === user.id) {
         audioRef.current?.playTurn();
         setYourTurnAlert(true);
@@ -853,7 +861,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
       socket.off('ludo_new_turn');
       socket.off('ludo_match_ended');
     };
-  }, [socket, gameState, roomCode, user.id]);
+  }, [socket, roomCode, user.id]);
 
   const handleRollDice = () => {
     if (!gameState) return;
