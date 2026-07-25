@@ -110,7 +110,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       if (!room) return socket.emit('error', 'Room not found');
 
       // Check permissions
-      const host = room.players.find((p) => p.socketId === socket.id);
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!host || room.hostId !== host.id) {
         return socket.emit('error', 'Only the host can start the game');
       }
@@ -137,7 +137,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Room not found or game inactive');
 
       // Check host permissions
-      const host = room.players.find((p) => p.socketId === socket.id);
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!host || room.hostId !== host.id) {
         return socket.emit('error', 'Only the host can advance rounds');
       }
@@ -315,7 +315,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       if (!room) return socket.emit('error', 'Room not found');
 
       // Verify host permissions
-      const host = room.players.find((p) => p.socketId === socket.id);
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!host || room.hostId !== host.id) {
         return socket.emit('error', 'Only the host can return the room to lobby');
       }

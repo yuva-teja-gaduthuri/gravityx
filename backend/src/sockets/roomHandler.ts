@@ -222,7 +222,7 @@ export function handleRoom(io: Server, socket: Socket) {
       if (!room) return socket.emit('error', 'Room not found');
 
       // Only host can add bots
-      const host = room.players.find((p) => p.socketId === socket.id);
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!host || room.hostId !== host.id) {
         return socket.emit('error', 'Only the host can add bots');
       }

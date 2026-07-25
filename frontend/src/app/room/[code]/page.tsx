@@ -62,12 +62,19 @@ export default function RoomPage() {
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
 
-    // Join room socket emit
-    socket.emit('join_room', {
-      roomCode,
-      userId: user.id,
-      username: user.username,
-    });
+    const handleConnect = () => {
+      socket.emit('join_room', {
+        roomCode,
+        userId: user.id,
+        username: user.username,
+      });
+    };
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    socket.on('connect', handleConnect);
 
     socket.on('room_joined', (roomData: RoomData) => {
       setRoom(roomData);
@@ -110,6 +117,7 @@ export default function RoomPage() {
     return () => {
       // Clean room signals
       socket.emit('leave_room', { roomCode, userId: user.id });
+      socket.off('connect', handleConnect);
       socket.off('room_joined');
       socket.off('room_state_updated');
       socket.off('chat_message');
