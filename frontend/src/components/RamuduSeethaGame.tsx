@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { HelpCircle, Star, Search, ShieldCheck, Timer } from 'lucide-react';
+import { HelpCircle, Star, ShieldCheck, Crown } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -29,7 +29,7 @@ interface RSGameProps {
   socket: Socket;
   isHost: boolean;
   matchEndedData?: any;
-  onReturnToLobby: () => void;
+  onReturnToLobby?: () => void;
 }
 
 export default function RamuduSeethaGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: RSGameProps) {
@@ -44,27 +44,37 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [maxRounds, setMaxRounds] = useState<number>(3);
   const [sessionScoreboard, setSessionScoreboard] = useState<{ [userId: string]: { username: string; score: number } }>({});
+  const [roundScores, setRoundScores] = useState<{ [userId: string]: number }>({});
   const [roundEnded, setRoundEnded] = useState<boolean>(false);
   const [roundData, setRoundData] = useState<any>(null);
-
-  // In-Game Live Scoreboard toggle
-  const [showLiveScore, setShowLiveScore] = useState<boolean>(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   // Match ended state
-  const [matchEnded, setMatchEnded] = useState(matchEndedData ? true : false);
+  const [matchEnded, setMatchEnded] = useState(false);
   const [matchResults, setMatchResults] = useState<{
     winnerId: string;
     seethaId: string;
     guessCount: number;
     scoreboard: ScoreboardRow[];
-  } | null>(matchEndedData || null);
+  } | null>(null);
 
+  const playersRef = useRef<Player[]>([]);
   useEffect(() => {
-    if (matchEndedData) {
-      setMatchEnded(true);
-      setMatchResults(matchEndedData);
+    playersRef.current = players;
+  }, [players]);
+
+  // Handle countdown ticks
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      return;
     }
-  }, [matchEndedData]);
+    const timer = setTimeout(() => {
+      setCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   useEffect(() => {
     socket.on('rs_game_started', (data: any) => {
@@ -77,6 +87,8 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setRoundEnded(false);
       setRoundData(null);
       setGuesses(0);
+      setRoundScores({});
+      setCountdown(null);
       setCurrentRound(data.currentRound || 1);
       setMaxRounds(data.maxRounds || 3);
       setSessionScoreboard(data.sessionScoreboard || {});
@@ -86,34 +98,35 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setRevealedIds(data.revealedIds);
       
       if (data.targetUserId) {
-        setPlayers((prev) => {
-          const updated = prev.map((pl) =>
+        setPlayers((prev) =>
+          prev.map((pl) =>
             pl.id === data.targetUserId
               ? { ...pl, isRevealed: true, role: data.targetRole }
               : pl
-          );
-          
-          const targetUser = updated.find(p => p.id === data.targetUserId);
-          if (targetUser) {
-            setGuessResult({
-              username: targetUser.username,
-              role: data.targetRole,
-              isCorrect: data.isSeetha
-            });
-            setTimeout(() => setGuessResult(null), 3000);
-          }
-          return updated;
-        });
-        setGuesses(prev => prev + 1);
-      } else if (data.guesses !== undefined) {
-        setGuesses(data.guesses);
+          )
+        );
       }
+
+      const targetUser = playersRef.current.find((p) => p.id === data.targetUserId);
+      if (targetUser) {
+        setGuessResult({
+          username: targetUser.username,
+          role: data.targetRole,
+          isCorrect: data.isSeetha
+        });
+        setTimeout(() => setGuessResult(null), 3000);
+      }
+      setGuesses(prev => prev + 1);
     });
 
     socket.on('rs_round_ended', (data: any) => {
       setRoundEnded(true);
       setRoundData(data);
       setSessionScoreboard(data.sessionScoreboard || {});
+      setRoundScores(data.roundScores || {});
+      if (data.countdownDuration) {
+        setCountdown(data.countdownDuration);
+      }
       confetti({
         particleCount: 80,
         spread: 50,
@@ -139,7 +152,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       socket.off('rs_round_ended');
       socket.off('rs_match_ended');
     };
-  }, [socket, roomCode]);
+  }, [socket, roomCode]); // Removed players from dependencies to avoid infinite loops
 
   const handleCardClick = (targetPlayerId: string) => {
     if (matchEnded || roundEnded) return;
@@ -154,111 +167,78 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
 
   const isRamudu = user.id === ramuduId;
 
+  // Prepare scoreboard sorting and ranking
+  const sortedScoreboard = Object.entries(sessionScoreboard)
+    .map(([userId, val]) => {
+      const playerInfo = players.find((p) => p.id === userId);
+      return {
+        userId,
+        username: val.username,
+        score: val.score,
+        avatar: playerInfo?.avatar || 'default_avatar',
+        profileFrame: playerInfo?.profileFrame || 'default_frame',
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const leaderId = sortedScoreboard[0]?.userId;
+
   return (
-    <div className="flex flex-col flex-grow p-4 md:p-6 space-y-6 max-w-6xl mx-auto w-full relative">
-      {/* Top dashboard row: Session stats and Identity status */}
-      <div className="flex flex-col md:flex-row items-center justify-between glass-panel rounded-2xl p-5 border-cybergold/20 gap-4 shadow-neon-gold">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cybergold/10 text-cybergold flex items-center justify-center border border-cybergold/30 shadow-[0_0_8px_rgba(255,213,79,0.2)]">
-            <Star size={22} className="fill-cybergold/20" />
-          </div>
-          <div>
-            <div className="text-[10px] uppercase font-bold text-gray-400">Divine Quest</div>
-            <div className="text-xl font-black text-cybergold">Round {currentRound} / {maxRounds}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-[10px] uppercase font-bold text-gray-400">Secret Identity</div>
-            <div className="text-lg font-black text-cybergold tracking-wider uppercase">{myRole || 'Chosen By Destiny...'}</div>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#ffd54f] to-[#b8860b] flex items-center justify-center font-black text-darkbg shadow-neon-gold border border-white/20">
-            {myRole ? myRole[0] : '?'}
-          </div>
-        </div>
-
-        <div className="text-center md:text-right">
-          <div className="text-[10px] uppercase font-bold text-gray-400">Guesser (Ramudu)</div>
-          <div className="text-sm font-extrabold text-cybergold">
-            {players.find(p => p.id === ramuduId)?.username || 'Calibrating...'}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Deduction Table */}
-      <div className="grid md:grid-cols-4 gap-6">
-        {/* Game Info Panel */}
-        <div className="md:col-span-1 glass-card rounded-2xl p-5 border-cybergold/20 space-y-5 h-fit shadow-neon-gold">
-          <h4 className="font-extrabold text-sm uppercase text-cybergold tracking-wider flex items-center gap-2">
-            <HelpCircle size={16} /> Celestial Scroll
-          </h4>
-          
-          <div className="space-y-3 text-xs text-gray-300 leading-relaxed border-b border-white/5 pb-4">
-            <p>
-              <strong className="text-white">Quest:</strong> Ramudu must find <span className="text-cybergold font-bold">Seetha</span> among the deities.
-            </p>
-            <p>
-              Only <strong className="text-cybergold">Ramudu</strong> makes guesses. Each scan reduces the score.
-            </p>
-            <p>
-              Use lobby chat coordination to protect or identify identities!
-            </p>
-          </div>
-
-          <div className="flex justify-between items-center">
+    <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-6 w-full max-w-7xl mx-auto items-stretch min-h-0">
+      
+      {/* LEFT: Game Card Area */}
+      <div className="flex-1 flex flex-col space-y-6 min-w-0">
+        
+        {/* Top dashboard row: Session stats and Identity status */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 glass-panel rounded-2xl p-5 border-white/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-cyberblue/10 text-cyberblue flex items-center justify-center shrink-0">
+              <Star size={22} className="fill-cyberblue/20 animate-spin-slow" />
+            </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-gray-500 mb-0.5">Attempted Scans</div>
-              <span className="text-2xl font-black text-white">{guesses}</span>
+              <div className="text-[10px] uppercase font-bold text-gray-500">Campaign Progress</div>
+              <div className="text-lg font-black text-white">Round {currentRound} / {maxRounds}</div>
             </div>
           </div>
 
-          <div className="pt-2 border-t border-white/5">
-            <button
-              onClick={() => setShowLiveScore(!showLiveScore)}
-              className="w-full py-2.5 rounded-xl border border-cybergold/45 bg-cybergold/10 hover:bg-cybergold text-cybergold hover:text-darkbg transition-all text-xs font-black uppercase tracking-wider"
-            >
-              {showLiveScore ? 'Hide Live Scores' : 'View Live Scores'}
-            </button>
-          </div>
-
-          {showLiveScore && (
-            <div className="space-y-2 pt-2 animate-fade-in">
-              <h5 className="text-[10px] uppercase font-black text-cybergold/80 tracking-widest">Running Standings</h5>
-              <div className="space-y-2 bg-black/40 border border-white/5 rounded-xl p-3">
-                {Object.entries(sessionScoreboard).length > 0 ? (
-                  Object.entries(sessionScoreboard)
-                    .map(([userId, val]) => ({ userId, username: val.username, score: val.score }))
-                    .sort((a, b) => b.score - a.score)
-                    .map((row, idx) => (
-                      <div key={row.userId} className="flex justify-between items-center text-xs">
-                        <span className="text-gray-300 truncate max-w-[120px] font-bold">
-                          #{idx + 1} {row.username}
-                        </span>
-                        <span className="text-cybergold font-black">{row.score} pts</span>
-                      </div>
-                    ))
-                ) : (
-                  <p className="text-[10px] text-gray-500">Waiting for round end...</p>
-                )}
+          <div className="flex items-center gap-3 justify-start sm:justify-center">
+            <div className="w-10 h-10 rounded-xl bg-cyberpink/10 text-cyberpink flex items-center justify-center shrink-0">
+              <span className="font-extrabold text-lg">🎭</span>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-500">Your secret role</div>
+              <div className="text-base font-black text-cyberpink tracking-wide uppercase truncate max-w-[150px]">
+                {myRole || 'Distributing...'}
               </div>
             </div>
-          )}
+          </div>
+
+          <div className="flex items-center gap-3 justify-start sm:justify-end">
+            <div className="w-10 h-10 rounded-xl bg-cybergold/10 text-cybergold flex items-center justify-center shrink-0">
+              <span className="font-extrabold text-lg">🏹</span>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-500">Ramudu Guesser</div>
+              <div className="text-sm font-bold text-cyberblue truncate max-w-[150px]">
+                {players.find(p => p.id === ramuduId)?.username || 'Selecting...'}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Player Cards Area */}
-        <div className="md:col-span-3 space-y-6">
+        <div className="space-y-4">
           {guessResult && (
-            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm transition-all ${
+            <div className={`p-4 rounded-xl flex items-center justify-center font-bold border text-sm transition-all duration-300 ${
               guessResult.isCorrect 
-                ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess shadow-neon-success animate-bounce' 
-                : 'bg-cybererror/10 border-cybererror text-cybererror shadow-neon-error animate-shake'
+                ? 'bg-cybersuccess/10 border-cybersuccess text-cybersuccess animate-bounce' 
+                : 'bg-cybererror/10 border-cybererror text-cybererror animate-pulse'
             }`}>
-              ⚔️ {guessResult.username} was revealed as: {guessResult.role}! {guessResult.isCorrect ? 'SEETHA FOUND!' : 'NOT SEETHA.'}
+              {guessResult.username} was revealed as: {guessResult.role}! {guessResult.isCorrect ? 'FOUND SEETHA!' : 'NOT SEETHA.'}
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
             {players.map((p) => {
               const isGuesserSelf = p.id === user.id;
               const isTargetRevealed = revealedIds.includes(p.id);
@@ -268,62 +248,58 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               const isPlayerSeetha = cardRole === 'Seetha';
               const isPlayerDeity = cardRole && cardRole !== 'Ramudu' && cardRole !== 'Seetha';
 
-              let cardBorderClass = 'border-white/5 bg-[#050816]/70';
+              let cardBorderClass = 'border-white/5 bg-gradient-to-b from-white/5 to-transparent';
               let subtitleColorClass = 'text-gray-500';
               let roleName = 'MYSTIC DEITY';
               let characterBadge = '✨';
 
-              // Assign custom emblems based on role names
-              if (cardRole === 'Ramudu' || isPlayerRamudu) {
-                cardBorderClass = 'border-cybergold bg-gradient-to-b from-[#ffd54f]/15 to-transparent shadow-neon-gold';
-                subtitleColorClass = 'text-cybergold font-black';
+              if (isPlayerRamudu) {
+                cardBorderClass = 'border-cyberblue bg-cyberblue/5 shadow-neon-blue';
+                subtitleColorClass = 'text-cyberblue font-extrabold';
                 roleName = 'RAMUDU';
                 characterBadge = '🏹';
               } else if (isPlayerSeetha) {
-                cardBorderClass = 'border-cyberpink bg-gradient-to-b from-[#ff5edf]/15 to-transparent shadow-neon-pink';
-                subtitleColorClass = 'text-cyberpink font-black';
+                cardBorderClass = 'border-cyberpink bg-cyberpink/5 shadow-neon-pink';
+                subtitleColorClass = 'text-cyberpink font-extrabold';
                 roleName = 'SEETHA';
                 characterBadge = '🌸';
               } else if (isPlayerDeity) {
-                cardBorderClass = 'border-purple-400 bg-gradient-to-b from-purple-500/15 to-transparent shadow-neon-purple';
-                subtitleColorClass = 'text-purple-300 font-bold';
+                cardBorderClass = 'border-cybergold bg-cybergold/5 shadow-neon-purple';
+                subtitleColorClass = 'text-cybergold font-extrabold';
                 roleName = cardRole.toUpperCase();
-                
-                // Emblems per specific deity
-                if (cardRole.includes('Hanuman')) characterBadge = '🔱';
-                else if (cardRole.includes('Lakshmana')) characterBadge = '⚔️';
-                else if (cardRole.includes('Krishna')) characterBadge = '🪈';
-                else if (cardRole.includes('Shiva')) characterBadge = '🔱';
-                else if (cardRole.includes('Ganesha')) characterBadge = '🐘';
-                else characterBadge = '⚡';
+                characterBadge = '⚡';
               } else {
-                cardBorderClass = 'border-cybergold/30 bg-gradient-to-b from-cybergold/5 to-transparent hover:border-cybergold/70 hover:shadow-neon-gold';
-                subtitleColorClass = 'text-gray-400';
-                roleName = 'UNREVEALED';
-                characterBadge = '🛡️';
+                cardBorderClass = 'border-primary/20 bg-gradient-to-b from-primary/10 via-darkbg to-primary/5 hover:border-cyberpink/50 hover:shadow-neon-pink';
+                subtitleColorClass = 'text-primary/70';
+                roleName = 'UNKNOWN DEITY';
+                characterBadge = '🌀';
               }
 
               return (
                 <div 
                   key={p.id}
                   onClick={() => handleCardClick(p.id)}
-                  className={`glass-card rounded-2xl p-6 border flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
-                    isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded ? 'hover:scale-[1.03] active:scale-95' : 'cursor-default'
+                  className={`glass-card rounded-2xl p-4 md:p-6 border flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-[3/4] select-none ${
+                    isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded ? 'hover:scale-105 hover:-translate-y-1 active:scale-95' : 'cursor-default'
                   } ${cardBorderClass}`}
                 >
-                  <div className="relative mb-4">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl border border-cybergold/20 bg-darkbg shadow-[0_0_12px_rgba(255,213,79,0.1)]`}>
+                  <div className="relative mb-4 shrink-0">
+                    <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-2xl border ${
+                      cardRole ? 'bg-primary/20 border-white/20' : 'bg-darkbg border-primary/30 shadow-inner'
+                    }`}>
                       {characterBadge}
                     </div>
                     {isTargetRevealed && (
-                      <span className="absolute -bottom-1 -right-1 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold shadow-md">
+                      <span className="absolute -bottom-1.5 -right-1.5 p-1 bg-cybersuccess rounded-full text-white text-[8px] font-bold shadow-md">
                         <ShieldCheck size={12} />
                       </span>
                     )}
                   </div>
 
-                  <h5 className="font-extrabold text-sm text-gray-200 truncate w-full tracking-wide">{p.username}</h5>
-                  <p className={`text-[10px] mt-2 uppercase tracking-widest font-black ${subtitleColorClass}`}>
+                  <h5 className="font-extrabold text-xs md:text-sm text-gray-200 truncate w-full tracking-wide shrink-0">
+                    {p.username}
+                  </h5>
+                  <p className={`text-[8px] md:text-[9px] mt-1.5 uppercase tracking-widest font-black shrink-0 ${subtitleColorClass}`}>
                     {roleName}
                   </p>
                 </div>
@@ -333,20 +309,112 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
         </div>
       </div>
 
+      {/* RIGHT: Live Sticky Scoreboard & Mission Log */}
+      <div className="w-full lg:w-80 shrink-0 flex flex-col gap-6">
+        
+        {/* Live Scoreboard */}
+        <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-4">
+          <h4 className="font-extrabold text-sm uppercase text-gray-400 tracking-wider flex items-center gap-2">
+            🏆 Scoreboard
+          </h4>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+            {sortedScoreboard.map((row, idx) => {
+              const isLeader = row.userId === leaderId;
+              const addedPoints = roundScores[row.userId] || 0;
+              
+              return (
+                <div 
+                  key={row.userId}
+                  className={`flex justify-between items-center p-3 rounded-xl border transition-all duration-500 ${
+                    isLeader 
+                      ? 'border-cybergold/30 bg-cybergold/5 shadow-[0_0_15px_rgba(255,213,79,0.05)]' 
+                      : 'border-white/5 bg-white/5'
+                  } ${addedPoints > 0 ? 'animate-pulse scale-[1.02]' : ''}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`font-black text-xs w-4 shrink-0 ${isLeader ? 'text-cybergold' : 'text-gray-500'}`}>
+                      #{idx + 1}
+                    </span>
+                    <div className="relative shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase ${
+                        isLeader ? 'bg-cybergold/20 text-cybergold border border-cybergold/30' : 'bg-primary/20 border border-white/10 text-white'
+                      }`}>
+                        {row.username[0]}
+                      </div>
+                      {isLeader && (
+                        <span className="absolute -top-1.5 -right-1 text-cybergold animate-bounce">
+                          <Crown size={10} className="fill-cybergold" />
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-extrabold text-xs text-gray-200 truncate pr-1">
+                      {row.username}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 shrink-0">
+                    {addedPoints > 0 && (
+                      <span className="text-[9px] text-cybersuccess font-black animate-bounce shrink-0">
+                        +{addedPoints}
+                      </span>
+                    )}
+                    <span className="font-black text-sm text-white shrink-0">
+                      {row.score}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Game Info Panel */}
+        <div className="glass-card rounded-2xl p-5 border-white/5 space-y-4">
+          <h4 className="font-extrabold text-sm uppercase text-gray-400 tracking-wider flex items-center gap-2">
+            <HelpCircle size={16} className="text-cyberblue" /> Mission Log
+          </h4>
+          
+          <div className="space-y-3 text-xs text-gray-400 leading-relaxed">
+            <p>
+              <strong className="text-white">Objective:</strong> Ramudu must identify <span className="text-cyberpink font-bold">Seetha</span>.
+            </p>
+            <p>
+              If you are <strong className="text-cyberblue font-bold">Ramudu</strong>, click on player cards to search.
+            </p>
+            <p>
+              Scans decrease round points. Work together in chat to locate Seetha safely!
+            </p>
+          </div>
+
+          <div className="border-t border-white/5 pt-4 flex justify-between items-center">
+            <span className="text-[10px] uppercase font-bold text-gray-500">Round Scans</span>
+            <span className="text-xl font-black text-white">{guesses}</span>
+          </div>
+        </div>
+
+      </div>
+
       {/* Round End Modal Overlay */}
       {roundEnded && roundData && !matchEnded && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-cybergold/30 relative overflow-hidden shadow-neon-gold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-blue transition-all duration-300 transform scale-100">
+            {countdown !== null && (
+              <div className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 rounded-full border border-cyberblue text-cyberblue font-extrabold text-xs">
+                {countdown}s
+              </div>
+            )}
+            
             <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest">Round {roundData.currentRound} Completed</span>
+              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">Round {roundData.currentRound} Completed</span>
               <h3 className="text-3xl font-black text-white mt-1">Seetha Located!</h3>
-              <p className="text-sm text-gray-300 mt-2">
-                Ramudu successfully searched Seetha in <span className="text-cybergold font-bold">{roundData.guessCount}</span> scans.
+              <p className="text-sm text-gray-400 mt-2">
+                Ramudu scanned Seetha in <span className="text-white font-bold">{roundData.guessCount}</span> attempts.
               </p>
             </div>
 
             <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Session Leaderboard</h4>
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Session Standings</h4>
               <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                 {Object.entries(sessionScoreboard)
                   .map(([userId, val]) => ({ userId, username: val.username, score: val.score }))
@@ -356,11 +424,11 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                     return (
                       <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
                         <div className="flex items-center gap-3">
-                          <span className="font-black text-cybergold/75 w-4">#{idx + 1}</span>
+                          <span className="font-bold text-gray-400 w-4">#{idx + 1}</span>
                           <span className="font-extrabold text-gray-200">{row.username}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] text-cybersuccess font-bold">+{roundScore} this round</span>
+                          <span className="text-[10px] text-cybersuccess font-bold">+{roundScore} pts</span>
                           <span className="font-black text-white">{row.score} pts</span>
                         </div>
                       </div>
@@ -372,13 +440,23 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
             {isHost ? (
               <button
                 onClick={() => socket.emit('rs_next_round', roomCode)}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-cybergold to-amber-600 text-darkbg font-bold shadow-neon-gold hover:opacity-90 active:scale-95 transition-all text-center text-sm"
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center text-sm"
               >
-                Launch Round {roundData.currentRound + 1}
+                Launch Next Round Immediately
               </button>
             ) : (
-              <div className="text-center py-3 text-xs text-cybergold font-bold animate-pulse">
-                Waiting for Captain to launch the next round...
+              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
+                Next round starting automatically...
+              </div>
+            )}
+
+            {/* Real-time shrinking progress bar */}
+            {countdown !== null && (
+              <div className="w-full h-1.5 bg-white/10 absolute bottom-0 left-0">
+                <div 
+                  className="h-full bg-cyberblue transition-all duration-1000 ease-linear"
+                  style={{ width: `${(countdown / 10) * 100}%` }}
+                />
               </div>
             )}
           </div>
@@ -387,18 +465,18 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
 
       {/* Grand Finale Session End Overlay Modal */}
       {matchEnded && matchResults && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-cybergold/40 relative overflow-hidden shadow-neon-gold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-lg glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-purple animate-float-slow">
             <div className="text-center mb-6">
-              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest animate-pulse">Campaign Complete</span>
-              <h3 className="text-3xl font-black text-white mt-1">Grand Standings</h3>
-              <p className="text-sm text-gray-300 mt-2">
-                All rounds completed! The final standings are synchronized:
+              <span className="text-[10px] font-black uppercase text-cybergold tracking-widest">Campaign Complete</span>
+              <h3 className="text-3xl font-black text-white mt-1">Grand Placements</h3>
+              <p className="text-sm text-gray-400 mt-2">
+                All rounds completed! Final campaign standings finalized:
               </p>
             </div>
 
             <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Campaign Leaderboard</h4>
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Final Standings</h4>
               <div className="divide-y divide-white/5 bg-white/5 rounded-2xl p-4 border border-white/5 space-y-3">
                 {matchResults.scoreboard.map((row) => (
                   <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
@@ -408,19 +486,25 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-[10px] text-gray-400">+{row.xpEarned} XP &bull; +{row.coinsEarned} 🪙</span>
-                      <span className="font-black text-cybergold">{row.score} pts</span>
+                      <span className="font-black text-cyberpink">{row.score} pts</span>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <button 
-              onClick={onReturnToLobby}
-              className="w-full py-4 rounded-xl bg-gradient-to-r from-cybergold to-amber-600 text-darkbg font-bold shadow-neon-gold hover:opacity-90 active:scale-95 transition-all text-center text-sm"
-            >
-              Return to Lobby
-            </button>
+            {isHost ? (
+              <button 
+                onClick={() => socket.emit('rs_return_to_lobby', roomCode)}
+                className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberpink font-bold shadow-neon-pink hover:opacity-90 active:scale-95 transition-all text-center text-sm animate-pulse"
+              >
+                Return to Lobby
+              </button>
+            ) : (
+              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
+                Waiting for Captain to return to Lobby...
+              </div>
+            )}
           </div>
         </div>
       )}

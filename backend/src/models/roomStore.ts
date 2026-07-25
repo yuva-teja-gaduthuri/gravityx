@@ -84,6 +84,19 @@ class RoomStore {
       return undefined;
     }
 
+    // Auto rollback room back to LOBBY status if playing drops below active playing thresholds
+    if (room.status === 'PLAYING') {
+      const minPlayers = room.gameType === 'RAMUDU_SEETHA' ? 3 : 2;
+      if (room.players.length < minPlayers) {
+        room.status = 'LOBBY';
+        room.gameState = null;
+        room.players.forEach((p) => {
+          p.ready = false;
+          p.role = undefined;
+        });
+      }
+    }
+
     return room;
   }
 
