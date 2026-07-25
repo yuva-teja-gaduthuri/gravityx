@@ -210,7 +210,7 @@ export default function RoomPage() {
     room.players.every((p) => p.id === room.hostId || p.ready);
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row h-screen overflow-hidden">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-screen lg:h-screen lg:overflow-hidden">
       {/* Game gameplay layout OR waiting room layout */}
       <div className="flex-grow flex flex-col overflow-y-auto max-h-[calc(100vh-160px)] lg:max-h-screen p-6">
                 {room.status === 'PLAYING' || matchEndedData !== null ? (
