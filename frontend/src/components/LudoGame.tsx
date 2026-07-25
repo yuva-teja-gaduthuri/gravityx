@@ -331,6 +331,11 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
   const [luckySix, setLuckySix] = useState(false);
   const [yourTurnAlert, setYourTurnAlert] = useState(false);
   const [isScreenShaking, setIsScreenShaking] = useState(false);
+  const [camZoom, setCamZoom] = useState(1.0);
+  const [camX, setCamX] = useState(0);
+  const [camY, setCamY] = useState(0);
+  const [eliminatedKey, setEliminatedKey] = useState<string | null>(null);
+  const [winnerKey, setWinnerKey] = useState<string | null>(null);
 
   // Audio and Canvas references
   const audioRef = useRef<LudoAudioEngine | null>(null);
@@ -591,16 +596,27 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
         }
 
         if (captured) {
+          setWinnerKey(key);
           handleCaptureAnimation(finalPos, finalPlayersState);
         } else {
           setGameState(prev => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
           setValidTokens([]);
+          setCamZoom(1.0);
+          setCamX(0);
+          setCamY(0);
         }
         return;
       }
 
       const nextPos = path[stepIndex];
       const [col, row] = getTokenCoords(color, tokenId, nextPos);
+
+      // Track walking pawn with dynamic camera
+      const camTargetX = (7 - col) * 12;
+      const camTargetY = (7 - row) * 12;
+      setCamZoom(1.18);
+      setCamX(camTargetX);
+      setCamY(camTargetY);
 
       // Orientation turn rotation
       const currentVisual = visualTokens[key];
@@ -671,6 +687,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     });
 
     if (capturedKey) {
+      setEliminatedKey(capturedKey);
       if (!isCameraShakeMuted) {
         setIsScreenShaking(true);
         setTimeout(() => setIsScreenShaking(false), 500);
@@ -679,6 +696,13 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
       audioRef.current?.playCapture();
 
       const [col, row] = TRACK_COORDINATES[capturePos] || [7, 7];
+      
+      // Zoom camera on capture conflict tile
+      const camTargetX = (7 - col) * 14;
+      const camTargetY = (7 - row) * 14;
+      setCamZoom(1.3);
+      setCamX(camTargetX);
+      setCamY(camTargetY);
       
       // Spawn capture explosions and smoke
       spawnParticles(col, row, 'smoke', 12);
@@ -724,6 +748,11 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
 
           setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
           setValidTokens([]);
+          setEliminatedKey(null);
+          setWinnerKey(null);
+          setCamZoom(1.0);
+          setCamX(0);
+          setCamY(0);
         } else {
           // Linear interpolation for coordinate mapping
           const interpCol = startCoords[0] + (endCoords[0] - startCoords[0]) * ratio;
@@ -748,6 +777,11 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     } else {
       setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
       setValidTokens([]);
+      setEliminatedKey(null);
+      setWinnerKey(null);
+      setCamZoom(1.0);
+      setCamX(0);
+      setCamY(0);
     }
   };
 
@@ -904,11 +938,539 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
     return [7, 7];
   };
 
+  const renderBaseDice = (color: 'red' | 'green' | 'yellow' | 'blue') => {
+    if (!gameState) return null;
+    
+    // Find if player exists in game
+    const playerIndex = gameState.players.findIndex(p => p.color === color);
+    if (playerIndex === -1) return null;
+    
+    const player = gameState.players[playerIndex];
+    const isPlayerActive = gameState.activePlayerIndex === playerIndex;
+    const isMyDice = player.id === user.id;
+    const canIRoll = isPlayerActive && isMyDice && !gameState.hasRolled && !isRolling;
+    
+    // Position classes inside the base card
+    let positionClass = '';
+    if (color === 'red') positionClass = 'absolute bottom-2 right-2';
+    else if (color === 'green') positionClass = 'absolute bottom-2 left-2';
+    else if (color === 'blue') positionClass = 'absolute top-2 right-2';
+    else if (color === 'yellow') positionClass = 'absolute top-2 left-2';
+
+    // Dice colors matching the team
+    let diceFaceBg = 'bg-cybererror';
+    let dotBg = 'bg-white';
+    if (color === 'green') { diceFaceBg = 'bg-cybersuccess'; }
+    else if (color === 'yellow') { diceFaceBg = 'bg-[#fbc02d]'; dotBg = 'bg-[#1a0802]'; }
+    else if (color === 'blue') { diceFaceBg = 'bg-cyberblue'; }
+
+    const displayRollValue = isPlayerActive && isRolling ? rollingValue : (gameState.diceValue || 1);
+
+    return (
+      <div className={`${positionClass} z-20`}>
+        {/* Glow backdrop for active dice */}
+        {isPlayerActive && (
+          <div className={`absolute inset-[-12px] rounded-2xl animate-pulse blur-md -z-10 ${
+            color === 'red' ? 'bg-cybererror/40' :
+            color === 'green' ? 'bg-cybersuccess/40' :
+            color === 'yellow' ? 'bg-cybergold/40' : 'bg-cyberblue/40'
+          }`} />
+        )}
+        
+        <button
+          onClick={handleRollDice}
+          disabled={!canIRoll}
+          className={`dice-scene select-none transition-all duration-300 ${
+            canIRoll ? 'cursor-pointer hover:scale-110 active:scale-95' : 'cursor-default'
+          }`}
+          style={{
+            pointerEvents: canIRoll ? 'auto' : 'none'
+          }}
+        >
+          <div 
+            className={`dice-cube ${isRolling && isPlayerActive ? 'animate-spin-slow' : ''}`}
+            data-roll={displayRollValue}
+          >
+            {/* Face 1 */}
+            <div className={`dice-face ${diceFaceBg} text-white flex items-center justify-center shadow-inner`} style={{ transform: 'rotateY(0deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <span className={`w-2.5 h-2.5 rounded-full ${color === 'yellow' ? 'bg-[#1a0802]' : 'bg-white'} shadow-md`}></span>
+            </div>
+            {/* Face 6 */}
+            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(180deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="grid grid-cols-2 gap-1.5 p-1 w-full h-full justify-items-center items-center">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+              </div>
+            </div>
+            {/* Face 2 */}
+            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1 w-full h-full">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
+              </div>
+            </div>
+            {/* Face 5 */}
+            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="grid grid-cols-3 gap-1 p-1 w-full h-full items-center justify-items-center">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-1 col-end-2`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-3 col-end-4`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-2 col-end-3`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-1 col-end-2`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-3 col-end-4`}></span>
+              </div>
+            </div>
+            {/* Face 3 */}
+            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1 w-full h-full items-center">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
+              </div>
+            </div>
+            {/* Face 4 */}
+            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="grid grid-cols-2 gap-2 p-1 w-full h-full justify-items-center items-center">
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+              </div>
+            </div>
+          </div>
+        </button>
+      </div>
+    );
+  };
+
   return (
-    <div className={`flex flex-col lg:flex-row gap-8 max-w-6xl mx-auto w-full p-4 items-center justify-center transition-all duration-100 ${
+    <div className={`flex flex-col items-center justify-center min-h-[92vh] w-full p-2 md:p-4 transition-all duration-100 select-none overflow-hidden ${
       isScreenShaking ? 'animate-shake' : ''
     }`}>
       
+      {/* Premium AAA Ludo stylesheet override */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        :root {
+          --dice-size: clamp(34px, 7.5vmin, 46px);
+        }
+        
+        /* Premium Wood Frame */
+        .wood-board-frame {
+          background: linear-gradient(135deg, #402010 0%, #2c140a 50%, #1a0802 100%);
+          border: clamp(6px, 1.8vmin, 12px) solid #52301c;
+          box-shadow: 
+            0 20px 40px rgba(0, 0, 0, 0.65),
+            inset 0 3px 6px rgba(255, 255, 255, 0.08),
+            inset 0 -3px 6px rgba(0, 0, 0, 0.5);
+          border-radius: clamp(16px, 4vmin, 28px);
+          overflow: hidden;
+        }
+
+        /* Wood Board Grid Cells */
+        .wood-cell-default {
+          background: #eedcb3; /* birch wood color */
+          border: 1px solid #dcd0b3;
+          box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45), inset 0 -1px 2px rgba(0,0,0,0.06);
+        }
+
+        /* Wood base yard panels */
+        .wood-base-yard {
+          background: #dfc8a5;
+          border: clamp(2px, 0.5vmin, 4px) solid #bfa57b;
+          border-radius: clamp(8px, 2.5vmin, 16px);
+          box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Spotlight & Reflection overlay */
+        .spotlight-overlay {
+          background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.14) 0%, rgba(0, 0, 0, 0.3) 100%);
+          mix-blend-mode: overlay;
+        }
+        .reflection-overlay {
+          background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%, rgba(255,255,255,0.03) 100%);
+        }
+
+        /* 3D Dice styling */
+        .dice-scene {
+          perspective: 300px;
+          width: var(--dice-size);
+          height: var(--dice-size);
+        }
+
+        .dice-cube {
+          width: 100%;
+          height: 100%;
+          position: relative;
+          transform-style: preserve-3d;
+          transition: transform 1s cubic-bezier(0.2, 0.8, 0.3, 1);
+        }
+
+        .dice-face {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          border-radius: clamp(4px, 1.2vmin, 8px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Roll positions using responsive variable calc */
+        .dice-cube[data-roll="1"] { transform: rotateX(0deg) rotateY(0deg); }
+        .dice-cube[data-roll="6"] { transform: rotateX(180deg) rotateY(0deg); }
+        .dice-cube[data-roll="3"] { transform: rotateX(-90deg) rotateY(0deg); }
+        .dice-cube[data-roll="4"] { transform: rotateX(90deg) rotateY(0deg); }
+        .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(90deg); }
+        .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(-90deg); }
+
+        /* Character Styles */
+        .pawn-character {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          transform-style: preserve-3d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .pawn-shadow {
+          position: absolute;
+          bottom: 2px;
+          width: 75%;
+          height: 4px;
+          background: rgba(0, 0, 0, 0.45);
+          border-radius: 50%;
+          filter: blur(1px);
+          transform: translateZ(-1px);
+        }
+
+        .pawn-body-wrapper {
+          position: absolute;
+          bottom: 4px;
+          width: 100%;
+          height: 125%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          transform-origin: bottom center;
+        }
+
+        /* Head */
+        .pawn-head {
+          position: relative;
+          width: clamp(14px, 3.5vmin, 22px);
+          height: clamp(14px, 3.5vmin, 22px);
+          background: #ffdbac;
+          border-radius: 50%;
+          z-index: 10;
+          box-shadow: inset -1.5px -1.5px 4px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* Eyes */
+        .pawn-eyes {
+          position: absolute;
+          top: 30%;
+          left: 15%;
+          right: 15%;
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .pawn-eye {
+          width: 28%;
+          height: 28%;
+          background: #fff;
+          border-radius: 50%;
+          position: relative;
+          overflow: hidden;
+          animation: blink 4s infinite;
+        }
+
+        .pawn-pupil {
+          width: 60%;
+          height: 60%;
+          background: #1c0e07;
+          border-radius: 50%;
+          position: absolute;
+          top: 20%;
+          left: 20%;
+        }
+
+        @keyframes blink {
+          0%, 95%, 100% { transform: scaleY(1); }
+          97% { transform: scaleY(0.1); }
+        }
+
+        .pawn-mouth {
+          position: absolute;
+          bottom: 15%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 32%;
+          height: 16%;
+          background: #731212;
+          border-radius: 0 0 100px 100px;
+        }
+
+        /* Red Team: Warrior */
+        .team-red .pawn-head { background: #ffd1a9; }
+        .warrior-hair {
+          position: absolute;
+          top: -30%;
+          left: -10%;
+          width: 120%;
+          height: 60%;
+          background: #2a1810;
+          border-radius: 100px 100px 0 0;
+        }
+        .warrior-hair::after {
+          content: '';
+          position: absolute;
+          top: -40%;
+          left: 35%;
+          border-left: clamp(3px, 0.8vmin, 5px) solid transparent;
+          border-right: clamp(3px, 0.8vmin, 5px) solid transparent;
+          border-bottom: clamp(5px, 1.2vmin, 8px) solid #ef4444;
+        }
+        .team-red .pawn-outfit {
+          position: relative;
+          width: 80%;
+          height: 80%;
+          background: #ef4444;
+          border-radius: clamp(3px, 0.8vmin, 6px);
+          margin-top: -15%;
+          border: 1px solid #991b1b;
+          box-shadow: inset 0 1px 2px rgba(255,255,255,0.2);
+        }
+        .pawn-cape {
+          position: absolute;
+          top: 0;
+          left: -10%;
+          width: 120%;
+          height: 110%;
+          background: #b91c1c;
+          border-radius: clamp(2px, 0.5vmin, 4px);
+          transform: rotateX(15deg);
+          z-index: -1;
+          transform-origin: top center;
+        }
+
+        /* Blue Team: Adventurer */
+        .team-blue .pawn-head { background: #ffe0bd; }
+        .adventurer-hat {
+          position: absolute;
+          top: -40%;
+          left: -20%;
+          width: 140%;
+          height: 50%;
+          background: #8d6e63;
+          border-radius: clamp(3px, 0.8vmin, 6px) clamp(3px, 0.8vmin, 6px) 2px 2px;
+        }
+        .adventurer-hat::after {
+          content: '';
+          position: absolute;
+          bottom: -15%;
+          left: -10%;
+          width: 120%;
+          height: 30%;
+          background: #5d4037;
+          border-radius: 100px;
+        }
+        .team-blue .pawn-outfit {
+          position: relative;
+          width: 80%;
+          height: 80%;
+          background: #3b82f6;
+          border-radius: clamp(3px, 0.8vmin, 6px);
+          margin-top: -15%;
+          border: 1px solid #1d4ed8;
+        }
+
+        /* Green Team: Forest Explorer */
+        .team-green .pawn-head { background: #ffd1a9; }
+        .explorer-hat {
+          position: absolute;
+          top: -35%;
+          left: -15%;
+          width: 130%;
+          height: 45%;
+          background: #689f38;
+          border-radius: 100px 100px 0 0;
+        }
+        .team-green .pawn-outfit {
+          position: relative;
+          width: 80%;
+          height: 80%;
+          background: #22c55e;
+          border-radius: clamp(3px, 0.8vmin, 6px);
+          margin-top: -15%;
+          border: 1px solid #15803d;
+        }
+
+        /* Yellow Team: Champion */
+        .team-yellow .pawn-head { background: #ffe0bd; }
+        .champion-crown {
+          position: absolute;
+          top: -40%;
+          left: 10%;
+          width: 80%;
+          height: 50%;
+          background: #f59e0b;
+          clip-path: polygon(0% 100%, 0% 20%, 25% 60%, 50% 0%, 75% 60%, 100% 20%, 100% 100%);
+        }
+        .team-yellow .pawn-outfit {
+          position: relative;
+          width: 80%;
+          height: 80%;
+          background: #eab308;
+          border-radius: clamp(3px, 0.8vmin, 6px);
+          margin-top: -15%;
+          border: 1px solid #a16207;
+        }
+        .pawn-medal {
+          position: absolute;
+          top: 15%;
+          left: 30%;
+          width: 40%;
+          height: 40%;
+          background: #facc15;
+          border-radius: 50%;
+          border: 1px solid #ca8a04;
+        }
+
+        /* Limbs */
+        .pawn-limbs {
+          position: absolute;
+          bottom: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+        }
+        .pawn-arm {
+          position: absolute;
+          top: 55%;
+          width: 16%;
+          height: 45%;
+          background: inherit;
+          border-radius: 100px;
+          transform-origin: top center;
+        }
+        .left-arm { left: -10%; }
+        .right-arm { right: -10%; }
+
+        .pawn-leg {
+          position: absolute;
+          bottom: -20%;
+          width: 22%;
+          height: 35%;
+          background: #3e2723;
+          border-radius: 100px;
+          transform-origin: top center;
+        }
+        .left-leg { left: 20%; }
+        .right-leg { right: 20%; }
+
+        /* Idle breathe cycle */
+        .pawn-character.idle .pawn-body-wrapper {
+          animation: breathe 3s infinite ease-in-out;
+        }
+        @keyframes breathe {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.04, 0.96); }
+        }
+
+        /* Walking loops */
+        .pawn-character.walking .pawn-body-wrapper {
+          animation: walk-bounce 0.22s infinite alternate ease-in-out;
+        }
+        .pawn-character.walking .left-leg {
+          animation: walk-leg-l 0.22s infinite alternate linear;
+        }
+        .pawn-character.walking .right-leg {
+          animation: walk-leg-r 0.22s infinite alternate linear;
+        }
+        .pawn-character.walking .left-arm {
+          animation: walk-arm-l 0.22s infinite alternate linear;
+        }
+        .pawn-character.walking .right-arm {
+          animation: walk-arm-r 0.22s infinite alternate linear;
+        }
+
+        @keyframes walk-bounce {
+          0% { transform: translateY(0) rotate(3deg); }
+          100% { transform: translateY(-5px) rotate(-3deg); }
+        }
+        @keyframes walk-leg-l {
+          0% { transform: rotate(40deg); }
+          100% { transform: rotate(-40deg); }
+        }
+        @keyframes walk-leg-r {
+          0% { transform: rotate(-40deg); }
+          100% { transform: rotate(40deg); }
+        }
+        @keyframes walk-arm-l {
+          0% { transform: rotate(-35deg); }
+          100% { transform: rotate(35deg); }
+        }
+        @keyframes walk-arm-r {
+          0% { transform: rotate(35deg); }
+          100% { transform: rotate(-35deg); }
+        }
+
+        /* Victory celebrations */
+        .pawn-character.victory-dance .pawn-body-wrapper {
+          animation: victory-jump 0.38s infinite alternate ease-out;
+        }
+        .pawn-character.victory-dance .left-arm {
+          animation: victory-wave-l 0.18s infinite alternate linear;
+        }
+        .pawn-character.victory-dance .right-arm {
+          animation: victory-wave-r 0.18s infinite alternate linear;
+        }
+        @keyframes victory-jump {
+          0% { transform: translateY(0) scaleY(0.85); }
+          100% { transform: translateY(-15px) scaleY(1.15); }
+        }
+        @keyframes victory-wave-l {
+          0% { transform: rotate(110deg); }
+          100% { transform: rotate(175deg); }
+        }
+        @keyframes victory-wave-r {
+          0% { transform: rotate(-110deg); }
+          100% { transform: rotate(-175deg); }
+        }
+
+        /* Dizzy stars on eliminated */
+        .pawn-character.eliminated .pawn-body-wrapper {
+          animation: faint-spin 1.1s forwards cubic-bezier(0.2, 0.9, 0.4, 1);
+        }
+        .pawn-character.eliminated::after {
+          content: '💫';
+          position: absolute;
+          top: -15px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: clamp(8px, 2vmin, 12px);
+          animation: dizzy-stars 1s infinite linear;
+          z-index: 30;
+        }
+        @keyframes dizzy-stars {
+          0% { transform: translateX(-50%) rotate(0deg); }
+          100% { transform: translateX(-50%) rotate(360deg); }
+        }
+        @keyframes faint-spin {
+          0% { transform: rotate(0) scale(1); }
+          20% { transform: translateY(-20px) rotate(180deg) scale(1.3); }
+          100% { transform: translateY(0) rotate(720deg) scale(0); opacity: 0; }
+        }
+      `}} />
+
       {/* Settings Panel Toggle */}
       <div className="absolute top-4 right-4 z-30">
         <button 
@@ -969,20 +1531,75 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
         </div>
       )}
 
-      {/* Ludo Board Panel */}
-      <div className="relative w-[340px] h-[340px] sm:w-[480px] sm:h-[480px] bg-darkbg border border-white/10 rounded-2xl p-1 overflow-hidden shadow-neon-blue shrink-0">
+      {/* Glassmorphic Top Telemetry Overlay */}
+      <div className="w-full max-w-[680px] glass-panel rounded-2xl p-4 border border-white/10 mb-4 flex items-center justify-between shadow-2xl relative overflow-hidden z-20">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs border border-white/10 uppercase transition-all duration-300 ${
+            activePlayer.color === 'red' ? 'bg-cybererror/20 text-cybererror shadow-[0_0_10px_rgba(255,77,77,0.3)]' :
+            activePlayer.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess shadow-[0_0_10px_rgba(0,208,132,0.3)]' :
+            activePlayer.color === 'yellow' ? 'bg-[#fbc02d]/20 text-[#fbc02d] shadow-[0_0_10px_rgba(255,213,79,0.3)]' : 'bg-cyberblue/20 text-cyberblue shadow-[0_0_10px_rgba(0,245,255,0.3)]'
+          }`}>
+            {activePlayer.username[0]}
+          </div>
+          <div>
+            <div className="text-sm font-extrabold flex items-center gap-2 text-white">
+              {activePlayer.username} 
+              <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
+                activePlayer.color === 'red' ? 'text-cybererror border-cybererror/30 bg-cybererror/5' :
+                activePlayer.color === 'green' ? 'text-cybersuccess border-cybersuccess/30 bg-cybersuccess/5' :
+                activePlayer.color === 'yellow' ? 'text-cybergold border-cybergold/30 bg-cybergold/5' : 'text-cyberblue border-cyberblue/30 bg-cyberblue/5'
+              }`}>
+                {activePlayer.color}
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {isMyTurn ? "Your Command Matrix is active. Roll your base dice." : "Observing opponent telemetry..."}
+            </p>
+          </div>
+        </div>
+        
+        {/* Turn timer indicator */}
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time Left</span>
+          <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-1000 ease-linear ${
+                gameState.turnTimeLeft <= 5 ? 'bg-cybererror animate-pulse' : 'bg-cyberblue'
+              }`}
+              style={{ width: `${(gameState.turnTimeLeft / 15) * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Ludo Board Panel with Dynamic Camera Zoom/Pan */}
+      <div 
+        className="wood-board-frame relative shrink-0 transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)]"
+        style={{
+          width: 'min(92vw, 92vh, 680px)',
+          height: 'min(92vw, 92vh, 680px)',
+          transform: `scale(${camZoom}) translate(${camX}px, ${camY}px)`,
+        }}
+      >
         
         {/* Render 15x15 Ludo Grid Layout */}
-        <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative">
+        <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative bg-[#eedcb3]">
           
           {/* Top-Left Red Base */}
-          <div className="col-span-6 row-span-6 bg-cybererror/10 border border-cybererror/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybererror/30 bg-cybererror/5 animate-pulse-slow"></div>
+          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#c62828]/10 to-[#b71c1c]/20 border-4 border-[#5d1616] rounded-3xl relative flex items-center justify-center shadow-2xl">
+            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Red Yard</span>
+            
+            {/* Wooden Base Panel */}
+            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+              </div>
+              
+              {/* Integrated Dice */}
+              {renderBaseDice('red')}
             </div>
           </div>
 
@@ -991,9 +1608,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 3;
               const row = Math.floor(idx / 3);
-              let bg = 'bg-white/5 border border-white/5';
-              if (col === 1 && row > 0) bg = 'bg-cybersuccess/40 border border-cybersuccess/20'; // Home stretch
-              if (col === 2 && row === 1) bg = 'bg-cybersuccess/80 border border-white/20'; // Green start
+              let bg = 'wood-cell-default';
+              if (col === 1 && row > 0) bg = 'bg-[#00e676]/85 border border-[#00a152] shadow-inner'; // Home stretch
+              if (col === 2 && row === 1) bg = 'bg-[#00e676]/85 border border-white/20 shadow-inner'; // Green start
               const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
               return (
                 <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -1004,13 +1621,20 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           </div>
 
           {/* Top-Right Green Base */}
-          <div className="col-span-6 row-span-6 bg-cybersuccess/10 border border-cybersuccess/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybersuccess font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 right-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybersuccess/30 bg-cybersuccess/5 animate-pulse-slow"></div>
+          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#2e7d32]/10 to-[#1b5e20]/20 border-4 border-[#124216] rounded-3xl relative flex items-center justify-center shadow-2xl">
+            <span className="text-cybersuccess font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 right-2">Green Yard</span>
+            
+            {/* Wooden Base Panel */}
+            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+              </div>
+              
+              {/* Integrated Dice */}
+              {renderBaseDice('green')}
             </div>
           </div>
 
@@ -1019,9 +1643,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
-              let bg = 'bg-white/5 border border-white/5';
-              if (row === 1 && col > 0) bg = 'bg-cybererror/40 border border-cybererror/20'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-cybererror/80 border border-white/20'; // Red start
+              let bg = 'wood-cell-default';
+              if (row === 1 && col > 0) bg = 'bg-[#ff5d5d]/85 border border-[#d33a3a] shadow-inner'; // Home stretch
+              if (row === 0 && col === 1) bg = 'bg-[#ff5d5d]/85 border border-white/20 shadow-inner'; // Red start
               const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
               return (
                 <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -1032,10 +1656,18 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           </div>
 
           {/* Center Goal Terminal */}
-          <div className="col-span-3 row-span-3 bg-gradient-to-br from-primary to-darkbg border border-white/10 rounded-xl flex items-center justify-center flex-col relative">
-            <Trophy className="text-cybergold sm:w-8 sm:h-8 w-5 h-5 animate-float-slow" />
-            <span className="text-[8px] sm:text-[10px] uppercase font-black tracking-widest mt-1 text-cyberblue">Home</span>
-            <div className="absolute inset-0 rounded-xl border border-cybergold/20 animate-pulse bg-cybergold/5 pointer-events-none"></div>
+          <div className="col-span-3 row-span-3 bg-gradient-to-br from-[#805030] to-[#50301a] border border-[#a67c52] rounded-xl flex items-center justify-center flex-col relative overflow-hidden shadow-inner">
+            {/* Traditional Triangles */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <polygon points="0,0 50,50 0,100" fill="rgba(239, 68, 68, 0.75)" stroke="#501010" strokeWidth="0.5" />
+              <polygon points="0,0 100,0 50,50" fill="rgba(34, 197, 94, 0.75)" stroke="#105010" strokeWidth="0.5" />
+              <polygon points="100,0 100,100 50,50" fill="rgba(234, 179, 8, 0.75)" stroke="#504005" strokeWidth="0.5" />
+              <polygon points="0,100 50,50 100,100" fill="rgba(59, 130, 246, 0.75)" stroke="#051050" strokeWidth="0.5" />
+            </svg>
+            <div className="relative z-10 flex flex-col items-center justify-center">
+              <Trophy className="text-cybergold sm:w-7 sm:h-7 w-4 h-4 animate-float-slow" />
+              <span className="text-[7px] sm:text-[9px] uppercase font-black tracking-widest mt-0.5 text-white">Goal</span>
+            </div>
           </div>
 
           {/* Right-Middle Yellow Column Track */}
@@ -1043,9 +1675,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 6;
               const row = Math.floor(idx / 6);
-              let bg = 'bg-white/5 border border-white/5';
-              if (row === 1 && col < 5) bg = 'bg-cybergold/40 border border-cybergold/20'; // Home stretch
-              if (row === 2 && col === 4) bg = 'bg-cybergold/80 border border-white/20'; // Yellow start
+              let bg = 'wood-cell-default';
+              if (row === 1 && col < 5) bg = 'bg-[#ffd740]/85 border border-[#ffb300] shadow-inner'; // Home stretch
+              if (row === 2 && col === 4) bg = 'bg-[#ffd740]/85 border border-white/20 shadow-inner'; // Yellow start
               const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
               return (
                 <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -1056,13 +1688,20 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           </div>
 
           {/* Bottom-Left Blue Base */}
-          <div className="col-span-6 row-span-6 bg-cyberblue/10 border border-cyberblue/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cyberblue font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 left-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cyberblue/30 bg-cyberblue/5 animate-pulse-slow"></div>
+          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#1565c0]/10 to-[#0d47a1]/20 border-4 border-[#092c68] rounded-3xl relative flex items-center justify-center shadow-2xl">
+            <span className="text-cyberblue font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 left-2">Blue Yard</span>
+            
+            {/* Wooden Base Panel */}
+            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+              </div>
+              
+              {/* Integrated Dice */}
+              {renderBaseDice('blue')}
             </div>
           </div>
 
@@ -1071,9 +1710,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             {Array.from({ length: 18 }).map((_, idx) => {
               const col = idx % 3;
               const row = Math.floor(idx / 3);
-              let bg = 'bg-white/5 border border-white/5';
-              if (col === 1 && row < 5) bg = 'bg-cyberblue/40 border border-cyberblue/20'; // Home stretch
-              if (col === 0 && row === 4) bg = 'bg-cyberblue/80 border border-white/20'; // Blue start
+              let bg = 'wood-cell-default';
+              if (col === 1 && row < 5) bg = 'bg-[#2979ff]/85 border border-[#2962ff] shadow-inner'; // Home stretch
+              if (col === 0 && row === 4) bg = 'bg-[#2979ff]/85 border border-white/20 shadow-inner'; // Blue start
               const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
               return (
                 <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
@@ -1084,13 +1723,20 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           </div>
 
           {/* Bottom-Right Yellow Base */}
-          <div className="col-span-6 row-span-6 bg-cybergold/10 border border-cybergold/20 rounded-xl relative flex items-center justify-center">
-            <span className="text-cybergold font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 right-2">Yard</span>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5 animate-pulse-slow"></div>
-              <div className="w-6 h-6 sm:w-10 sm:h-10 rounded-full border border-cybergold/30 bg-cybergold/5 animate-pulse-slow"></div>
+          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#f57f17]/10 to-[#f57f17]/20 border-4 border-[#824400] rounded-3xl relative flex items-center justify-center shadow-2xl">
+            <span className="text-cybergold font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 right-2">Yellow Yard</span>
+            
+            {/* Wooden Base Panel */}
+            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+              </div>
+              
+              {/* Integrated Dice */}
+              {renderBaseDice('yellow')}
             </div>
           </div>
 
@@ -1126,70 +1772,86 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
                 const key = `${p.color}-${t.id}`;
                 const visual = visualTokens[key];
 
-                let tokenBg = 'bg-cybererror border-white/60 shadow-neon-error';
-                let glowColor = 'rgba(255, 77, 77, 0.4)';
-                if (p.color === 'green') {
-                  tokenBg = 'bg-cybersuccess border-white/60 shadow-neon-success';
-                  glowColor = 'rgba(0, 208, 132, 0.4)';
-                } else if (p.color === 'yellow') {
-                  tokenBg = 'bg-cybergold border-white/60 shadow-neon-gold';
-                  glowColor = 'rgba(255, 213, 79, 0.4)';
-                } else if (p.color === 'blue') {
-                  tokenBg = 'bg-cyberblue border-white/60 shadow-neon-blue';
-                  glowColor = 'rgba(0, 245, 255, 0.4)';
-                }
-
                 let dx = 0;
                 let dy = 0;
-                let sizeClass = 'w-5 h-5 sm:w-8 sm:h-8';
-                let textClass = 'text-[8px] sm:text-xs';
 
                 if (count > 1 && !visual?.isMoving) {
-                  sizeClass = 'w-4 h-4 sm:w-6 sm:h-6';
-                  textClass = 'text-[6px] sm:text-[10px]';
                   const angle = (idx * 2 * Math.PI) / count;
-                  const radius = count === 2 ? 6 : 8;
+                  const radius = count === 2 ? 5 : 7;
                   dx = Math.cos(angle) * radius;
                   dy = Math.sin(angle) * radius;
                 }
 
-                // Check if current tile position is safe
                 const isSafeCell = t.position !== -1 && SAFE_CELLS.includes(t.position);
-                const isActiveTurnPawn = gameState.activePlayerIndex === item.playerIndex;
+                const isWinnerCelebration = t.position === 58;
 
                 return (
                   <button
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute rounded-full border-2 flex items-center justify-center font-bold text-white z-20 select-none select-none transition-transform duration-75 ${sizeClass} ${textClass} ${tokenBg} ${
-                      isTokenEligible 
-                        ? 'animate-bounce cursor-pointer scale-110 border-cyberblue ring-4 ring-cyberblue/50 z-30' 
-                        : 'cursor-default'
-                    } ${
-                      isActiveTurnPawn && !visual?.isMoving ? 'animate-pulse' : ''
+                    className={`absolute z-20 select-none transition-all duration-75 ${
+                      isTokenEligible ? 'cursor-pointer scale-110 z-30' : 'cursor-default'
                     }`}
                     style={{
-                      left: `calc((${visual?.col ?? col} * 100% / 15) + 2px)`,
-                      top: `calc((${visual?.row ?? row} * 100% / 15) + 2px)`,
+                      left: `calc((${visual?.col ?? col} * 100% / 15))`,
+                      top: `calc((${visual?.row ?? row} * 100% / 15))`,
+                      width: 'calc(100% / 15)',
+                      height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
-                      boxShadow: visual?.isMoving ? `0 12px 24px ${glowColor}, 0 0 10px rgba(255, 255, 255, 0.4)` : undefined
                     }}
                   >
-                    {/* Pawn visual facial detail representation (tiny AAA eyes for breathing personality) */}
-                    <span className="absolute top-[2px] flex gap-[2px] justify-center w-full opacity-60">
-                      <span className="w-1 h-1 rounded-full bg-white animate-pulse"></span>
-                      <span className="w-1 h-1 rounded-full bg-white animate-pulse"></span>
-                    </span>
-                    
-                    <span className="mt-[2px]">{t.id + 1}</span>
+                    {/* Tiny Pixar-Style Human Model */}
+                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
+                      {/* Character shadow on ground */}
+                      <div className="pawn-shadow"></div>
+                      
+                      <div className="pawn-body-wrapper">
+                        {/* Body / clothes outfit */}
+                        <div className="pawn-outfit">
+                          {p.color === 'red' && <div className="pawn-cape"></div>}
+                          {p.color === 'yellow' && <div className="pawn-medal"></div>}
+                          <div className="pawn-chest"></div>
+                        </div>
+                        
+                        {/* Head */}
+                        <div className="pawn-head">
+                          {p.color === 'red' && <div className="pawn-hair warrior-hair"></div>}
+                          {p.color === 'blue' && <div className="pawn-hair adventurer-hat"></div>}
+                          {p.color === 'green' && <div className="pawn-hair explorer-hat"></div>}
+                          {p.color === 'yellow' && <div className="pawn-hair champion-crown"></div>}
+                          
+                          {/* Face */}
+                          <div className="pawn-face">
+                            <div className="pawn-eyes">
+                              <div className="pawn-eye left-eye"><div className="pawn-pupil"></div></div>
+                              <div className="pawn-eye right-eye"><div className="pawn-pupil"></div></div>
+                            </div>
+                            <div className="pawn-mouth"></div>
+                          </div>
+                        </div>
 
-                    {/* Safe Shield Indicator */}
-                    {isSafeCell && (
-                      <span className="absolute -top-1 -left-1 p-0.5 bg-cyberblue rounded-full text-white text-[6px] font-bold shadow-md animate-pulse">
-                        🛡️
-                      </span>
-                    )}
+                        {/* Limbs */}
+                        <div className="pawn-limbs">
+                          <div className="pawn-arm left-arm"></div>
+                          <div className="pawn-arm right-arm"></div>
+                          <div className="pawn-leg left-leg"></div>
+                          <div className="pawn-leg right-leg"></div>
+                        </div>
+                      </div>
+                      
+                      {/* Safe Shield Indicator */}
+                      {isSafeCell && (
+                        <span className="absolute -top-1 -left-1 p-0.5 bg-cyberblue rounded-full text-white text-[6px] font-bold shadow-md animate-pulse z-30">
+                          🛡️
+                        </span>
+                      )}
+
+                      {/* Selection Glow for eligible moves */}
+                      {isTokenEligible && (
+                        <div className="absolute inset-[-4px] rounded-full border-2 border-cyberblue animate-ping opacity-75 pointer-events-none"></div>
+                      )}
+                    </div>
                   </button>
                 );
               });
@@ -1199,9 +1861,9 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           {/* Comic Popup Alert */}
           {comicText && (
             <div 
-              className="absolute z-40 bg-cyberpink border-2 border-white px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider text-white shadow-neon-pink scale-110 animate-bounce select-none pointer-events-none"
+              className="absolute z-40 bg-gradient-to-r from-cyberpink to-purple-600 text-white font-black text-[9px] sm:text-xs px-2.5 py-1 rounded-xl shadow-neon-pink select-none uppercase tracking-wider animate-bounce flex items-center justify-center gap-1 border border-white/20"
               style={{
-                left: `calc((${comicText.col} * 100% / 15) - 15px)`,
+                left: `calc((${comicText.col} * 100% / 15) - 25px)`,
                 top: `calc((${comicText.row} * 100% / 15) - 30px)`,
               }}
             >
@@ -1215,170 +1877,37 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             className="absolute inset-0 z-30 pointer-events-none w-full h-full"
           />
 
+          {/* Glossy PBR overlays */}
+          <div className="absolute inset-0 spotlight-overlay pointer-events-none z-10" />
+          <div className="absolute inset-0 reflection-overlay pointer-events-none z-10" />
+
         </div>
       </div>
 
-      {/* Control Console Sidebar */}
-      <div className="w-full max-w-sm flex flex-col gap-5 shrink-0">
-        
-        {/* Status card */}
-        <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-4 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Console Telemetry</span>
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-cybersuccess/10 border border-cybersuccess/20 text-xs font-semibold text-cybersuccess animate-pulse">
-              LIVE MATCH
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 border-t border-white/5 pt-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs border border-white/10 uppercase transition-all duration-300 ${
-              activePlayer.color === 'red' ? 'bg-cybererror/20 text-cybererror shadow-[0_0_10px_rgba(255,77,77,0.3)]' :
-              activePlayer.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess shadow-[0_0_10px_rgba(0,208,132,0.3)]' :
-              activePlayer.color === 'yellow' ? 'bg-cybergold/20 text-cybergold shadow-[0_0_10px_rgba(255,213,79,0.3)]' : 'bg-cyberblue/20 text-cyberblue shadow-[0_0_10px_rgba(0,245,255,0.3)]'
-            }`}>
-              {activePlayer.username[0]}
-            </div>
-            <div>
-              <div className="text-sm font-extrabold flex items-center gap-2">
-                {activePlayer.username} 
-                <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
-                  activePlayer.color === 'red' ? 'text-cybererror border-cybererror/30 bg-cybererror/5' :
-                  activePlayer.color === 'green' ? 'text-cybersuccess border-cybersuccess/30 bg-cybersuccess/5' :
-                  activePlayer.color === 'yellow' ? 'text-cybergold border-cybergold/30 bg-cybergold/5' : 'text-cyberblue border-cyberblue/30 bg-cyberblue/5'
-                }`}>
-                  {activePlayer.color}
-                </span>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">
-                {isMyTurn ? "Your Command Matrix is active. Roll or select token." : "Observing opponent telemetry..."}
-              </p>
-            </div>
-          </div>
-
-          {/* Turn timer progress bar indicator */}
-          <div className="w-full h-1 bg-white/10 absolute bottom-0 left-0">
-            <div 
-              className={`h-full transition-all duration-1000 ease-linear ${
-                gameState.turnTimeLeft <= 5 ? 'bg-cybererror animate-pulse' : 'bg-cyberblue'
-              }`}
-              style={{ width: `${(gameState.turnTimeLeft / 15) * 100}%` }}
-            />
+      {/* Floating Eligible Movements Selector for touch-friendliness */}
+      {isMyTurn && validTokens.length > 0 && (
+        <div className="fixed bottom-6 inset-x-4 max-w-sm mx-auto z-30 glass-panel rounded-2xl p-4 border border-cyberblue/30 shadow-[0_10px_30px_rgba(0,245,255,0.25)] space-y-3">
+          <h5 className="text-[10px] uppercase font-bold text-cyberblue tracking-wider flex items-center gap-1.5 justify-center">
+            <Sparkles size={12} className="animate-spin-slow" /> Eligible Movements
+          </h5>
+          <div className="grid grid-cols-2 gap-3">
+            {validTokens.map((tokenId) => (
+              <button
+                key={tokenId}
+                onClick={() => handleMoveToken(tokenId)}
+                className={`py-3 rounded-xl border text-xs font-black text-white hover:scale-[1.02] active:scale-95 transition-all shadow-md ${
+                  activePlayer.color === 'red' ? 'border-cybererror/35 bg-cybererror/10 hover:bg-cybererror/20' :
+                  activePlayer.color === 'green' ? 'border-cybersuccess/35 bg-cybersuccess/10 hover:bg-cybersuccess/20' :
+                  activePlayer.color === 'yellow' ? 'border-cybergold/35 bg-cybergold/10 hover:bg-cybergold/20' :
+                  'border-cyberblue/35 bg-cyberblue/10 hover:bg-cyberblue/20'
+                }`}
+              >
+                Move Tiny Human {tokenId + 1}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Dice Roller Console */}
-        <div className="glass-card rounded-2xl p-6 border-white/5 flex flex-col items-center justify-center text-center space-y-5 relative overflow-hidden">
-          
-          {/* Active Turn Neon Boarder Glow */}
-          <div className={`absolute inset-0 pointer-events-none border transition-all duration-500 ${
-            isMyTurn 
-              ? activePlayer.color === 'red' ? 'border-cybererror/30 shadow-[inset_0_0_20px_rgba(255,77,77,0.1)]' :
-                activePlayer.color === 'green' ? 'border-cybersuccess/30 shadow-[inset_0_0_20px_rgba(0,208,132,0.1)]' :
-                activePlayer.color === 'yellow' ? 'border-cybergold/30 shadow-[inset_0_0_20px_rgba(255,213,79,0.1)]' : 'border-cyberblue/30 shadow-[inset_0_0_20px_rgba(0,245,255,0.1)]'
-              : 'border-white/5'
-          }`}></div>
-
-          {/* 3D Dice Real 6-face Render */}
-          <div className="dice-scene select-none">
-            <div 
-              className={`dice-cube ${isRolling ? 'animate-spin-slow' : ''}`}
-              data-roll={rollingValue}
-            >
-              {/* Face 1 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white flex items-center justify-center shadow-inner" style={{ transform: 'rotateY(0deg) translateZ(32px)' }}>
-                <span className="w-3.5 h-3.5 rounded-full bg-cyberpink shadow-neon-pink"></span>
-              </div>
-              {/* Face 6 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white shadow-inner" style={{ transform: 'rotateY(180deg) translateZ(32px)' }}>
-                <div className="grid grid-cols-2 gap-2.5 p-2 w-full h-full justify-items-center items-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                </div>
-              </div>
-              {/* Face 2 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white shadow-inner" style={{ transform: 'rotateY(90deg) translateZ(32px)' }}>
-                <div className="flex flex-col justify-between p-2 w-full h-full">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white self-start"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white self-end"></span>
-                </div>
-              </div>
-              {/* Face 5 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white shadow-inner" style={{ transform: 'rotateY(-90deg) translateZ(32px)' }}>
-                <div className="grid grid-cols-3 gap-1.5 p-2 w-full h-full items-center justify-items-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white col-start-1 col-end-2"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white col-start-3 col-end-4"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white col-start-2 col-end-3"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white col-start-1 col-end-2"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white col-start-3 col-end-4"></span>
-                </div>
-              </div>
-              {/* Face 3 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white shadow-inner" style={{ transform: 'rotateX(90deg) translateZ(32px)' }}>
-                <div className="flex flex-col justify-between p-2 w-full h-full items-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white self-start"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white self-end"></span>
-                </div>
-              </div>
-              {/* Face 4 */}
-              <div className="dice-face bg-darkbg border-white/20 text-white shadow-inner" style={{ transform: 'rotateX(-90deg) translateZ(32px)' }}>
-                <div className="grid grid-cols-2 gap-3.5 p-2.5 w-full h-full justify-items-center items-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-white"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center pt-2">
-            <button
-              onClick={handleRollDice}
-              disabled={!isMyTurn || gameState.hasRolled || isRolling}
-              className={`px-8 py-3.5 rounded-xl font-black flex items-center gap-2 text-sm transition-all duration-300 border ${
-                isMyTurn && !gameState.hasRolled && !isRolling
-                  ? activePlayer.color === 'red' ? 'bg-cybererror text-white border-cybererror shadow-neon-error hover:opacity-90 active:scale-95' :
-                    activePlayer.color === 'green' ? 'bg-cybersuccess text-white border-cybersuccess shadow-neon-success hover:opacity-90 active:scale-95' :
-                    activePlayer.color === 'yellow' ? 'bg-cybergold text-white border-cybergold shadow-neon-gold hover:opacity-90 active:scale-95' :
-                    'bg-cyberblue text-white border-cyberblue shadow-neon-blue hover:opacity-90 active:scale-95'
-                  : 'bg-white/5 border-white/5 text-gray-500 opacity-40 cursor-default'
-              }`}
-            >
-              <Play size={16} className={isMyTurn && !gameState.hasRolled && !isRolling ? 'animate-pulse' : ''} /> Roll Core
-            </button>
-          </div>
-        </div>
-
-        {/* Valid Tokens Selector Console */}
-        {isMyTurn && validTokens.length > 0 && (
-          <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-3">
-            <h5 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1.5">
-              <Sparkles size={12} className="text-cyberblue animate-pulse" /> Command Executions
-            </h5>
-            <div className="grid grid-cols-2 gap-3">
-              {validTokens.map((tokenId) => (
-                <button
-                  key={tokenId}
-                  onClick={() => handleMoveToken(tokenId)}
-                  className={`py-3 rounded-xl border text-xs font-black text-white hover:scale-[1.02] active:scale-95 transition-all shadow-md ${
-                    activePlayer.color === 'red' ? 'border-cybererror/35 bg-cybererror/10 hover:bg-cybererror/20' :
-                    activePlayer.color === 'green' ? 'border-cybersuccess/35 bg-cybersuccess/10 hover:bg-cybersuccess/20' :
-                    activePlayer.color === 'yellow' ? 'border-cybergold/35 bg-cybergold/10 hover:bg-cybergold/20' :
-                    'border-cyberblue/35 bg-cyberblue/10 hover:bg-cyberblue/20'
-                  }`}
-                >
-                  Move Token {tokenId + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Match Results Scoreboard Modal */}
       {matchEnded && scoreboard.length > 0 && (
@@ -1396,7 +1925,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
 
             <div className="space-y-3 mb-6 relative">
               <div className="divide-y divide-white/5 bg-white/5 border border-white/5 rounded-2xl p-4 space-y-3">
-                {scoreboard.map((row, idx) => (
+                {scoreboard.map((row) => (
                   <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3">
                       <span className={`font-black w-4 ${
@@ -1428,7 +1957,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
             </div>
 
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => onReturnToLobby && onReturnToLobby()}
               className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center relative"
             >
               Return to Lobby deck
