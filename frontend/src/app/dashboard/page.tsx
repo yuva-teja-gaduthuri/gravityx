@@ -686,7 +686,7 @@ export default function Dashboard() {
       {/* Create Room Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-6 border-white/5 relative overflow-hidden">
+          <div className="w-full max-w-md glass-panel rounded-3xl p-6 border-white/5 relative overflow-y-auto max-h-[90vh]">
             <h3 className="text-xl font-extrabold text-white mb-6">Create Lobbies</h3>
             {createError && (
               <div className="mb-4 p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
@@ -1000,7 +1000,7 @@ export default function Dashboard() {
       {/* Join Room Modal */}
       {showJoinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-sm glass-panel rounded-3xl p-6 border-white/5 relative overflow-hidden">
+          <div className="w-full max-w-sm glass-panel rounded-3xl p-6 border-white/5 relative overflow-y-auto max-h-[90vh]">
             <h3 className="text-xl font-extrabold text-white mb-6">Enter Terminal Code</h3>
             {joinError && (
               <div className="mb-4 p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">

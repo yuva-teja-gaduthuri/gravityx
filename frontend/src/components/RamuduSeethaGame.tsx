@@ -86,25 +86,28 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setRevealedIds(data.revealedIds);
       
       if (data.targetUserId) {
-        setPlayers((prev) =>
-          prev.map((pl) =>
+        setPlayers((prev) => {
+          const updated = prev.map((pl) =>
             pl.id === data.targetUserId
               ? { ...pl, isRevealed: true, role: data.targetRole }
               : pl
-          )
-        );
-      }
-
-      const targetUser = players.find(p => p.id === data.targetUserId);
-      if (targetUser) {
-        setGuessResult({
-          username: targetUser.username,
-          role: data.targetRole,
-          isCorrect: data.isSeetha
+          );
+          
+          const targetUser = updated.find(p => p.id === data.targetUserId);
+          if (targetUser) {
+            setGuessResult({
+              username: targetUser.username,
+              role: data.targetRole,
+              isCorrect: data.isSeetha
+            });
+            setTimeout(() => setGuessResult(null), 3000);
+          }
+          return updated;
         });
-        setTimeout(() => setGuessResult(null), 3000);
+        setGuesses(prev => prev + 1);
+      } else if (data.guesses !== undefined) {
+        setGuesses(data.guesses);
       }
-      setGuesses(prev => prev + 1);
     });
 
     socket.on('rs_round_ended', (data: any) => {
@@ -136,7 +139,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       socket.off('rs_round_ended');
       socket.off('rs_match_ended');
     };
-  }, [socket, players, roomCode]);
+  }, [socket, roomCode]);
 
   const handleCardClick = (targetPlayerId: string) => {
     if (matchEnded || roundEnded) return;

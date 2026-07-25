@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { Trophy, Timer, Play, ShieldAlert, Sparkles } from 'lucide-react';
@@ -86,6 +86,12 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
   const [matchEnded, setMatchEnded] = useState(matchEndedData ? true : false);
   const [scoreboard, setScoreboard] = useState<any[]>(matchEndedData?.scoreboard || []);
 
+  const gameStateRef = useRef<LudoState | null>(null);
+
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   useEffect(() => {
     if (matchEndedData) {
       setMatchEnded(true);
@@ -121,7 +127,8 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
           setRollingValue(data.diceValue);
           setGameState(prev => prev ? { ...prev, diceValue: data.diceValue, hasRolled: true } : null);
           
-          const isMyTurn = gameState?.players[gameState.activePlayerIndex]?.id === user.id;
+          const currentGameState = gameStateRef.current;
+          const isMyTurn = currentGameState?.players[currentGameState.activePlayerIndex]?.id === user.id;
           if (isMyTurn) {
             setValidTokens(data.validTokens);
           }
@@ -177,7 +184,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
       socket.off('ludo_new_turn');
       socket.off('ludo_match_ended');
     };
-  }, [socket, gameState, roomCode, user.id]);
+  }, [socket, roomCode, user.id]);
 
   const handleRollDice = () => {
     if (!gameState) return;
@@ -229,7 +236,7 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
   return (
     <div className="flex flex-col lg:flex-row gap-8 max-w-6xl mx-auto w-full p-4 items-center justify-center">
       {/* Ludo Board Panel */}
-      <div className="relative w-[340px] h-[340px] sm:w-[480px] sm:h-[480px] bg-darkbg border border-white/10 rounded-2xl p-1 overflow-hidden shadow-neon-blue">
+      <div className="relative w-full max-w-[340px] sm:max-w-[480px] aspect-square bg-darkbg border border-white/10 rounded-2xl p-1 overflow-hidden shadow-neon-blue">
         {/* Render 15x15 Ludo Grid Layout */}
         <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative">
           

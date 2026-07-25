@@ -301,6 +301,9 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         roomCode: upperCode,
         myRole: room.gameState.roles[player.id],
         ramuduId: room.gameState.ramuduId,
+        currentRound: room.currentRound || 1,
+        maxRounds: room.maxRounds || 3,
+        sessionScoreboard: room.sessionScoreboard || {},
         players: room.players.map((pl) => ({
           id: pl.id,
           username: pl.username,
@@ -317,6 +320,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         targetUserId: '',
         targetRole: '',
         isSeetha: false,
+        guesses: room.gameState.guessCount || 0,
       });
     } catch (err: any) {
       socket.emit('error', err.message);

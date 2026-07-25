@@ -1,15 +1,23 @@
 import nodemailer from 'nodemailer';
 
+let cachedTransporter: nodemailer.Transporter | null = null;
 let testAccount: any = null;
 let modeLogged = false;
+let etherealCreationFailed = false;
 
 /**
  * Dynamically resolves SMTP transporter.
  * If SMTP credentials exist in .env, it uses them.
  * Otherwise, it spins up a test Ethereal account (prints log links in development).
  */
-async function getTransporter() {
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+async function getTransporter(): Promise<nodemailer.Transporter> {
+  if (cachedTransporter) {
+    return cachedTransporter;
+  }
+
+  const hasRealSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  if (hasRealSmtp) {
     if (!modeLogged) {
       console.log('\n====================================================');
       console.log('📬 [MAILER CONFIG]: REAL SMTP');
@@ -18,7 +26,7 @@ async function getTransporter() {
       console.log('====================================================\n');
       modeLogged = true;
     }
-    return nodemailer.createTransport({
+    const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: Number(process.env.SMTP_PORT) || 587,
       secure: process.env.SMTP_SECURE === 'true',
@@ -26,15 +34,37 @@ async function getTransporter() {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
     });
+
+    try {
+      await transporter.verify();
+      cachedTransporter = transporter;
+      return cachedTransporter;
+    } catch (verifyError: any) {
+      console.error('❌ [MAILER ERROR]: Real SMTP connection verification failed:', verifyError.message);
+      throw new Error(`Real SMTP connection failed: ${verifyError.message}`);
+    }
   }
 
   // Development Fallback: Ethereal dynamic test accounts
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Real SMTP credentials missing in production environment');
+  }
+
+  if (etherealCreationFailed) {
+    throw new Error('Ethereal fallback SMTP setup previously failed');
+  }
+
   if (!testAccount) {
     try {
       testAccount = await nodemailer.createTestAccount();
-    } catch (err) {
+    } catch (err: any) {
+      etherealCreationFailed = true;
       console.error('Failed to create Ethereal test account:', err);
+      throw new Error(`Ethereal creation failed: ${err.message}`);
     }
   }
 
@@ -45,7 +75,7 @@ async function getTransporter() {
     modeLogged = true;
   }
 
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
     secure: false,
@@ -53,7 +83,13 @@ async function getTransporter() {
       user: testAccount?.user || 'ethereal_fallback_user',
       pass: testAccount?.pass || 'ethereal_fallback_pass',
     },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000,
   });
+
+  cachedTransporter = transporter;
+  return cachedTransporter;
 }
 
 /**

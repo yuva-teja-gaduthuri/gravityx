@@ -112,6 +112,12 @@ export function handleLudo(io: Server, socket: Socket) {
       roomStore.updateGameState(upperCode, gameState);
       roomStore.updateRoomStatus(upperCode, 'PLAYING');
 
+      // Broadcast room state update so client changes view to Ludo game board
+      const updatedRoom = roomStore.getRoom(upperCode);
+      if (updatedRoom && updatedRoom.status === 'PLAYING') {
+        io.to(upperCode).emit('room_state_updated', updatedRoom);
+      }
+
       // Notify clients and send initial state
       io.to(upperCode).emit('ludo_game_started', {
         roomCode: upperCode,
