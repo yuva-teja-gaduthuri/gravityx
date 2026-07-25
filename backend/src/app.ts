@@ -10,7 +10,7 @@ dotenv.config();
 import apiRouter from './routes/api';
 import { roomStore } from './models/roomStore';
 import { handleRoom } from './sockets/roomHandler';
-import { handleRamuduSeetha } from './sockets/ramuduSeethaHandler';
+import { handleRamuduSeetha, clearRSRoundTimeout } from './sockets/ramuduSeethaHandler';
 import { handleLudo } from './sockets/ludoHandler';
 
 const app = express();
@@ -80,6 +80,9 @@ io.on('connection', (socket: Socket) => {
       if (player) {
         const updated = roomStore.removePlayer(room.code, player.id);
         if (updated) {
+          if (updated.status === 'LOBBY') {
+            clearRSRoundTimeout(room.code);
+          }
           io.to(room.code).emit('room_state_updated', updated);
           io.to(room.code).emit('chat_message', {
             id: Math.random().toString(),
@@ -88,6 +91,7 @@ io.on('connection', (socket: Socket) => {
             createdAt: new Date(),
           });
         } else {
+          clearRSRoundTimeout(room.code);
           io.to(room.code).emit('room_deleted');
         }
       }

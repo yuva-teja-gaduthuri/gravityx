@@ -6,7 +6,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
-import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare } from 'lucide-react';
+import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -45,20 +45,29 @@ export default function RoomPage() {
 
   const socket = useSocket();
   const { user, loading } = useAuth(true);
+
   const [room, setRoom] = useState<RoomData | null>(null);
   const [chatList, setChatList] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  
   const [rounds, setRounds] = useState(3);
   const [matchEndedData, setMatchEndedData] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
+
+    // Join room socket emit
+    socket.emit('join_room', {
+      roomCode,
+      userId: user.id,
+      username: user.username,
+    });
 
     socket.on('room_joined', (roomData: RoomData) => {
       setRoom(roomData);
@@ -98,15 +107,9 @@ export default function RoomPage() {
       setMatchEndedData({ gameType: 'LUDO', data });
     });
 
-    socket.emit('join_room', {
-      roomCode,
-      userId: user.id,
-      username: user.username,
-    });
-
     return () => {
+      // Clean room signals
       socket.emit('leave_room', { roomCode, userId: user.id });
-
       socket.off('room_joined');
       socket.off('room_state_updated');
       socket.off('chat_message');
@@ -117,6 +120,7 @@ export default function RoomPage() {
     };
   }, [socket, user, roomCode, router]);
 
+  // Scroll chat list automatically
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatList]);
@@ -141,6 +145,7 @@ export default function RoomPage() {
       socket.emit('rs_start_game', { roomCode: room.code, maxRounds: rounds });
     }
   };
+
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !socket || !user) return;
@@ -168,34 +173,7 @@ export default function RoomPage() {
     }
   };
 
-  if (loading || !user || !socket) {
-    return (
-      <div className="flex-grow flex flex-col items-center justify-center">
-        <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Entering Lobby Matrix...</p>
-      </div>
-    );
-  }
-
-  if (errorMsg && !room) {
-    return (
-      <div className="flex-grow flex flex-col items-center justify-center p-6">
-        <div className="p-6 max-w-md rounded-2xl bg-cybererror/10 border border-cybererror/30 text-cybererror text-center shadow-neon-error">
-          <ShieldAlert className="mx-auto mb-3 text-cybererror" size={32} />
-          <h3 className="font-extrabold text-white text-lg mb-1">Lobby Entry Failed</h3>
-          <p className="text-xs text-gray-400 mb-4">{errorMsg}</p>
-          <button 
-            onClick={() => router.push('/dashboard')}
-            className="w-full px-5 py-2.5 bg-cybererror hover:opacity-90 text-white font-bold text-xs rounded-xl transition-all"
-          >
-            Return to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!room) {
+  if (loading || !user || !room || !socket) {
     return (
       <div className="flex-grow flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
@@ -210,10 +188,12 @@ export default function RoomPage() {
     room.players.every((p) => p.id === room.hostId || p.ready);
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row min-h-screen lg:h-screen lg:overflow-hidden">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-screen lg:h-screen lg:overflow-hidden relative">
       {/* Game gameplay layout OR waiting room layout */}
-      <div className="flex-grow flex flex-col overflow-y-auto max-h-[calc(100vh-160px)] lg:max-h-screen p-6">
-                {room.status === 'PLAYING' || matchEndedData !== null ? (
+      <div className="flex-grow flex flex-col overflow-y-auto h-full p-4 md:p-6 min-h-0">
+        
+        {room.status === 'PLAYING' || matchEndedData !== null ? (
+          // In Game Render orstandings screen
           room.gameType === 'RAMUDU_SEETHA' ? (
             <RamuduSeethaGame 
               roomCode={roomCode} 
@@ -400,10 +380,23 @@ export default function RoomPage() {
       </div>
 
       {/* Side Chat Drawer */}
-      <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-white/5 bg-darkbg/95 backdrop-blur-xl flex flex-col h-48 lg:h-screen shrink-0">
-        <div className="p-3 border-b border-white/5 flex items-center gap-2">
-          <MessageSquare size={16} className="text-cyberblue" />
-          <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">Lobby Chat</span>
+      <div className={`
+        ${isChatOpen ? 'fixed inset-x-0 bottom-0 h-[45vh] z-50 rounded-t-3xl border-t border-white/10' : 'hidden'} 
+        lg:flex lg:relative lg:inset-auto lg:h-screen lg:w-80 lg:rounded-none lg:border-t-0 lg:border-l lg:border-white/5
+        bg-darkbg/98 backdrop-blur-xl flex flex-col shrink-0 shadow-2xl transition-all duration-300
+      `}>
+        <div className="p-3 border-b border-white/5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={16} className="text-cyberblue" />
+            <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">Lobby Chat</span>
+          </div>
+          {/* Close button visible only on mobile/tablet */}
+          <button 
+            onClick={() => setIsChatOpen(false)}
+            className="lg:hidden p-1 text-gray-400 hover:text-white"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Chat List */}
@@ -417,20 +410,6 @@ export default function RoomPage() {
             </div>
           ))}
           <div ref={chatEndRef} />
-        </div>
-
-        {/* Quick Emoji bar */}
-        <div className="flex gap-1.5 px-3 py-1.5 border-t border-white/5 bg-white/5 overflow-x-auto scrollbar-none">
-          {['🔥', '🎮', '👑', '😂', '😮', '😢', '🎉', '👍', '👎', '💀'].map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => setChatInput((prev) => prev + emoji)}
-              className="text-sm p-1 rounded hover:bg-white/10 transition-all hover:scale-105 active:scale-95"
-            >
-              {emoji}
-            </button>
-          ))}
         </div>
 
         {/* Chat Input */}
@@ -448,6 +427,14 @@ export default function RoomPage() {
           </button>
         </form>
       </div>
+
+      {/* Floating Chat FAB for Mobile/Tablet */}
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="fixed bottom-6 right-6 z-40 lg:hidden p-4 rounded-full bg-primary hover:bg-primary/95 text-white shadow-neon-blue transition-all duration-300"
+      >
+        <MessageSquare size={20} />
+      </button>
     </div>
   );
 }

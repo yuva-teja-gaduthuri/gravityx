@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { roomStore, Player } from '../models/roomStore';
 import prisma from '../utils/prisma';
+import { clearRSRoundTimeout } from './ramuduSeethaHandler';
 
 export function handleRoom(io: Server, socket: Socket) {
   // Create Room
@@ -166,6 +167,9 @@ export function handleRoom(io: Server, socket: Socket) {
       await socket.leave(upperCode);
 
       if (updatedRoom) {
+        if (updatedRoom.status === 'LOBBY') {
+          clearRSRoundTimeout(upperCode);
+        }
         io.to(upperCode).emit('room_state_updated', updatedRoom);
         io.to(upperCode).emit('chat_message', {
           id: Math.random().toString(),
@@ -175,6 +179,7 @@ export function handleRoom(io: Server, socket: Socket) {
         });
       } else {
         // Room empty and deleted
+        clearRSRoundTimeout(upperCode);
         io.to(upperCode).emit('room_deleted');
       }
     } catch (err: any) {
