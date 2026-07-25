@@ -57,6 +57,7 @@ export default function RoomPage() {
   const [rounds, setRounds] = useState(3);
   const [matchEndedData, setMatchEndedData] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
+  const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -143,6 +144,24 @@ export default function RoomPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatList]);
 
+  // Voice chat speaking indicator listener
+  useEffect(() => {
+    const handleSpeaking = (e: any) => {
+      const { socketId, isSpeaking } = e.detail;
+      setSpeakingPlayers((prev) => {
+        const next = new Set(prev);
+        if (isSpeaking) {
+          next.add(socketId);
+        } else {
+          next.delete(socketId);
+        }
+        return next;
+      });
+    };
+    window.addEventListener('voice_user_speaking', handleSpeaking);
+    return () => window.removeEventListener('voice_user_speaking', handleSpeaking);
+  }, []);
+
   const handleToggleReady = () => {
     if (!user || !roomCode || !socket) return;
     const nextReady = !isReady;
@@ -226,6 +245,7 @@ export default function RoomPage() {
               roomCode={roomCode} 
               user={user} 
               socket={socket} 
+              isHost={isHost}
               matchEndedData={matchEndedData?.gameType === 'LUDO' ? matchEndedData.data : null}
               onReturnToLobby={() => setMatchEndedData(null)}
             />
@@ -286,10 +306,12 @@ export default function RoomPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                 {room.players.map((player) => {
                   const isPlayerHost = room.hostId === player.id;
+                  const isSpeaking = speakingPlayers.has(player.socketId);
                   return (
                     <div 
                       key={player.id} 
-                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-center relative group ${
+                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-center relative group transition-all ${
+                        isSpeaking ? 'border-cybersuccess shadow-[0_0_15px_rgba(0,230,118,0.55)] ring-2 ring-cybersuccess/50' :
                         player.ready ? 'border-cybersuccess shadow-neon-success' : 'border-white/5'
                       }`}
                     >
@@ -304,7 +326,9 @@ export default function RoomPage() {
                       )}
 
                       <div className="relative mb-3">
-                        <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border border-white/10`}>
+                        <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border transition-all ${
+                          isSpeaking ? 'border-cybersuccess shadow-[0_0_12px_rgba(0,230,118,0.6)] ring-2 ring-cybersuccess' : 'border-white/10'
+                        }`}>
                           {player.username[0]}
                         </div>
                         {isPlayerHost && (
@@ -321,6 +345,11 @@ export default function RoomPage() {
 
                       <h4 className="font-extrabold text-sm text-gray-200 truncate w-full flex items-center justify-center gap-1">
                         {player.username}
+                        {isSpeaking && (
+                          <span className="text-cybersuccess animate-pulse" title="Speaking">
+                            🎙️
+                          </span>
+                        )}
                         {player.isBot && (
                           <span className="px-1 py-0.5 rounded bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black text-cyberpink uppercase">
                             AI

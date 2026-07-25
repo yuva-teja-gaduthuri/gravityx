@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getApiUrl, fetchWithCache, invalidateCache } from '../utils/api';
+import { getApiUrl, invalidateCache } from '../utils/api';
 
 export interface UserProfile {
   id: string;
@@ -19,6 +19,7 @@ export interface UserProfile {
   profileFrame: string;
   victoryEffect: string;
   role: 'USER' | 'ADMIN';
+  bio?: string;
   createdAt: string;
 }
 
@@ -31,13 +32,42 @@ export interface UserStats {
 
 export function useAuth(requireAuth = true) {
   const router = useRouter();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<UserStats | null>(null);
+  
+  // 1. Initialize state synchronously from localStorage to prevent empty flashes
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gravityx_user');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+
+  const [stats, setStats] = useState<UserStats | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gravityx_stats');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+
   const [inventory, setInventory] = useState<any[]>([]);
   const [achievements, setAchievements] = useState<any[]>([]);
   const [matchHistory, setMatchHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 2. Fetch fresh profile from the server bypassing cache
   const fetchProfile = useCallback(async () => {
     const token = localStorage.getItem('gravityx_token');
     if (!token) {
@@ -47,19 +77,37 @@ export function useAuth(requireAuth = true) {
     }
 
     try {
-      const data = await fetchWithCache('/api/auth/profile', 30000); // 30s stale time
+      const url = getApiUrl('/api/auth/profile');
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`Profile fetch failed status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      
       setUser(data.user);
       setStats(data.stats);
-      setInventory(data.inventory);
-      setAchievements(data.achievements);
-      setMatchHistory(data.matchHistory);
+      setInventory(data.inventory || []);
+      setAchievements(data.achievements || []);
+      setMatchHistory(data.matchHistory || []);
 
-      // Cache updated user summary locally
+      // Cache updated profile info locally
       localStorage.setItem('gravityx_user', JSON.stringify(data.user));
+      localStorage.setItem('gravityx_stats', JSON.stringify(data.stats));
+      
+      // Dispatch sync event for active client hooks
+      window.dispatchEvent(new Event('gravityx_user_updated'));
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching profile:', err);
       localStorage.removeItem('gravityx_token');
       localStorage.removeItem('gravityx_user');
+      localStorage.removeItem('gravityx_stats');
       if (requireAuth) router.push('/auth');
     } finally {
       setLoading(false);
@@ -70,11 +118,41 @@ export function useAuth(requireAuth = true) {
     fetchProfile();
   }, [fetchProfile]);
 
+  // 3. Keep hook states in sync in real-time across components and tabs
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      const savedUser = localStorage.getItem('gravityx_user');
+      const savedStats = localStorage.getItem('gravityx_stats');
+      if (savedUser) {
+        try {
+          setUser(JSON.parse(savedUser));
+        } catch (e) {}
+      }
+      if (savedStats) {
+        try {
+          setStats(JSON.parse(savedStats));
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener('gravityx_user_updated', handleUserUpdate);
+    window.addEventListener('storage', handleUserUpdate); // tab sync
+
+    return () => {
+      window.removeEventListener('gravityx_user_updated', handleUserUpdate);
+      window.removeEventListener('storage', handleUserUpdate);
+    };
+  }, []);
+
   const logout = () => {
     invalidateCache('/api/auth/profile');
     localStorage.removeItem('gravityx_token');
     localStorage.removeItem('gravityx_user');
-    router.push('/');
+    localStorage.removeItem('gravityx_stats');
+    setUser(null);
+    setStats(null);
+    window.dispatchEvent(new Event('gravityx_user_updated'));
+    router.push('/auth');
   };
 
   const refreshProfile = useCallback(async () => {
@@ -93,4 +171,3 @@ export function useAuth(requireAuth = true) {
     refreshProfile,
   };
 }
-

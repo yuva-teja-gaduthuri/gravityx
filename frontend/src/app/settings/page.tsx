@@ -13,7 +13,6 @@ export default function SettingsPage() {
   const [sound, setSound] = useState(true);
   const [volume, setVolume] = useState(80);
   const [notifications, setNotifications] = useState(true);
-  const [language, setLanguage] = useState('English');
   const [privacy, setPrivacy] = useState('Public');
   const [success, setSuccess] = useState('');
 
@@ -120,19 +119,7 @@ export default function SettingsPage() {
               </button>
             </div>
 
-            <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-200">Lobby Language</span>
-              <select 
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue"
-              >
-                <option value="English">English</option>
-                <option value="Spanish">Spanish</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Telugu">Telugu</option>
-              </select>
-            </div>
+
 
             <div className="flex justify-between items-center text-sm">
               <span className="font-bold text-gray-200">Profile Visibility</span>

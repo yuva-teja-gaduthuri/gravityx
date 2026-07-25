@@ -119,6 +119,7 @@ export const login = async (req: Request, res: Response) => {
         rank: user.rank,
         avatar: user.avatar,
         profileFrame: user.profileFrame,
+        bio: user.bio,
       },
     });
   } catch (error: any) {
@@ -302,6 +303,7 @@ export const guestLogin = async (req: Request, res: Response) => {
         rank: user.rank,
         avatar: user.avatar,
         profileFrame: user.profileFrame,
+        bio: user.bio,
       },
     });
   } catch (error: any) {
@@ -360,6 +362,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         profileFrame: user.profileFrame,
         victoryEffect: user.victoryEffect,
         role: user.role,
+        bio: user.bio,
         createdAt: user.createdAt,
       },
       stats: {
@@ -391,7 +394,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
 export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { username, avatar } = req.body;
+    const { username, avatar, bio } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -415,6 +418,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       data: {
         ...(username && { username }),
         ...(avatar && { avatar }),
+        ...(bio !== undefined && { bio }),
       },
     });
 
@@ -431,6 +435,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
         xp: updatedUser.xp,
         level: updatedUser.level,
         rank: updatedUser.rank,
+        bio: updatedUser.bio,
       },
     });
   } catch (error: any) {

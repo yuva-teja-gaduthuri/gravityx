@@ -362,6 +362,16 @@ export default function Dashboard() {
                 Panel
               </button>
             )}
+            <button 
+              onClick={() => {
+                logout();
+                router.push('/auth');
+              }} 
+              className="p-3 rounded-xl glass-card border-white/10 text-gray-400 hover:text-cybererror hover:border-cybererror/30 hover:bg-cybererror/10 transition-all"
+              title="Log Out Session"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
         </div>      </nav>
 
@@ -930,19 +940,7 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <div className="flex justify-between items-center text-xs pt-1">
-                    <span className="font-bold text-gray-300">Lobby Language</span>
-                    <select 
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
-                      className="glass-input rounded-xl px-2.5 py-1 text-xs focus:border-cyberblue cursor-pointer"
-                    >
-                      <option value="English">English</option>
-                      <option value="Spanish">Spanish</option>
-                      <option value="Hindi">Hindi</option>
-                      <option value="Telugu">Telugu</option>
-                    </select>
-                  </div>
+                    {/* Language configuration removed */}
 
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-gray-300">Profile Visibility</span>
@@ -977,19 +975,7 @@ export default function Dashboard() {
               </div>
             </form>
 
-            {/* Logout Telemetry Button */}
-            <div className="pt-4 mt-2 border-t border-white/5">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEditProfileModal(false);
-                  logout();
-                }}
-                className="w-full py-3 bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white rounded-xl font-bold transition-all text-xs flex items-center justify-center gap-2"
-              >
-                <LogOut size={14} /> Terminate Connection (Sign Out)
-              </button>
-            </div>
+            {/* Logout button removed from modal */}
 
           </div>
         </div>

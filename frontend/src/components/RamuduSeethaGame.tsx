@@ -13,6 +13,7 @@ interface Player {
   profileFrame: string;
   isRevealed?: boolean;
   role?: string;
+  socketId: string;
 }
 
 interface ScoreboardRow {
@@ -168,6 +169,24 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
 
   // Match ended state
   const [matchEnded, setMatchEnded] = useState(false);
+  const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handleSpeaking = (e: any) => {
+      const { socketId, isSpeaking } = e.detail;
+      setSpeakingPlayers((prev) => {
+        const next = new Set(prev);
+        if (isSpeaking) {
+          next.add(socketId);
+        } else {
+          next.delete(socketId);
+        }
+        return next;
+      });
+    };
+    window.addEventListener('voice_user_speaking', handleSpeaking);
+    return () => window.removeEventListener('voice_user_speaking', handleSpeaking);
+  }, []);
   const [matchResults, setMatchResults] = useState<{
     winnerId: string;
     seethaId: string;
@@ -561,12 +580,20 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               }
 
               const isClickable = isRamudu && !isGuesserSelf && !isTargetRevealed && !roundEnded && !matchEnded && !hasGuessed && guesses === 0;
+              const isSpeaking = speakingPlayers.has(p.socketId);
+
+              let activeBorderClass = cardBorderClass;
+              let activeGlow = cardGlow;
+              if (isSpeaking) {
+                activeBorderClass = 'border-cybersuccess';
+                activeGlow = 'shadow-[0_0_15px_rgba(0,230,118,0.6)]';
+              }
 
               return (
                 <div 
                   key={p.id}
                   onClick={() => isClickable && handleCardClick(p.id)}
-                  className={`glass-card rounded-2xl p-4 md:p-6 border flex flex-col items-center justify-between text-center cursor-pointer transition-all aspect-[3/4] select-none bg-gradient-to-b ${cardBgClass} ${cardBorderClass} ${cardGlow} ${
+                  className={`glass-card rounded-2xl p-4 md:p-6 border flex flex-col items-center justify-between text-center cursor-pointer transition-all aspect-[3/4] select-none bg-gradient-to-b ${cardBgClass} ${activeBorderClass} ${activeGlow} ${
                     isClickable ? 'hover:scale-105 hover:-translate-y-1 hover:border-cyberblue active:scale-95' : 'cursor-default'
                   }`}
                 >
@@ -580,14 +607,21 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
 
                   <div className="relative my-4 shrink-0 flex items-center justify-center">
                     <div className="absolute inset-0 w-20 h-20 rounded-full bg-primary/5 blur-md animate-pulse"></div>
-                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center text-3xl md:text-4xl border border-white/10 shadow-2xl bg-black/40`}>
+                    <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center text-3xl md:text-4xl border border-white/10 shadow-2xl bg-black/40 ${
+                      isSpeaking ? 'border-cybersuccess shadow-[0_0_12px_rgba(0,230,118,0.5)] ring-2 ring-cybersuccess' : ''
+                    }`}>
                       {characterBadge}
                     </div>
                   </div>
 
                   <div className="w-full space-y-1 shrink-0">
-                    <h5 className="font-extrabold text-sm md:text-base text-gray-200 truncate w-full tracking-wide">
+                    <h5 className="font-extrabold text-sm md:text-base text-gray-200 truncate w-full tracking-wide flex items-center justify-center gap-1">
                       {p.username}
+                      {isSpeaking && (
+                        <span className="text-cybersuccess animate-pulse" title="Speaking">
+                          🎙️
+                        </span>
+                      )}
                     </h5>
                     <p className={`text-[10px] md:text-[11px] uppercase tracking-widest font-black ${subtitleColorClass}`}>
                       {roleName}

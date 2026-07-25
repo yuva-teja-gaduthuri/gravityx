@@ -31,11 +31,18 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const analysersRef = useRef<Map<string, () => void>>(new Map());
 
-  const peersStateRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  useEffect(() => {
-    peersStateRef.current = peersRef.current;
-  });
+  // Refs to allow async callbacks to read fresh state without re-binding
+  const joinedRef = useRef(false);
+  const micMutedRef = useRef(false);
+  const speakerDeafenedRef = useRef(false);
+  const playersRef = useRef<Player[]>([]);
+
+  useEffect(() => { joinedRef.current = joined; }, [joined]);
+  useEffect(() => { micMutedRef.current = micMuted; }, [micMuted]);
+  useEffect(() => { speakerDeafenedRef.current = speakerDeafened; }, [speakerDeafened]);
+  useEffect(() => { playersRef.current = players; }, [players]);
 
   const getLocalStream = async (): Promise<MediaStream> => {
     if (localStreamRef.current) return localStreamRef.current;
@@ -54,38 +61,151 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     return stream;
   };
 
+  const startAnalyzingStream = (socketId: string, stream: MediaStream) => {
+    // Clean up existing analyzer if any
+    const existingCleanup = analysersRef.current.get(socketId);
+    if (existingCleanup) {
+      existingCleanup();
+    }
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const ctx = new AudioContextClass();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      let isCurrentlySpeaking = false;
+      let silenceTimeout: any = null;
+
+      const intervalId = setInterval(() => {
+        if (ctx.state === 'suspended') return;
+        
+        analyser.getByteTimeDomainData(dataArray);
+        
+        // Calculate RMS (root-mean-square) volume level
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = (dataArray[i] - 128) / 128;
+          sum += val * val;
+        }
+        const rms = Math.sqrt(sum / bufferLength);
+        const threshold = 0.015; // Sensitivity threshold for speech
+
+        // If local mic is muted, force silence
+        const isMutedLocal = socketId === socket.id && micMutedRef.current;
+        const speaking = rms > threshold && !isMutedLocal;
+
+        if (speaking) {
+          if (silenceTimeout) {
+            clearTimeout(silenceTimeout);
+            silenceTimeout = null;
+          }
+          if (!isCurrentlySpeaking) {
+            isCurrentlySpeaking = true;
+            window.dispatchEvent(new CustomEvent('voice_user_speaking', {
+              detail: { socketId, isSpeaking: true }
+            }));
+            setActiveSpeakers((prev) => [...prev.filter(id => id !== socketId), socketId]);
+          }
+        } else {
+          if (isCurrentlySpeaking && !silenceTimeout) {
+            silenceTimeout = setTimeout(() => {
+              isCurrentlySpeaking = false;
+              window.dispatchEvent(new CustomEvent('voice_user_speaking', {
+                detail: { socketId, isSpeaking: false }
+              }));
+              setActiveSpeakers((prev) => prev.filter(id => id !== socketId));
+              silenceTimeout = null;
+            }, 400); // 400ms delay to prevent flickering during natural pauses
+          }
+        }
+      }, 100);
+
+      const cleanup = () => {
+        clearInterval(intervalId);
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        try {
+          source.disconnect();
+          analyser.disconnect();
+          ctx.close();
+        } catch (e) {}
+      };
+
+      analysersRef.current.set(socketId, cleanup);
+      return cleanup;
+    } catch (err) {
+      console.error('Error starting audio analyser:', err);
+    }
+  };
+
   const closePeer = (peerSocketId: string) => {
-    // Close connection
+    // 1. Clean up analyzer
+    const cleanupAnalyser = analysersRef.current.get(peerSocketId);
+    if (cleanupAnalyser) {
+      cleanupAnalyser();
+      analysersRef.current.delete(peerSocketId);
+    }
+    
+    // Dispatch speaking stopped
+    window.dispatchEvent(new CustomEvent('voice_user_speaking', {
+      detail: { socketId: peerSocketId, isSpeaking: false }
+    }));
+    setActiveSpeakers((prev) => prev.filter(id => id !== peerSocketId));
+
+    // 2. Close peer connection
     const pc = peersRef.current.get(peerSocketId);
     if (pc) {
       pc.close();
       peersRef.current.delete(peerSocketId);
     }
     
-    // Remove audio element
+    // 3. Remove audio element
     const audio = audioElementsRef.current.get(peerSocketId);
     if (audio) {
       audio.pause();
+      audio.srcObject = null;
       audio.remove();
       audioElementsRef.current.delete(peerSocketId);
     }
   };
 
   const cleanupAll = () => {
-    // Close all peer connections
+    // 1. Clear analysers
+    analysersRef.current.forEach((cleanup) => {
+      cleanup();
+    });
+    analysersRef.current.clear();
+    
+    // Dispatch speaking stopped for local user
+    if (socket.id) {
+      window.dispatchEvent(new CustomEvent('voice_user_speaking', {
+        detail: { socketId: socket.id, isSpeaking: false }
+      }));
+    }
+    setActiveSpeakers([]);
+
+    // 2. Close peer connections
     peersRef.current.forEach((pc, socketId) => {
       pc.close();
     });
     peersRef.current.clear();
 
-    // Remove all remote audios
+    // 3. Remove remote audios
     audioElementsRef.current.forEach((audio) => {
       audio.pause();
+      audio.srcObject = null;
       audio.remove();
     });
     audioElementsRef.current.clear();
 
-    // Stop mic stream
+    // 4. Stop mic stream
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
@@ -104,6 +224,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
       ],
     });
 
@@ -128,15 +249,27 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }
     };
 
-    // Connection state log
+    // Connection state & auto-reconnect trigger
     pc.onconnectionstatechange = () => {
       console.log(`WebRTC Connection State for peer ${peerSocketId}: ${pc.connectionState}`);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         closePeer(peerSocketId);
+        
+        // Reconnection logic
+        setTimeout(() => {
+          if (joinedRef.current && playersRef.current.some(p => p.socketId === peerSocketId)) {
+            console.log(`Auto-reconnecting Voice peer ${peerSocketId}...`);
+            const currentStream = localStreamRef.current;
+            if (currentStream) {
+              const initiate = socket.id ? socket.id < peerSocketId : false;
+              initializePeer(peerSocketId, currentStream, initiate);
+            }
+          }
+        }, 3000);
       }
     };
 
-    // Remote streams hookup
+    // Remote stream capture
     pc.ontrack = (event) => {
       console.log(`Received remote audio track from ${peerSocketId}`);
       const remoteStream = event.streams[0];
@@ -151,14 +284,17 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }
       
       audio.srcObject = remoteStream;
-      audio.muted = speakerDeafened;
+      audio.muted = speakerDeafenedRef.current;
       
       audio.play().catch((err) => {
         console.error('Failed to play remote audio track:', err);
       });
+
+      // Start Web Audio analysis
+      startAnalyzingStream(peerSocketId, remoteStream);
     };
 
-    // If we are initiating the connection, create offer
+    // If we are initiating, create offer on negotiation needed
     if (initiateOffer) {
       pc.onnegotiationneeded = async () => {
         try {
@@ -192,8 +328,20 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
         track.enabled = !micMuted;
       });
 
-      // Join the voice channel on backend
-      socket.emit('join_voice', roomCode);
+      // Start Web Audio analysis on local mic
+      if (socket.id) {
+        startAnalyzingStream(socket.id, stream);
+      }
+
+      // Connect to existing active players
+      const otherPlayers = players.filter(
+        (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
+      );
+
+      otherPlayers.forEach((p) => {
+        const initiate = socket.id ? socket.id < p.socketId : false;
+        initializePeer(p.socketId, stream, initiate);
+      });
     } catch (err: any) {
       console.error('Failed to join voice chat:', err);
       setStatus('Access Blocked');
@@ -201,7 +349,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     }
   };
 
-  // Listen to remote signaling and voice list updates
+  // Listen to remote signaling
   useEffect(() => {
     if (!joined) return;
 
@@ -239,38 +387,41 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }
     };
 
-    const handlePeersList = async (peerSocketIds: string[]) => {
-      const stream = await getLocalStream();
-      peerSocketIds.forEach((peerSocketId) => {
-        if (!peersRef.current.has(peerSocketId)) {
-          initializePeer(peerSocketId, stream, true); // Initiate connection to existing voice users
-        }
-      });
-    };
-
-    const handleUserJoinedVoice = async ({ socketId }: { socketId: string }) => {
-      const stream = await getLocalStream();
-      if (!peersRef.current.has(socketId)) {
-        initializePeer(socketId, stream, false); // Passive connection, wait for offer from joining user
-      }
-    };
-
-    const handleUserLeftVoice = ({ socketId }: { socketId: string }) => {
-      closePeer(socketId);
-    };
-
     socket.on('voice_signal_received', handleSignal);
-    socket.on('voice_peers_list', handlePeersList);
-    socket.on('user_joined_voice', handleUserJoinedVoice);
-    socket.on('user_left_voice', handleUserLeftVoice);
 
     return () => {
       socket.off('voice_signal_received', handleSignal);
-      socket.off('voice_peers_list', handlePeersList);
-      socket.off('user_joined_voice', handleUserJoinedVoice);
-      socket.off('user_left_voice', handleUserLeftVoice);
     };
   }, [joined, socket, roomCode, micMuted, speakerDeafened]);
+
+  // Mesh reconciliation on player roster updates
+  useEffect(() => {
+    if (!joined) return;
+
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    const otherPlayers = players.filter(
+      (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
+    );
+
+    const activeSocketIds = new Set(otherPlayers.map((p) => p.socketId));
+
+    // 1. Close peers that left
+    peersRef.current.forEach((pc, socketId) => {
+      if (!activeSocketIds.has(socketId)) {
+        closePeer(socketId);
+      }
+    });
+
+    // 2. Initialize new peers
+    otherPlayers.forEach((p) => {
+      if (!peersRef.current.has(p.socketId)) {
+        const initiate = socket.id ? socket.id < p.socketId : false;
+        initializePeer(p.socketId, stream, initiate);
+      }
+    });
+  }, [players, joined, socket]);
 
   // Handle Mute Mic
   const toggleMuteMic = () => {
@@ -280,6 +431,13 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = !nextMute;
       });
+    }
+    // Instantly notify speaking state
+    if (socket.id) {
+      window.dispatchEvent(new CustomEvent('voice_user_speaking', {
+        detail: { socketId: socket.id, isSpeaking: false }
+      }));
+      setActiveSpeakers((prev) => prev.filter(id => id !== socket.id));
     }
   };
 
@@ -295,13 +453,9 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Notify others we left
-      if (joined) {
-        socket.emit('leave_voice', roomCode);
-      }
       cleanupAll();
     };
-  }, [joined]);
+  }, []);
 
   const connectedPeersCount = peersRef.current.size;
 
@@ -357,6 +511,24 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
               <span>{speakerDeafened ? 'Deafened' : 'Listen'}</span>
             </button>
           </div>
+
+          {activeSpeakers.length > 0 && (
+            <div className="flex flex-col gap-1 border-t border-white/5 pt-2">
+              <span className="text-[8px] uppercase font-bold text-gray-500">Currently Speaking:</span>
+              <div className="flex flex-wrap gap-1">
+                {activeSpeakers.map((socketId) => {
+                  const pl = players.find(p => p.socketId === socketId);
+                  const name = socketId === socket.id ? 'You' : (pl?.username || 'Peer');
+                  return (
+                    <span key={socketId} className="text-[9px] bg-cybersuccess/10 text-cybersuccess border border-cybersuccess/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cybersuccess animate-ping"></span>
+                      {name}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-[10px] text-gray-500 border-t border-white/5 pt-2 font-bold">
             <div className="flex items-center gap-1">

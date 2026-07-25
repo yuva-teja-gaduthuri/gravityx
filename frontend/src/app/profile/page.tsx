@@ -30,6 +30,7 @@ export default function ProfilePage() {
   // Profile Edit states
   const [editUsername, setEditUsername] = useState('');
   const [editAvatar, setEditAvatar] = useState('astronaut');
+  const [editBio, setEditBio] = useState('');
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
   const [isEditing, setIsEditing] = useState(false);
@@ -59,6 +60,7 @@ export default function ProfilePage() {
     if (!user) return;
     setEditUsername(user.username);
     setEditAvatar(user.avatar || 'astronaut');
+    setEditBio(user.bio || '');
 
     // Load likes and reviews
     const likes = localStorage.getItem(`gravityx_likes_${user.username}`);
@@ -203,7 +205,6 @@ export default function ProfilePage() {
       localStorage.setItem('gravityx_setting_sound', String(sound));
       localStorage.setItem('gravityx_setting_volume', String(volume));
       localStorage.setItem('gravityx_setting_notifications', String(notifications));
-      localStorage.setItem('gravityx_setting_language', language);
       localStorage.setItem('gravityx_setting_privacy', privacy);
 
       const res = await fetch(getApiUrl('/api/auth/profile'), {
@@ -212,12 +213,13 @@ export default function ProfilePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ username: editUsername, avatar: editAvatar })
+        body: JSON.stringify({ username: editUsername, avatar: editAvatar, bio: editBio })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update profile');
 
       localStorage.setItem('gravityx_user', JSON.stringify(data.user));
+      window.dispatchEvent(new Event('gravityx_user_updated'));
       refreshProfile();
       setProfileSuccess('Telemetry parameters committed successfully!');
       setIsEditing(false);
@@ -305,9 +307,17 @@ export default function ProfilePage() {
                   </span>
                 </div>
 
-                <div>
+                <div className="flex flex-col items-center">
                   <h2 className="text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight">{user.username}</h2>
                   <p className="text-[10px] uppercase text-slate-500 dark:text-gray-400 font-bold tracking-widest mt-1">Level {user.level} Operator</p>
+                  <p className="text-[10px] font-mono text-slate-400 dark:text-gray-500 mt-2 select-all bg-slate-100 dark:bg-white/5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/5">
+                    Player ID: {user.id}
+                  </p>
+                  {user.bio && (
+                    <p className="text-xs text-slate-650 dark:text-gray-300 italic text-center max-w-sm mt-3 px-4 leading-relaxed">
+                      "{user.bio}"
+                    </p>
+                  )}
                   
                   {/* Likes badge */}
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 mt-2.5 rounded-full bg-cyberpink/10 border border-cyberpink/30 text-cyberpink text-xs font-black">
@@ -328,30 +338,20 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-200 dark:border-white/5">
+              <div className="pt-6 border-t border-slate-200 dark:border-white/5 w-full flex">
                 <button 
                   onClick={() => setIsEditing(true)}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
                 >
-                  Configure Operator Identity
+                  Edit Profile
                 </button>
-                
-                <button 
-                  onClick={() => {
-                    logout();
-                    router.push('/auth');
-                  }}
-                  className="flex-1 py-3 rounded-xl bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-gray-300 hover:bg-cybererror/10 hover:border-cybererror/30 hover:text-cybererror font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  Log Out Session
-                </button>
-              </div>
             </div>
-          ) : (
-            // Edit Profile Mode
-            <div className="space-y-6 flex-grow flex flex-col justify-between">
+          </div>
+        ) : (
+          // Edit Profile Mode
+          <div className="space-y-6 flex-grow flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-black text-slate-800 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2 mb-4">Edit Telemetry Profile</h3>
+                <h3 className="text-lg font-black text-slate-800 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2 mb-4">Edit Profile</h3>
                 
                 <form onSubmit={handleUpdateProfile} className="space-y-4">
                   {profileError && (
@@ -366,13 +366,24 @@ export default function ProfilePage() {
                   )}
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Change Username Alias</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Change Display Name</label>
                     <input 
                       type="text" 
                       required
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
                       className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink text-slate-800 dark:text-white bg-slate-50 dark:bg-white/5"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Bio Description</label>
+                    <textarea 
+                      value={editBio}
+                      onChange={(e) => setEditBio(e.target.value)}
+                      placeholder="Tell the galaxy about yourself..."
+                      rows={3}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberpink text-slate-800 dark:text-white bg-slate-50 dark:bg-white/5 resize-none"
                     />
                   </div>
 
@@ -586,31 +597,7 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Lobby Language</label>
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { code: 'English', label: 'English', flag: '🇺🇸' },
-                  { code: 'Spanish', label: 'Español', flag: '🇪🇸' },
-                  { code: 'Hindi', label: 'हिन्दी', flag: '🇮🇳' },
-                  { code: 'Telugu', label: 'తెలుగు', flag: '🇮🇳' },
-                ].map((lang) => (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    onClick={() => setLanguage(lang.code)}
-                    className={`p-2.5 rounded-xl border transition-all flex flex-col items-center gap-1 ${
-                      language === lang.code
-                        ? 'border-cyberblue bg-cyberblue/10 text-slate-800 dark:text-white shadow-neon-blue'
-                        : 'border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-gray-400 hover:text-slate-800 hover:dark:text-white hover:border-slate-300 hover:dark:border-white/10'
-                    }`}
-                  >
-                    <span className="text-xl">{lang.flag}</span>
-                    <span className="text-[8.5px] font-black uppercase tracking-tighter truncate w-full text-center">{lang.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Language Selection Option Removed */}
 
             <div className="space-y-2">
               <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Profile Privacy</label>
