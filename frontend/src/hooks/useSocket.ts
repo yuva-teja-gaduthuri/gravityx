@@ -10,8 +10,9 @@ export function useSocket() {
   const [socket, setSocket] = useState<Socket | null>(socketInstance);
 
   useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('gravityx_token') : null;
+
     if (!socketInstance) {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('gravityx_token') : null;
       socketInstance = io(getApiUrl(), {
         auth: { token },
         transports: ['websocket'],
@@ -31,6 +32,14 @@ export function useSocket() {
       socketInstance.on('connect_error', (err) => {
         console.error('Socket connect error:', err.message);
       });
+    } else {
+      // If the socket connection already exists, check if the token has been updated
+      const currentAuthToken = (socketInstance.auth as any)?.token;
+      if (token && currentAuthToken !== token) {
+        (socketInstance.auth as any).token = token;
+        socketInstance.disconnect().connect();
+        console.log('Socket reconnected with updated auth token');
+      }
     }
 
     setSocket(socketInstance);
