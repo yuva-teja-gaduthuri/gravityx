@@ -8,7 +8,7 @@ import { getApiUrl } from '../../utils/api';
 import { 
   Trophy, Coins, LogOut, Settings, ShieldAlert, CheckCircle2,
   Volume2, ArrowLeft, Zap, Shield, Sparkles, User, PlayCircle, BarChart2,
-  Heart, Star
+  Heart, Star, MessageSquare
 } from 'lucide-react';
 
 const AVATAR_GRAPHICS: { [key: string]: string } = {

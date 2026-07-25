@@ -53,16 +53,13 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
   return cachedTransporter;
 }
 
-/**
- * Core send mail helper routing between Resend API and Ethereal fallback.
- */
 function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
 /**
- * Core send mail helper routing between Resend API and Ethereal fallback.
+ * Core send mail helper routing between Brevo API and Ethereal fallback.
  */
 async function sendMailHelper(to: string, subject: string, html: string, flowName: string) {
   // Validate recipient email address format
@@ -71,14 +68,24 @@ async function sendMailHelper(to: string, subject: string, html: string, flowNam
     throw new Error('Invalid recipient email address format.');
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
   const isProd = process.env.NODE_ENV === 'production';
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  const emailFrom = process.env.EMAIL_FROM;
 
-  // Helper for actual Resend API dispatch
-  const dispatchResend = async () => {
-    const fromAddress = process.env.EMAIL_FROM;
-    if (!fromAddress) {
-      console.error('❌ [MAILER CONFIG ERROR]: EMAIL_FROM is required when using Resend API.');
+  // Production validation
+  if (isProd) {
+    if (!brevoApiKey || !emailFrom) {
+      console.error('❌ [MAILER CONFIG ERROR]: BREVO_API_KEY and EMAIL_FROM are required in production.');
+      throw new Error('Email delivery failed due to a server configuration error.');
+    }
+  }
+
+  // Determine if we should use Brevo or fall back to Ethereal in development
+  const useBrevo = !!brevoApiKey;
+
+  if (useBrevo) {
+    if (!emailFrom) {
+      console.error('❌ [MAILER CONFIG ERROR]: EMAIL_FROM is required when using Brevo API.');
       throw new Error('EMAIL_FROM configuration is missing.');
     }
 
@@ -86,115 +93,87 @@ async function sendMailHelper(to: string, subject: string, html: string, flowNam
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
     try {
-      const response = await fetch('https://api.resend.com/emails', {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'api-key': brevoApiKey,
         },
         body: JSON.stringify({
-          from: fromAddress,
-          to: [to],
-          subject,
-          html,
+          sender: {
+            name: process.env.EMAIL_FROM_NAME || 'GravityX',
+            email: emailFrom,
+          },
+          to: [
+            {
+              email: to,
+            },
+          ],
+          subject: subject,
+          htmlContent: html,
         }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      const resBody = await response.json().catch(() => ({}));
-
       if (!response.ok) {
-        throw new Error(`Resend API failed (status ${response.status}): ${JSON.stringify(resBody)}`);
+        let resBody: any = {};
+        try {
+          resBody = await response.json();
+        } catch (_) {
+          // ignore parsing failures
+        }
+        console.error(`❌ [MAILER ERROR]: Brevo API failed (status ${response.status}): ${JSON.stringify(resBody)}`);
+        throw new Error('Email delivery failed due to a provider error.');
       }
 
-      console.log(`📬 [MAILER SUCCESS]: Email successfully dispatched via Resend to ${to}`);
+      console.log(`📬 [MAILER SUCCESS]: Email successfully dispatched via Brevo to ${to}`);
     } catch (err: any) {
       clearTimeout(timeoutId);
-      throw err;
-    }
-  };
-
-  // Helper for Ethereal SMTP dispatch
-  const dispatchEthereal = async () => {
-    const transporter = await getTransporter();
-    
-    // Fallback Sender
-    const fromAddress = process.env.EMAIL_FROM || '"GravityX Terminal" <no-reply@gravityx.play>';
-    
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      to,
-      subject,
-      html,
-    });
-
-    if (testAccount) {
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
-      // Find token and generate preview URL
-      const matches = html.match(/token=([^"\s&]+)/);
-      const token = matches ? matches[1] : '';
-      const previewLink = flowName.includes('verification') 
-        ? `${clientUrl}/auth?tab=verify&token=${token}`
-        : `${clientUrl}/auth?tab=reset&token=${token}`;
-
-      console.log('\n====================================================');
-      console.log(`🌌 [DEVELOPMENT SMTP]: ${flowName} email dispatched via Ethereal.`);
-      console.log(`🔗 Token Link: ${previewLink}`);
-      console.log(`📬 View Ethereal Inbox Link: ${nodemailer.getTestMessageUrl(info)}`);
-      console.log('====================================================\n');
-    }
-  };
-
-  // Check if Resend API Key is available and try dispatching with retries
-  if (apiKey) {
-    let lastError: any = null;
-    const maxRetries = 3;
-    let delay = 1000;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await dispatchResend();
-        return; // Success!
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`⚠️ [MAILER RETRY]: Resend API dispatch attempt ${attempt} failed: ${err.message}`);
-        if (attempt < maxRetries) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          delay *= 2; // Exponential backoff
-        }
+      if (err.name === 'AbortError') {
+        console.error('❌ [MAILER ERROR]: Brevo email delivery request timed out.');
+      } else {
+        console.error(`❌ [MAILER ERROR]: ${err.message}`);
       }
+      throw new Error('Email delivery failed due to a provider error.');
     }
-
-    console.error(`❌ [MAILER ERROR]: Resend API failed after ${maxRetries} attempts.`);
-    
+  } else {
+    // Ethereal fallback - allowed only in development when BREVO_API_KEY is not present
     if (isProd) {
-      throw new Error(`Unable to send ${flowName} email after multiple retries: ${lastError?.message}`);
-    } else {
-      console.log('⚠️ [MAILER WARNING]: Falling back to Ethereal SMTP in development environment...');
-      try {
-        await dispatchEthereal();
-        return;
-      } catch (etherealErr: any) {
-        console.error('❌ [MAILER ERROR]: Ethereal SMTP fallback failed:', etherealErr.message);
-        throw new Error(`Email dispatch failed completely: ${lastError?.message}. Fallback error: ${etherealErr.message}`);
-      }
+      throw new Error('Ethereal SMTP is not allowed in production');
     }
-  }
 
-  // If in production but no RESEND_API_KEY is configured
-  if (isProd) {
-    console.error('❌ [MAILER CONFIG ERROR]: RESEND_API_KEY is missing in production environment');
-    throw new Error(`Unable to send ${flowName} email. Configuration error.`);
-  }
+    try {
+      const transporter = await getTransporter();
+      const fromAddress = emailFrom || '"GravityX Terminal" <no-reply@gravityx.play>';
 
-  // Development Fallback: Ethereal SMTP
-  try {
-    await dispatchEthereal();
-  } catch (err: any) {
-    console.error('❌ [MAILER ERROR]: Failed to send Ethereal email:', err.message);
-    throw new Error(`Unable to send ${flowName} email. Fallback error: ${err.message}`);
+      const info = await transporter.sendMail({
+        from: fromAddress,
+        to,
+        subject,
+        html,
+      });
+
+      if (testAccount) {
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+        const matches = html.match(/token=([^"\s&]+)/);
+        const token = matches ? matches[1] : '';
+        const previewLink = flowName.includes('verification') 
+          ? `${clientUrl}/auth?tab=verify&token=${token}`
+          : `${clientUrl}/auth?tab=reset&token=${token}`;
+
+        console.log('\n====================================================');
+        console.log(`🌌 [DEVELOPMENT SMTP]: ${flowName} email dispatched via Ethereal.`);
+        console.log(`🔗 Token Link: ${previewLink}`);
+        console.log(`📬 View Ethereal Inbox Link: ${nodemailer.getTestMessageUrl(info)}`);
+        console.log('====================================================\n');
+      }
+    } catch (err: any) {
+      console.error('❌ [MAILER ERROR]: Failed to send Ethereal email:', err.message);
+      throw new Error(`Unable to send ${flowName} email. Fallback error: ${err.message}`);
+    }
   }
 }
 
