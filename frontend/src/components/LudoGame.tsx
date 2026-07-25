@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye } from 'lucide-react';
+import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize } from 'lucide-react';
+import { getApiUrl } from '../utils/api';
 
 interface LudoToken {
   id: number;
@@ -30,8 +31,9 @@ interface LudoState {
 
 interface LudoGameProps {
   roomCode: string;
-  user: { id: string; username: string };
+  user: { id: string; username: string; isGuest?: boolean };
   socket: Socket;
+  isHost: boolean;
   matchEndedData?: any;
   onReturnToLobby?: () => void;
 }
@@ -310,13 +312,21 @@ interface VisualToken {
   isCaptured: boolean;
 }
 
-export default function LudoGame({ roomCode, user, socket, matchEndedData, onReturnToLobby }: LudoGameProps) {
+export default function LudoGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: LudoGameProps) {
   const [gameState, setGameState] = useState<LudoState | null>(null);
   const [validTokens, setValidTokens] = useState<number[]>([]);
   const [isRolling, setIsRolling] = useState(false);
   const [rollingValue, setRollingValue] = useState<number>(1);
   const [matchEnded, setMatchEnded] = useState(false);
   const [scoreboard, setScoreboard] = useState<any[]>([]);
+
+  // Social Stats States
+  const [likesMap, setLikesMap] = useState<{[username: string]: number}>({});
+  const [friendStatus, setFriendStatus] = useState<{[username: string]: string}>({});
+  const [reviewModalUser, setReviewModalUser] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewComment, setReviewComment] = useState<string>('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Accessibility & Polish Settings
   const [isAudioMuted, setIsAudioMuted] = useState(false);
@@ -896,6 +906,103 @@ export default function LudoGame({ roomCode, user, socket, matchEndedData, onRet
       socket.off('ludo_match_ended');
     };
   }, [socket, roomCode, user.id]);
+
+  // Sync match ended data on mount/change
+  useEffect(() => {
+    if (matchEndedData) {
+      setMatchEnded(true);
+      setScoreboard(matchEndedData.scoreboard || []);
+    }
+  }, [matchEndedData]);
+
+  // Load initial likes when scoreboard changes
+  useEffect(() => {
+    if (matchEnded && scoreboard.length > 0) {
+      const initialLikes: {[username: string]: number} = {};
+      scoreboard.forEach(row => {
+        const count = localStorage.getItem(`gravityx_likes_${row.username}`);
+        initialLikes[row.username] = count ? parseInt(count) : Math.floor(Math.random() * 5) + 12;
+      });
+      setLikesMap(initialLikes);
+    }
+  }, [matchEnded, scoreboard]);
+
+  // Fullscreen state listeners
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+      }).catch(err => {
+        console.error('Error attempting to enable fullscreen:', err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => {
+          setIsFullscreen(false);
+        });
+      }
+    }
+  };
+
+  const handleLike = (username: string) => {
+    const current = likesMap[username] || 0;
+    const next = current + 1;
+    localStorage.setItem(`gravityx_likes_${username}`, String(next));
+    setLikesMap(prev => ({ ...prev, [username]: next }));
+  };
+
+  const handleSaveReview = (username: string) => {
+    if (user.isGuest) return;
+    const existingStr = localStorage.getItem(`gravityx_reviews_${username}`);
+    const existing = existingStr ? JSON.parse(existingStr) : [];
+    
+    const newRev = {
+      username: user.username,
+      rating: reviewRating,
+      comment: reviewComment,
+      date: new Date().toISOString().split('T')[0]
+    };
+
+    const updated = [newRev, ...existing];
+    localStorage.setItem(`gravityx_reviews_${username}`, JSON.stringify(updated));
+    setReviewModalUser(null);
+    setReviewComment('');
+    setReviewRating(5);
+    alert(`Feedback saved successfully for ${username}!`);
+  };
+
+  const handleAddFriendClick = async (friendUsername: string) => {
+    try {
+      setFriendStatus(prev => ({ ...prev, [friendUsername]: 'sending' }));
+      const token = localStorage.getItem('gravityx_token');
+      const res = await fetch(getApiUrl('/api/social/request'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ friendUsername })
+      });
+      if (res.ok) {
+        setFriendStatus(prev => ({ ...prev, [friendUsername]: 'sent' }));
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to send friend request');
+        setFriendStatus(prev => ({ ...prev, [friendUsername]: 'error' }));
+      }
+    } catch (err) {
+      console.error(err);
+      setFriendStatus(prev => ({ ...prev, [friendUsername]: 'error' }));
+    }
+  };
 
   const handleRollDice = () => {
     if (!gameState) return;
