@@ -73,25 +73,22 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => {
     console.log(`Socket disconnected: ${socket.id}`);
     
-    // Automatically find and remove player from any active rooms
-    const userId = socket.data.user?.id;
-    if (userId) {
-      const activeRooms = roomStore.getAllRooms();
-      for (const room of activeRooms) {
-        const player = room.players.find((p) => p.id === userId);
-        if (player && player.socketId === socket.id) {
-          const updated = roomStore.removePlayer(room.code, userId);
-          if (updated) {
-            io.to(room.code).emit('room_state_updated', updated);
-            io.to(room.code).emit('chat_message', {
-              id: Math.random().toString(),
-              senderName: 'SYSTEM',
-              content: `${socket.data.user?.username || 'A player'} disconnected.`,
-              createdAt: new Date(),
-            });
-          } else {
-            io.to(room.code).emit('room_deleted');
-          }
+    // Automatically find and remove player from any active rooms by matching socketId
+    const activeRooms = roomStore.getAllRooms();
+    for (const room of activeRooms) {
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (player) {
+        const updated = roomStore.removePlayer(room.code, player.id);
+        if (updated) {
+          io.to(room.code).emit('room_state_updated', updated);
+          io.to(room.code).emit('chat_message', {
+            id: Math.random().toString(),
+            senderName: 'SYSTEM',
+            content: `${player.username} disconnected.`,
+            createdAt: new Date(),
+          });
+        } else {
+          io.to(room.code).emit('room_deleted');
         }
       }
     }
