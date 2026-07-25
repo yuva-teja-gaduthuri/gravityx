@@ -6,6 +6,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
+import VoiceChat from '../../../components/VoiceChat';
 import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
 
 interface Player {
@@ -62,12 +63,19 @@ export default function RoomPage() {
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
 
-    // Join room socket emit
-    socket.emit('join_room', {
-      roomCode,
-      userId: user.id,
-      username: user.username,
-    });
+    const handleConnect = () => {
+      socket.emit('join_room', {
+        roomCode,
+        userId: user.id,
+        username: user.username,
+      });
+    };
+
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    socket.on('connect', handleConnect);
 
     socket.on('room_joined', (roomData: RoomData) => {
       setRoom(roomData);
@@ -110,6 +118,7 @@ export default function RoomPage() {
     return () => {
       // Clean room signals
       socket.emit('leave_room', { roomCode, userId: user.id });
+      socket.off('connect', handleConnect);
       socket.off('room_joined');
       socket.off('room_state_updated');
       socket.off('chat_message');
@@ -354,8 +363,8 @@ export default function RoomPage() {
                   <button
                     onClick={handleStartGame}
                     disabled={!canStart}
-                    className={`px-8 py-3.5 rounded-xl font-bold shadow-neon-blue bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 transition-all ${
-                      !canStart ? 'opacity-30 cursor-default' : 'active:scale-95 hover:scale-[1.01]'
+                    className={`px-8 py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${
+                      !canStart ? 'opacity-30 cursor-default bg-white/5 border border-white/10 text-gray-500' : 'btn-mythic-gold active:scale-95'
                     }`}
                   >
                     Start Match
@@ -363,10 +372,10 @@ export default function RoomPage() {
                 ) : (
                   <button
                     onClick={handleToggleReady}
-                    className={`px-8 py-3.5 rounded-xl font-bold transition-all hover:scale-[1.01] ${
+                    className={`px-8 py-3.5 rounded-xl font-bold uppercase tracking-wider text-xs transition-all ${
                       isReady 
-                        ? 'bg-cybersuccess text-white border border-cybersuccess/30 shadow-neon-success' 
-                        : 'glass-card border-white/10 hover:border-cyberblue text-white'
+                        ? 'bg-cybersuccess text-white border border-cybersuccess/30 shadow-neon-success hover:bg-cybersuccess/90 active:scale-95' 
+                        : 'btn-mythic active:scale-95'
                     }`}
                   >
                     {isReady ? 'Ready' : 'Not Ready'}
@@ -435,6 +444,15 @@ export default function RoomPage() {
       >
         <MessageSquare size={20} />
       </button>
+
+      {room.voiceChat && (
+        <VoiceChat 
+          roomCode={roomCode} 
+          socket={socket} 
+          players={room.players} 
+          currentUser={user} 
+        />
+      )}
     </div>
   );
 }

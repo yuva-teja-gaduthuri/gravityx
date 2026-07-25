@@ -56,27 +56,32 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
 /**
  * Core send mail helper routing between Resend API and Ethereal fallback.
  */
+function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+/**
+ * Core send mail helper routing between Resend API and Ethereal fallback.
+ */
 async function sendMailHelper(to: string, subject: string, html: string, flowName: string) {
+  // Validate recipient email address format
+  if (!validateEmail(to)) {
+    console.error(`❌ [MAILER ERROR]: Invalid recipient email address: ${to}`);
+    throw new Error('Invalid recipient email address format.');
+  }
+
   const apiKey = process.env.RESEND_API_KEY;
   const isProd = process.env.NODE_ENV === 'production';
 
-  // Check if Resend API Key is available
-  if (apiKey) {
+  // Helper for actual Resend API dispatch
+  const dispatchResend = async () => {
     const fromAddress = process.env.EMAIL_FROM;
     if (!fromAddress) {
       console.error('❌ [MAILER CONFIG ERROR]: EMAIL_FROM is required when using Resend API.');
-      throw new Error(`Unable to send ${flowName} email. Configuration error.`);
+      throw new Error('EMAIL_FROM configuration is missing.');
     }
 
-    if (!modeLogged) {
-      console.log('\n====================================================');
-      console.log('📬 [MAILER CONFIG]: RESEND HTTPS API');
-      console.log(`📧 Sender (EMAIL_FROM): ${fromAddress}`);
-      console.log('====================================================\n');
-      modeLogged = true;
-    }
-
-    // Timeout using AbortController
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
@@ -101,34 +106,18 @@ async function sendMailHelper(to: string, subject: string, html: string, flowNam
       const resBody = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        console.error(
-          `❌ [MAILER ERROR]: Resend API request failed. Status: ${response.status}. Error Details:`,
-          JSON.stringify(resBody)
-        );
-        throw new Error('API delivery failed');
+        throw new Error(`Resend API failed (status ${response.status}): ${JSON.stringify(resBody)}`);
       }
 
       console.log(`📬 [MAILER SUCCESS]: Email successfully dispatched via Resend to ${to}`);
-      return;
     } catch (err: any) {
       clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        console.error(`❌ [MAILER TIMEOUT]: Resend API request timed out after 5000ms`);
-      } else {
-        console.error(`❌ [MAILER ERROR]: Failed to send email via Resend API:`, err.message);
-      }
-      throw new Error(`Unable to send ${flowName} email. Please try again.`);
+      throw err;
     }
-  }
+  };
 
-  // If in production but no RESEND_API_KEY is configured
-  if (isProd) {
-    console.error('❌ [MAILER CONFIG ERROR]: RESEND_API_KEY is missing in production environment');
-    throw new Error(`Unable to send ${flowName} email. Configuration error.`);
-  }
-
-  // Development Fallback: Ethereal SMTP
-  try {
+  // Helper for Ethereal SMTP dispatch
+  const dispatchEthereal = async () => {
     const transporter = await getTransporter();
     
     // Fallback Sender
@@ -156,9 +145,56 @@ async function sendMailHelper(to: string, subject: string, html: string, flowNam
       console.log(`📬 View Ethereal Inbox Link: ${nodemailer.getTestMessageUrl(info)}`);
       console.log('====================================================\n');
     }
+  };
+
+  // Check if Resend API Key is available and try dispatching with retries
+  if (apiKey) {
+    let lastError: any = null;
+    const maxRetries = 3;
+    let delay = 1000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await dispatchResend();
+        return; // Success!
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`⚠️ [MAILER RETRY]: Resend API dispatch attempt ${attempt} failed: ${err.message}`);
+        if (attempt < maxRetries) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
+        }
+      }
+    }
+
+    console.error(`❌ [MAILER ERROR]: Resend API failed after ${maxRetries} attempts.`);
+    
+    if (isProd) {
+      throw new Error(`Unable to send ${flowName} email after multiple retries: ${lastError?.message}`);
+    } else {
+      console.log('⚠️ [MAILER WARNING]: Falling back to Ethereal SMTP in development environment...');
+      try {
+        await dispatchEthereal();
+        return;
+      } catch (etherealErr: any) {
+        console.error('❌ [MAILER ERROR]: Ethereal SMTP fallback failed:', etherealErr.message);
+        throw new Error(`Email dispatch failed completely: ${lastError?.message}. Fallback error: ${etherealErr.message}`);
+      }
+    }
+  }
+
+  // If in production but no RESEND_API_KEY is configured
+  if (isProd) {
+    console.error('❌ [MAILER CONFIG ERROR]: RESEND_API_KEY is missing in production environment');
+    throw new Error(`Unable to send ${flowName} email. Configuration error.`);
+  }
+
+  // Development Fallback: Ethereal SMTP
+  try {
+    await dispatchEthereal();
   } catch (err: any) {
     console.error('❌ [MAILER ERROR]: Failed to send Ethereal email:', err.message);
-    throw new Error(`Unable to send ${flowName} email. Please try again.`);
+    throw new Error(`Unable to send ${flowName} email. Fallback error: ${err.message}`);
   }
 }
 

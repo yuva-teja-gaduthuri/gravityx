@@ -64,9 +64,6 @@ export default function LandingClient() {
 
       {/* Hero Section */}
       <section className="relative flex flex-col items-center justify-center text-center px-6 pt-24 pb-16 md:pt-36 md:pb-28 max-w-5xl mx-auto z-10">
-        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full glass-panel border-cyberblue/30 text-xs font-semibold text-cyberblue mb-6 shadow-neon-blue uppercase tracking-widest animate-pulse-slow">
-          <Activity size={14} /> Anti-Gravity Multiplayer Playground
-        </div>
 
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight mb-6">
           Play Together. <br />
