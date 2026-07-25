@@ -6,8 +6,8 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
-import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X, Mic, MicOff } from 'lucide-react';
-import { useVoiceChat } from '../../../hooks/useVoiceChat';
+import VoiceChat from '../../../components/VoiceChat';
+import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -57,14 +57,6 @@ export default function RoomPage() {
   const [rounds, setRounds] = useState(3);
   const [matchEndedData, setMatchEndedData] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const { isMuted, toggleMute, micError } = useVoiceChat(
-    socket,
-    roomCode,
-    room?.players || [],
-    user?.id || '',
-    room?.voiceChat || false
-  );
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -416,34 +408,6 @@ export default function RoomPage() {
           </button>
         </div>
 
-        {/* Voice Chat Control Panel */}
-        {room.voiceChat && (
-          <div className="p-3 border-b border-white/5 bg-primary/5 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${micError ? 'bg-cybererror' : isMuted ? 'bg-cybererror' : 'bg-cybersuccess'}`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${micError ? 'bg-cybererror' : isMuted ? 'bg-cybererror' : 'bg-cybersuccess'}`}></span>
-              </span>
-              <span className="text-[10px] uppercase font-black tracking-widest text-gray-300">
-                {micError ? 'Mic Blocked' : isMuted ? 'Voice Muted' : 'Voice Active'}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={toggleMute}
-              className={`p-1.5 rounded-lg border text-white transition-all active:scale-95 ${
-                micError || isMuted 
-                  ? 'bg-cybererror/10 border-cybererror/30 text-cybererror hover:bg-cybererror/20' 
-                  : 'bg-cyberblue/10 border-cyberblue/30 text-cyberblue hover:bg-cyberblue/20 shadow-neon-blue'
-              }`}
-              title={micError ? 'Mic Access Blocked' : isMuted ? 'Unmute Mic' : 'Mute Mic'}
-              disabled={!!micError}
-            >
-              {micError || isMuted ? <MicOff size={14} /> : <Mic size={14} />}
-            </button>
-          </div>
-        )}
-
         {/* Chat List */}
         <div className="flex-1 p-3 overflow-y-auto space-y-2">
           {chatList.map((chat) => (
@@ -480,6 +444,15 @@ export default function RoomPage() {
       >
         <MessageSquare size={20} />
       </button>
+
+      {room.voiceChat && (
+        <VoiceChat 
+          roomCode={roomCode} 
+          socket={socket} 
+          players={room.players} 
+          currentUser={user} 
+        />
+      )}
     </div>
   );
 }
