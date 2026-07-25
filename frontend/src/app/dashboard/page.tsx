@@ -733,7 +733,7 @@ export default function Dashboard() {
                     <input 
                       type="number"
                       min={3}
-                      max={9}
+                      max={10}
                       value={maxPlayers}
                       onChange={(e) => setMaxPlayers(Number(e.target.value))}
                       className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
