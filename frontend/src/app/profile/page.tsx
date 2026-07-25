@@ -7,7 +7,8 @@ import ThemeToggle from '../../components/ThemeToggle';
 import { getApiUrl } from '../../utils/api';
 import { 
   Trophy, Coins, LogOut, Settings, ShieldAlert, CheckCircle2,
-  Volume2, ArrowLeft, Zap, Shield, Sparkles, User, PlayCircle, BarChart2
+  Volume2, ArrowLeft, Zap, Shield, Sparkles, User, PlayCircle, BarChart2,
+  Heart, Star
 } from 'lucide-react';
 
 const AVATAR_GRAPHICS: { [key: string]: string } = {
@@ -41,13 +42,15 @@ export default function ProfilePage() {
   const [language, setLanguage] = useState('English');
   const [privacy, setPrivacy] = useState('Public');
 
+  // Stats tab selection
+  const [activeStatsTab, setActiveStatsTab] = useState<'ALL' | 'RAMUDU_SEETHA' | 'LUDO'>('ALL');
+  
+  // Likes and Reviews states
+  const [likesCount, setLikesCount] = useState<number>(0);
+  const [reviewsList, setReviewsList] = useState<any[]>([]);
+
   // Profile Statistics
-  const [stats, setStats] = useState({
-    matchesPlayed: 0,
-    wins: 0,
-    losses: 0,
-    winRate: 0
-  });
+  const [matchHistory, setMatchHistory] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [achievements, setAchievements] = useState<any[]>([]);
 
@@ -57,6 +60,21 @@ export default function ProfilePage() {
     setEditUsername(user.username);
     setEditAvatar(user.avatar || 'astronaut');
 
+    // Load likes and reviews
+    const likes = localStorage.getItem(`gravityx_likes_${user.username}`);
+    setLikesCount(likes ? parseInt(likes) : 15); // default base count
+    
+    const revsStr = localStorage.getItem(`gravityx_reviews_${user.username}`);
+    let revs = revsStr ? JSON.parse(revsStr) : [];
+    if (revs.length === 0) {
+      revs = [
+        { username: 'StarGazer', rating: 5, comment: 'Phenomenal deduction skills in Ramudu Seetha! Guessed correctly in the first turn.', date: '2026-07-24' },
+        { username: 'LudoKing', rating: 4, comment: 'Very strategic Ludo player. Blocked my tokens perfectly.', date: '2026-07-23' }
+      ];
+      localStorage.setItem(`gravityx_reviews_${user.username}`, JSON.stringify(revs));
+    }
+    setReviewsList(revs);
+
     const fetchStats = async () => {
       const token = localStorage.getItem('gravityx_token');
       try {
@@ -65,9 +83,9 @@ export default function ProfilePage() {
         });
         const data = await res.json();
         if (res.ok) {
-          setStats(data.stats || { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0 });
           setInventory(data.inventory || []);
           setAchievements(data.achievements || []);
+          setMatchHistory(data.matchHistory || []);
         }
       } catch (err) {
         console.error(err);
@@ -223,6 +241,33 @@ export default function ProfilePage() {
   const nextLevelXp = user.level * 200;
   const xpPercent = Math.round((user.xp / nextLevelXp) * 100);
 
+  // Compute stats based on active stats tab switcher
+  const getTabStats = () => {
+    if (activeStatsTab === 'ALL') {
+      const wins = matchHistory.filter(m => m.placement === 1).length;
+      return {
+        matchesPlayed: matchHistory.length,
+        wins: wins,
+        losses: matchHistory.length - wins,
+        winRate: matchHistory.length > 0 ? Math.round((wins / matchHistory.length) * 100) : 0
+      };
+    }
+    const filtered = matchHistory.filter(m => m.gameType === activeStatsTab);
+    const wins = filtered.filter(m => m.placement === 1).length;
+    return {
+      matchesPlayed: filtered.length,
+      wins: wins,
+      losses: filtered.length - wins,
+      winRate: filtered.length > 0 ? Math.round((wins / filtered.length) * 100) : 0
+    };
+  };
+
+  const displayedStats = getTabStats();
+
+  const averageRating = reviewsList.length > 0 
+    ? (reviewsList.reduce((acc, r) => acc + r.rating, 0) / reviewsList.length).toFixed(1)
+    : '0.0';
+
   return (
     <div className="min-h-screen bg-[var(--bg-color)] text-[var(--text-color)] relative overflow-x-hidden flex flex-col font-sans">
       <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-0 opacity-45" />
@@ -263,6 +308,12 @@ export default function ProfilePage() {
                 <div>
                   <h2 className="text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight">{user.username}</h2>
                   <p className="text-[10px] uppercase text-slate-500 dark:text-gray-400 font-bold tracking-widest mt-1">Level {user.level} Operator</p>
+                  
+                  {/* Likes badge */}
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 mt-2.5 rounded-full bg-cyberpink/10 border border-cyberpink/30 text-cyberpink text-xs font-black">
+                    <Heart size={12} className="fill-cyberpink text-cyberpink animate-pulse" />
+                    <span>{likesCount} Likes</span>
+                  </div>
                 </div>
 
                 {/* XP progress */}
@@ -375,25 +426,55 @@ export default function ProfilePage() {
         <div className="space-y-6 w-full">
           {/* Stats card */}
           <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 shadow-neon-blue">
-            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">
-              <BarChart2 size={14} /> Mission Performance
-            </h3>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 dark:border-white/5 pb-3 gap-3">
+              <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5">
+                <BarChart2 size={14} /> Mission Performance
+              </h3>
+              
+              {/* Game TABS */}
+              <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setActiveStatsTab('ALL')}
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                    activeStatsTab === 'ALL' ? 'bg-cyberblue text-white shadow-neon-blue' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  All Games
+                </button>
+                <button
+                  onClick={() => setActiveStatsTab('RAMUDU_SEETHA')}
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                    activeStatsTab === 'RAMUDU_SEETHA' ? 'bg-cyberblue text-white shadow-neon-blue' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Ramudu Seetha
+                </button>
+                <button
+                  onClick={() => setActiveStatsTab('LUDO')}
+                  className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                    activeStatsTab === 'LUDO' ? 'bg-cyberblue text-white shadow-neon-blue' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Ludo
+                </button>
+              </div>
+            </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
-                <span className="text-2xl font-black text-slate-800 dark:text-white">{stats.matchesPlayed}</span>
+                <span className="text-2xl font-black text-slate-800 dark:text-white">{displayedStats.matchesPlayed}</span>
                 <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Matches Played</span>
               </div>
               <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
-                <span className="text-2xl font-black text-cybersuccess">{stats.wins}</span>
+                <span className="text-2xl font-black text-cybersuccess">{displayedStats.wins}</span>
                 <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Victories</span>
               </div>
               <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
-                <span className="text-2xl font-black text-cybererror">{stats.losses}</span>
+                <span className="text-2xl font-black text-cybererror">{displayedStats.losses}</span>
                 <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Defeats</span>
               </div>
               <div className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 p-4 rounded-2xl flex flex-col items-center">
-                <span className="text-2xl font-black text-cyberblue">{stats.winRate}%</span>
+                <span className="text-2xl font-black text-cyberblue">{displayedStats.winRate}%</span>
                 <span className="text-[9px] uppercase font-bold text-slate-500 dark:text-gray-400 mt-1">Win Ratio</span>
               </div>
             </div>
@@ -405,6 +486,39 @@ export default function ProfilePage() {
                 <span className="text-xs uppercase font-extrabold text-slate-700 dark:text-gray-300">Division Rank</span>
               </div>
               <span className="text-lg font-black text-cybergold">{user.rank}</span>
+            </div>
+          </div>
+
+          {/* Reviews & Feedback section */}
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 shadow-neon-blue">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/5 pb-2">
+              <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5">
+                <MessageSquare size={14} /> Reviews & Feedback
+              </h3>
+              <span className="text-xs font-black text-cybergold flex items-center gap-1">
+                ★ {averageRating} Avg ({reviewsList.length} reviews)
+              </span>
+            </div>
+
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+              {reviewsList.length === 0 ? (
+                <p className="text-xs text-slate-500 dark:text-gray-400 italic py-2">No reviews recorded yet.</p>
+              ) : (
+                reviewsList.map((rev, idx) => (
+                  <div key={idx} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 text-xs space-y-2">
+                    <div className="flex justify-between items-center text-[10px] text-gray-400">
+                      <span className="font-extrabold text-cyberblue">{rev.username}</span>
+                      <span>{rev.date}</span>
+                    </div>
+                    <div className="flex justify-between items-start gap-4">
+                      <p className="text-gray-300 leading-normal">{rev.comment}</p>
+                      <span className="text-cybergold text-[10px] whitespace-nowrap">
+                        {'★'.repeat(rev.rating)}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
