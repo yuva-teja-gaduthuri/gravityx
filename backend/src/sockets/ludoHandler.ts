@@ -343,6 +343,32 @@ export function handleLudo(io: Server, socket: Socket) {
       socket.emit('ludo_state_sync', room.gameState);
     }
   });
+
+  socket.on('ludo_return_to_lobby', (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      // Verify host permissions
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can return the room to lobby');
+      }
+
+      // Reset room status to lobby
+      roomStore.updateRoomStatus(upperCode, 'LOBBY');
+      room.players.forEach((p) => {
+        p.ready = false;
+      });
+      room.gameState = null;
+
+      // Broadcast room status update to everyone
+      io.to(upperCode).emit('room_state_updated', room);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
 }
 
 function getValidTokensToMove(player: LudoPlayer, dice: number): number[] {
@@ -585,20 +611,10 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
     });
   }
 
-  // Set room back to LOBBY status
-  roomStore.updateRoomStatus(roomCode, 'LOBBY');
-  room.players.forEach((p) => {
-    p.ready = false;
-    p.role = undefined;
-  });
-  room.gameState = null;
-
   io.to(roomCode).emit('ludo_match_ended', {
     duration,
     scoreboard: scoreboardData,
   });
-
-  io.to(roomCode).emit('room_state_updated', room);
 }
 
 function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {

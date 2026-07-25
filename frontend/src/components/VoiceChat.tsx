@@ -192,16 +192,8 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
         track.enabled = !micMuted;
       });
 
-      // Connect to existing active players
-      const otherPlayers = players.filter(
-        (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
-      );
-
-      otherPlayers.forEach((p) => {
-        // Initiator criteria: socket.id < peerSocketId
-        const initiate = socket.id ? socket.id < p.socketId : false;
-        initializePeer(p.socketId, stream, initiate);
-      });
+      // Join the voice channel on backend
+      socket.emit('join_voice', roomCode);
     } catch (err: any) {
       console.error('Failed to join voice chat:', err);
       setStatus('Access Blocked');
@@ -209,7 +201,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     }
   };
 
-  // Listen to remote signaling
+  // Listen to remote signaling and voice list updates
   useEffect(() => {
     if (!joined) return;
 
@@ -247,41 +239,38 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }
     };
 
+    const handlePeersList = async (peerSocketIds: string[]) => {
+      const stream = await getLocalStream();
+      peerSocketIds.forEach((peerSocketId) => {
+        if (!peersRef.current.has(peerSocketId)) {
+          initializePeer(peerSocketId, stream, true); // Initiate connection to existing voice users
+        }
+      });
+    };
+
+    const handleUserJoinedVoice = async ({ socketId }: { socketId: string }) => {
+      const stream = await getLocalStream();
+      if (!peersRef.current.has(socketId)) {
+        initializePeer(socketId, stream, false); // Passive connection, wait for offer from joining user
+      }
+    };
+
+    const handleUserLeftVoice = ({ socketId }: { socketId: string }) => {
+      closePeer(socketId);
+    };
+
     socket.on('voice_signal_received', handleSignal);
+    socket.on('voice_peers_list', handlePeersList);
+    socket.on('user_joined_voice', handleUserJoinedVoice);
+    socket.on('user_left_voice', handleUserLeftVoice);
 
     return () => {
       socket.off('voice_signal_received', handleSignal);
+      socket.off('voice_peers_list', handlePeersList);
+      socket.off('user_joined_voice', handleUserJoinedVoice);
+      socket.off('user_left_voice', handleUserLeftVoice);
     };
   }, [joined, socket, roomCode, micMuted, speakerDeafened]);
-
-  // Mesh reconciliation when the player list changes (e.g. players leave or join)
-  useEffect(() => {
-    if (!joined) return;
-
-    const stream = localStreamRef.current;
-    if (!stream) return;
-
-    const otherPlayers = players.filter(
-      (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
-    );
-
-    const activeSocketIds = new Set(otherPlayers.map((p) => p.socketId));
-
-    // 1. Close peers that left
-    peersRef.current.forEach((pc, socketId) => {
-      if (!activeSocketIds.has(socketId)) {
-        closePeer(socketId);
-      }
-    });
-
-    // 2. Initialize new peers
-    otherPlayers.forEach((p) => {
-      if (!peersRef.current.has(p.socketId)) {
-        const initiate = socket.id ? socket.id < p.socketId : false;
-        initializePeer(p.socketId, stream, initiate);
-      }
-    });
-  }, [players, joined, socket]);
 
   // Handle Mute Mic
   const toggleMuteMic = () => {
@@ -306,9 +295,13 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Notify others we left
+      if (joined) {
+        socket.emit('leave_voice', roomCode);
+      }
       cleanupAll();
     };
-  }, []);
+  }, [joined]);
 
   const connectedPeersCount = peersRef.current.size;
 

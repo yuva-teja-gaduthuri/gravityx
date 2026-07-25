@@ -91,6 +91,14 @@ export default function RoomPage() {
       if (myPlayer) {
         setIsReady(myPlayer.ready);
       }
+      if (roomData.status === 'LOBBY') {
+        setMatchEndedData(null);
+      }
+    });
+
+    socket.on('room_kicked', ({ message }: { message: string }) => {
+      alert(message);
+      router.push('/dashboard');
     });
 
     socket.on('chat_message', (msg: ChatMessage) => {
@@ -121,6 +129,7 @@ export default function RoomPage() {
       socket.off('connect', handleConnect);
       socket.off('room_joined');
       socket.off('room_state_updated');
+      socket.off('room_kicked');
       socket.off('chat_message');
       socket.off('room_deleted');
       socket.off('error');
@@ -286,7 +295,7 @@ export default function RoomPage() {
                     >
                       {isHost && player.id !== user.id && (
                         <button
-                          onClick={() => socket.emit('leave_room', { roomCode, userId: player.id })}
+                          onClick={() => socket.emit('kick_player', { roomCode, userId: player.id })}
                           className="absolute top-2 right-2 p-1.5 rounded bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white transition-all duration-200 z-30 opacity-0 group-hover:opacity-100 flex items-center justify-center animate-fade-in"
                           title="Remove Crew Member"
                         >
@@ -326,6 +335,83 @@ export default function RoomPage() {
                 })}
               </div>
             </div>
+
+            {/* Host Settings panel */}
+            {isHost && (
+              <div className="glass-card rounded-3xl p-6 border-white/5 space-y-4">
+                <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400">
+                  Lobby Settings Configuration
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Visibility</label>
+                    <select
+                      value={room.type}
+                      onChange={(e) => socket.emit('edit_room_settings', {
+                        roomCode: room.code,
+                        type: e.target.value as 'PUBLIC' | 'PRIVATE',
+                        maxPlayers: room.maxPlayers,
+                        voiceChat: room.voiceChat,
+                        allowSpectators: room.allowSpectators
+                      })}
+                      className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cyberblue mt-1 bg-white/5 text-white"
+                    >
+                      <option value="PUBLIC" className="bg-[#0b0f19] text-white">PUBLIC</option>
+                      <option value="PRIVATE" className="bg-[#0b0f19] text-white">PRIVATE</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Max Players</label>
+                    <select
+                      value={room.maxPlayers}
+                      onChange={(e) => socket.emit('edit_room_settings', {
+                        roomCode: room.code,
+                        type: room.type,
+                        maxPlayers: Number(e.target.value),
+                        voiceChat: room.voiceChat,
+                        allowSpectators: room.allowSpectators
+                      })}
+                      className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cyberblue mt-1 bg-white/5 text-white"
+                    >
+                      <option value={2} className="bg-[#0b0f19] text-white">2 Players</option>
+                      <option value={3} className="bg-[#0b0f19] text-white">3 Players</option>
+                      <option value={4} className="bg-[#0b0f19] text-white">4 Players</option>
+                      <option value={6} className="bg-[#0b0f19] text-white">6 Players</option>
+                      <option value={8} className="bg-[#0b0f19] text-white">8 Players</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Voice Chat</label>
+                    <select
+                      value={room.voiceChat ? 'true' : 'false'}
+                      onChange={(e) => socket.emit('edit_room_settings', {
+                        roomCode: room.code,
+                        type: room.type,
+                        maxPlayers: room.maxPlayers,
+                        voiceChat: e.target.value === 'true',
+                        allowSpectators: room.allowSpectators
+                      })}
+                      className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cyberblue mt-1 bg-white/5 text-white"
+                    >
+                      <option value="true" className="bg-[#0b0f19] text-white">Enabled</option>
+                      <option value="false" className="bg-[#0b0f19] text-white">Disabled</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        if (confirm('Are you sure you want to disband and delete this lobby?')) {
+                          socket.emit('delete_room', room.code);
+                        }
+                      }}
+                      className="w-full py-2 rounded-xl bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white transition-all text-xs font-bold text-center"
+                    >
+                      Disband Lobby Room
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Start Panel Actions */}
             <div className="glass-card rounded-3xl p-6 border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">

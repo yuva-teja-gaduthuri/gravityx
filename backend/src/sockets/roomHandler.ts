@@ -260,11 +260,128 @@ export function handleRoom(io: Server, socket: Socket) {
     }
   });
 
-  // Simple RTC voice chat signaling placeholder
+  // WebRTC voice chat signaling
   socket.on('voice_signal', ({ roomCode, targetSocketId, signal }: { roomCode: string; targetSocketId: string; signal: any }) => {
     io.to(targetSocketId).emit('voice_signal_received', {
       senderSocketId: socket.id,
       signal,
     });
+  });
+
+  socket.on('join_voice', (roomCode: string) => {
+    const upperCode = roomCode.trim().toUpperCase();
+    socket.data.inVoice = true;
+    socket.data.voiceRoom = upperCode;
+
+    // Find all other sockets in this room that are in voice chat
+    const roomSockets = io.sockets.adapter.rooms.get(upperCode);
+    const peerSocketIds: string[] = [];
+    if (roomSockets) {
+      for (const socketId of roomSockets) {
+        if (socketId === socket.id) continue;
+        const otherSocket = io.sockets.sockets.get(socketId);
+        if (otherSocket && otherSocket.data.inVoice) {
+          peerSocketIds.push(socketId);
+        }
+      }
+    }
+
+    // Reply to the joining socket with the list of current voice peers
+    socket.emit('voice_peers_list', peerSocketIds);
+
+    // Broadcast to other sockets in the room that we joined voice
+    socket.to(upperCode).emit('user_joined_voice', {
+      socketId: socket.id,
+      userId: socket.data.user?.id,
+    });
+  });
+
+  socket.on('leave_voice', (roomCode: string) => {
+    const upperCode = roomCode.trim().toUpperCase();
+    socket.data.inVoice = false;
+    socket.data.voiceRoom = undefined;
+    socket.to(upperCode).emit('user_left_voice', {
+      socketId: socket.id,
+    });
+  });
+
+  socket.on('kick_player', ({ roomCode, userId }: { roomCode: string; userId: string }) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can kick players');
+      }
+
+      const target = room.players.find((p) => p.id === userId);
+      if (!target) return socket.emit('error', 'Player not found in room');
+
+      const updatedRoom = roomStore.removePlayer(upperCode, userId);
+
+      io.to(target.socketId).emit('room_kicked', { message: 'You have been kicked by the host.' });
+
+      if (updatedRoom) {
+        io.to(upperCode).emit('room_state_updated', updatedRoom);
+        io.to(upperCode).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${target.username} was kicked by the host.`,
+          createdAt: new Date(),
+        });
+      }
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  socket.on('edit_room_settings', ({ roomCode, type, maxPlayers, voiceChat, allowSpectators }: { roomCode: string; type: 'PUBLIC' | 'PRIVATE'; maxPlayers: number; voiceChat: boolean; allowSpectators: boolean }) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can edit room settings');
+      }
+
+      room.type = type;
+      room.maxPlayers = maxPlayers;
+      room.voiceChat = voiceChat;
+      room.allowSpectators = allowSpectators;
+
+      io.to(upperCode).emit('room_state_updated', room);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  socket.on('delete_room', (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can delete the room');
+      }
+
+      roomStore.removeRoom(upperCode);
+      io.to(upperCode).emit('room_deleted');
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (socket.data.voiceRoom) {
+      io.to(socket.data.voiceRoom).emit('user_left_voice', {
+        socketId: socket.id,
+      });
+    }
   });
 }

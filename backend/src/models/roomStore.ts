@@ -74,14 +74,26 @@ class RoomStore {
 
     room.players = room.players.filter((p) => p.id !== userId);
 
-    // If host leaves, reassign host or delete room
-    if (room.hostId === userId && room.players.length > 0) {
+    // If only bots remain or no players left, fill with bots and persist on radar
+    if (room.players.length === 0 || room.players.every((p) => p.isBot)) {
+      if (room.players.length === 0) {
+        room.players.push({
+          id: 'BOT_HOST',
+          username: 'CosmicBot',
+          socketId: 'BOT_SOCKET',
+          avatar: 'nebula',
+          profileFrame: 'default_frame',
+          ready: true,
+          isBot: true,
+        });
+      }
       room.hostId = room.players[0].id;
-    }
-
-    if (room.players.length === 0) {
-      this.rooms.delete(code);
-      return undefined;
+    } else {
+      // Reassign host to the first human player if host leaves
+      if (room.hostId === userId && room.players.length > 0) {
+        const firstHuman = room.players.find((p) => !p.isBot);
+        room.hostId = firstHuman ? firstHuman.id : room.players[0].id;
+      }
     }
 
     // Auto rollback room back to LOBBY status if playing drops below active playing thresholds
