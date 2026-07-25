@@ -28,6 +28,7 @@ const CHARACTER_SCORES: { [role: string]: number } = {
 };
 
 export const roundEndTimeouts = new Map<string, NodeJS.Timeout>();
+export const gameplayTimeouts = new Map<string, NodeJS.Timeout>();
 
 export function clearRSRoundTimeout(roomCode: string) {
   const timeout = roundEndTimeouts.get(roomCode);
@@ -37,10 +38,172 @@ export function clearRSRoundTimeout(roomCode: string) {
   }
 }
 
+export function clearRSGameplayTimeout(roomCode: string) {
+  const timeout = gameplayTimeouts.get(roomCode);
+  if (timeout) {
+    clearTimeout(timeout);
+    gameplayTimeouts.delete(roomCode);
+  }
+}
+
 export function handleRamuduSeetha(io: Server, socket: Socket) {
+  // Helper to end a round with failure
+  const endRSRoundWithFailure = async (room: any, reason: 'TIMEOUT' | 'ATTEMPTS') => {
+    clearRSGameplayTimeout(room.code);
+    if (!room.gameState) return;
+
+    const gameState = room.gameState;
+    
+    // Scoring Formula for failure (Ramudu fails, Seetha gets max, deities get defense bonus)
+    const roundScores: { [userId: string]: number } = {};
+    for (const p of room.players) {
+      const role = gameState.roles[p.id];
+      let score = 0;
+      if (role === 'Ramudu') {
+        score = 0; // Ramudu failed
+      } else if (role === 'Seetha') {
+        score = 1000; // Seetha successfully hid
+      } else {
+        score = CHARACTER_SCORES[role] || 0;
+      }
+      roundScores[p.id] = score;
+
+      if (!room.sessionScoreboard) {
+        room.sessionScoreboard = {};
+      }
+      if (!room.sessionScoreboard[p.id]) {
+        room.sessionScoreboard[p.id] = { username: p.username, score: 0 };
+      }
+      room.sessionScoreboard[p.id].score += score;
+    }
+
+    const isLastRound = room.currentRound! >= room.maxRounds!;
+    const countdownDuration = 10;
+
+    // Emit round ended with failure
+    io.to(room.code).emit('rs_round_ended', {
+      currentRound: room.currentRound,
+      maxRounds: room.maxRounds,
+      winnerId: '', // No winner
+      seethaId: gameState.seethaId,
+      guessCount: gameState.guessCount,
+      roundScores,
+      sessionScoreboard: room.sessionScoreboard,
+      countdownDuration,
+      won: false,
+      isCorrect: false,
+      reason,
+      roles: gameState.roles,
+    });
+
+    if (!isLastRound) {
+      clearRSRoundTimeout(room.code);
+      const timeout = setTimeout(() => {
+        try {
+          const r = roomStore.getRoom(room.code);
+          if (r && r.status === 'PLAYING') {
+            if (r.currentRound! < r.maxRounds!) {
+              r.currentRound! += 1;
+              startRSRound(r);
+            }
+          }
+        } catch (e) {
+          console.error('Error starting next round automatically:', e);
+        }
+      }, countdownDuration * 1000);
+      roundEndTimeouts.set(room.code, timeout);
+    } else {
+      // Schedule match end after scorecard round info display
+      clearRSRoundTimeout(room.code);
+      const timeout = setTimeout(async () => {
+        await triggerRSMatchEnd(room, false);
+      }, countdownDuration * 1000);
+      roundEndTimeouts.set(room.code, timeout);
+    }
+  };
+
+  const triggerRSMatchEnd = async (room: any, isCorrect: boolean) => {
+    clearRSRoundTimeout(room.code);
+    clearRSGameplayTimeout(room.code);
+    if (!room.gameState) return;
+
+    if (!room.sessionScoreboard) {
+      room.sessionScoreboard = {};
+      room.players.forEach((pl: any) => {
+        room.sessionScoreboard![pl.id] = { username: pl.username, score: 0 };
+      });
+    }
+
+    const finalScoreboard = Object.entries(room.sessionScoreboard)
+      .map(([userId, val]: any) => ({
+        userId,
+        username: val.username,
+        score: val.score,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .map((item, index) => {
+        const placement = index + 1;
+        return {
+          ...item,
+          placement,
+          coinsEarned: placement === 1 ? 150 : placement === 2 ? 100 : 50,
+          xpEarned: Math.round(item.score / 5),
+        };
+      });
+
+    // Record Match in DB & Award stats
+    const match = await prisma.match.create({
+      data: {
+        gameType: 'RAMUDU_SEETHA',
+        durationSeconds: 0,
+        winnerId: finalScoreboard[0]?.userId || '',
+      },
+    });
+
+    for (const row of finalScoreboard) {
+      await awardUserStats(row.userId, row.xpEarned, row.coinsEarned);
+      await prisma.matchPlayer.create({
+        data: {
+          matchId: match.id,
+          userId: row.userId,
+          score: row.score,
+          coinsEarned: row.coinsEarned,
+          placement: row.placement,
+        },
+      });
+    }
+
+    const rolesBeforeReset = { ...room.gameState.roles };
+    const seethaIdBeforeReset = room.gameState.seethaId;
+    const guessCountBeforeReset = room.gameState.guessCount;
+
+    // Reset room properties for return to lobby
+    room.status = 'LOBBY';
+    room.players.forEach((p: any) => {
+      p.ready = false;
+      p.role = undefined;
+    });
+    room.gameState = null;
+
+    // Broadcast match ended details
+    io.to(room.code).emit('rs_match_ended', {
+      winnerId: finalScoreboard[0]?.userId || '',
+      seethaId: seethaIdBeforeReset,
+      guessCount: guessCountBeforeReset,
+      scoreboard: finalScoreboard,
+      isCorrect,
+      roles: rolesBeforeReset,
+      won: isCorrect,
+    });
+
+    io.to(room.code).emit('room_state_updated', room);
+  };
+
   // Helper to start a round
   const startRSRound = (room: any) => {
     clearRSRoundTimeout(room.code);
+    clearRSGameplayTimeout(room.code);
+    
     const playerCount = room.players.length;
     if (playerCount < 3) {
       return io.to(room.code).emit('error', 'Minimum 3 players are required to start');
@@ -104,6 +267,19 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       players: room.players.map((p: any) => ({ ...p, role: undefined })), // hide roles
     });
 
+    // Start 15-second timer for this round
+    const timeout = setTimeout(() => {
+      try {
+        const r = roomStore.getRoom(room.code);
+        if (r && r.status === 'PLAYING') {
+          endRSRoundWithFailure(r, 'TIMEOUT');
+        }
+      } catch (e) {
+        console.error('Error in round timer:', e);
+      }
+    }, 15000);
+    gameplayTimeouts.set(room.code, timeout);
+
     // Check if Ramudu is a bot
     const botRamuduPlayer = room.players.find((pl: any) => pl.id === room.gameState.ramuduId);
     if (botRamuduPlayer && botRamuduPlayer.isBot) {
@@ -113,6 +289,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
 
   // Shared helper to handle guess resolution
   const handleRSGuessResolution = async (room: any, targetUserId: string) => {
+    clearRSGameplayTimeout(room.code);
     const gameState = room.gameState;
     if (!gameState) return;
 
@@ -184,6 +361,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         countdownDuration,
         isCorrect: isSeetha,
         roles: gameState.roles, // send all roles to reveal them on round end
+        won: isSeetha,
       });
 
       // Set automatic next round timeout
@@ -205,64 +383,26 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       roundEndTimeouts.set(room.code, timeout);
     } else {
       // Final round finished! Grand Finale.
-      const finalScoreboard = Object.entries(room.sessionScoreboard)
-        .map(([userId, val]: any) => ({
-          userId,
-          username: val.username,
-          score: val.score,
-        }))
-        .sort((a, b) => b.score - a.score)
-        .map((item, index) => {
-          const placement = index + 1;
-          return {
-            ...item,
-            placement,
-            coinsEarned: placement === 1 ? 150 : placement === 2 ? 100 : 50,
-            xpEarned: Math.round(item.score / 5),
-          };
-        });
-
-      // Record Match in DB & Award stats
-      const match = await prisma.match.create({
-        data: {
-          gameType: 'RAMUDU_SEETHA',
-          durationSeconds: 0, // timer-less
-          winnerId: finalScoreboard[0].userId, // highest score winner
-        },
-      });
-
-      for (const row of finalScoreboard) {
-        await awardUserStats(row.userId, row.xpEarned, row.coinsEarned);
-        await prisma.matchPlayer.create({
-          data: {
-            matchId: match.id,
-            userId: row.userId,
-            score: row.score,
-            coinsEarned: row.coinsEarned,
-            placement: row.placement,
-          },
-        });
-      }
-
-      // Return room status to lobby
-      room.status = 'LOBBY';
-      room.players.forEach((p: any) => {
-        p.ready = false;
-        p.role = undefined;
-      });
-      room.gameState = null;
-
-      // Broadcast match ended details
-      io.to(room.code).emit('rs_match_ended', {
-        winnerId: finalScoreboard[0].userId,
+      // Emit round ended first, then wait 10 seconds to show match ended results
+      io.to(room.code).emit('rs_round_ended', {
+        currentRound: room.currentRound,
+        maxRounds: room.maxRounds,
+        winnerId: isSeetha ? gameState.ramuduId : null,
         seethaId: gameState.seethaId,
         guessCount: gameState.guessCount,
-        scoreboard: finalScoreboard,
+        roundScores,
+        sessionScoreboard: room.sessionScoreboard,
+        countdownDuration,
         isCorrect: isSeetha,
-        roles: gameState.roles, // send all roles to reveal them
+        roles: gameState.roles,
+        won: isSeetha,
       });
 
-      io.to(room.code).emit('room_state_updated', room);
+      clearRSRoundTimeout(room.code);
+      const timeout = setTimeout(async () => {
+        await triggerRSMatchEnd(room, isSeetha);
+      }, countdownDuration * 1000);
+      roundEndTimeouts.set(room.code, timeout);
     }
   };
 
@@ -319,6 +459,24 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     }
   });
 
+  // Show final scorecard immediately
+  socket.on('rs_show_final_scorecard', async (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+
+      const host = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!host || room.hostId !== host.id) {
+        return socket.emit('error', 'Only the host can show final scorecard');
+      }
+
+      await triggerRSMatchEnd(room, room.gameState?.guessCount > 0 ? (room.gameState?.revealedIds.includes(room.gameState?.seethaId)) : false);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
   // Ramudu guesses player role
   socket.on('rs_guess', async ({ roomCode, targetUserId }: { roomCode: string; targetUserId: string }) => {
     try {
@@ -360,6 +518,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       }
 
       clearRSRoundTimeout(upperCode);
+      clearRSGameplayTimeout(upperCode);
 
       // Return room status to lobby
       roomStore.updateRoomStatus(upperCode, 'LOBBY');
