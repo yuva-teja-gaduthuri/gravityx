@@ -329,7 +329,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   const [reviewRating, setReviewRating] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-
   // Accessibility & Polish Settings
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isCameraShakeMuted, setIsCameraShakeMuted] = useState(false);
@@ -990,7 +989,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   };
 
   const handleSaveReview = async (username: string) => {
-    if (user.isGuest) return;
     try {
       const token = localStorage.getItem('gravityx_token');
       const res = await fetch(getApiUrl('/api/social/review'), {
@@ -2069,34 +2067,76 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
             <div className="space-y-3 mb-6 relative">
               <div className="divide-y divide-white/5 bg-white/5 border border-white/5 rounded-2xl p-4 space-y-3">
-                {scoreboard.map((row) => (
-                  <div key={row.userId} className="flex justify-between items-center py-2 text-sm first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-3">
-                      <span className={`font-black w-4 ${
-                        row.placement === 1 ? 'text-cybergold' : 'text-gray-500'
-                      }`}>
-                        #{row.placement}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs uppercase font-bold border border-white/10 ${
-                          row.color === 'red' ? 'bg-cybererror/20 text-cybererror' :
-                          row.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess' :
-                          row.color === 'yellow' ? 'bg-cybergold/20 text-cybergold' : 'bg-cyberblue/20 text-cyberblue'
-                        }`}>
-                          {row.username[0]}
+                {scoreboard.map((row) => {
+                  const isSelf = row.username === user.username;
+                  const isFriendAdded = friendStatus[row.username] === 'sent';
+                  const isFriendSending = friendStatus[row.username] === 'sending';
+
+                  return (
+                    <div key={row.userId} className="flex flex-col py-2.5 first:pt-0 last:pb-0 gap-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <div className="flex items-center gap-3">
+                          <span className={`font-black w-4 ${
+                            row.placement === 1 ? 'text-cybergold' : 'text-gray-500'
+                          }`}>
+                            #{row.placement}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs uppercase font-bold border border-white/10 ${
+                              row.color === 'red' ? 'bg-cybererror/20 text-cybererror' :
+                              row.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess' :
+                              row.color === 'yellow' ? 'bg-cybergold/20 text-cybergold' : 'bg-cyberblue/20 text-cyberblue'
+                            }`}>
+                              {row.username[0]}
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-gray-200">{row.username}</span>
+                              <span className="text-[9px] text-gray-500 ml-2 font-semibold uppercase">({row.color})</span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <span className="font-extrabold text-gray-200">{row.username}</span>
-                          <span className="text-[9px] text-gray-500 ml-2 font-semibold uppercase">({row.color})</span>
+                        <div className="flex gap-3 items-center shrink-0">
+                          <span className="text-[10px] font-bold text-gray-400">+{row.xpEarned} XP</span>
+                          <span className="text-xs font-black text-cybergold">+{row.coinsEarned} 🪙</span>
                         </div>
                       </div>
+
+                      {/* Social Actions Row */}
+                      <div className="flex flex-wrap gap-2 items-center pl-7">
+                        <button
+                          onClick={() => handleLike(row.username)}
+                          className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all active:scale-90"
+                        >
+                          <Heart size={12} className="fill-cyberpink text-cyberpink" />
+                          <span>{t('like', 'Like')} ({likesMap[row.username] || 0})</span>
+                        </button>
+
+                        {!isSelf && (
+                          <button
+                            onClick={() => handleAddFriendClick(row.username)}
+                            disabled={isFriendAdded || isFriendSending}
+                            className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberblue text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all disabled:opacity-50"
+                          >
+                            <UserPlus size={12} className="text-cyberblue" />
+                            <span>
+                              {isFriendAdded ? t('friendRequestSent', 'Friend Request Sent') : isFriendSending ? 'Sending...' : t('addFriendBtn', 'Add Friend')}
+                            </span>
+                          </button>
+                        )}
+
+                        {!isSelf && (
+                          <button
+                            onClick={() => setReviewModalUser(row.username)}
+                            className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cybergold text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all"
+                          >
+                            <MessageSquare size={12} className="text-cybergold" />
+                            <span>{t('reviewPlayer', 'Review Player')}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-3 items-center shrink-0">
-                      <span className="text-[10px] font-bold text-gray-400">+{row.xpEarned} XP</span>
-                      <span className="text-xs font-black text-cybergold">+{row.coinsEarned} 🪙</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -2106,6 +2146,55 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             >
               Return to Lobby deck
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal popup */}
+      {reviewModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm glass-panel rounded-3xl p-6 border border-white/10 relative shadow-neon-blue">
+            <button 
+              onClick={() => setReviewModalUser(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+            <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">
+              {t('writeReviewFor', 'Write Review for')} {reviewModalUser}
+            </h4>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('selectStarRating', 'Select Star Rating')}</label>
+                <div className="flex items-center gap-1 mt-1">
+                  {[1, 2, 3, 4, 5].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setReviewRating(val)}
+                      className={`text-xl ${val <= reviewRating ? 'text-cybergold' : 'text-gray-600'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('commentFeedback', 'Comment/Feedback')}</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder={t('tellHowPlayed', 'Tell others how this user played...')}
+                  className="w-full h-24 mt-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:border-cyberblue focus:outline-none"
+                />
+              </div>
+              <button
+                onClick={() => handleSaveReview(reviewModalUser)}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold text-xs uppercase tracking-wider shadow-md hover:opacity-90 active:scale-95 transition-all"
+              >
+                {t('saveReview', 'Save Review')}
+              </button>
+            </div>
           </div>
         </div>
       )}

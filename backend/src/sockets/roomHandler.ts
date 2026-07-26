@@ -143,7 +143,8 @@ export function handleRoom(io: Server, socket: Socket) {
       };
 
       let updatedRoom: any = room;
-      if (!existingPlayer) {
+      const isNewJoin = !existingPlayer;
+      if (isNewJoin) {
         updatedRoom = roomStore.addPlayer(upperCode, player);
       } else {
         existingPlayer.socketId = socket.id;
@@ -161,12 +162,33 @@ export function handleRoom(io: Server, socket: Socket) {
       socket.emit('room_joined', updatedRoom);
       io.to(upperCode).emit('room_state_updated', updatedRoom);
 
-      // System Message
-      io.to(upperCode).emit('chat_message', {
-        id: Math.random().toString(),
-        senderName: 'SYSTEM',
-        content: `${username} joined the room.`,
-        createdAt: new Date(),
+      // System Message - ONLY if player newly joined
+      if (isNewJoin) {
+        io.to(upperCode).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${username} joined the room.`,
+          createdAt: new Date(),
+        });
+      }
+
+      // Asynchronous background profile enrichment to eliminate database loading delays
+      prisma.user.findUnique({
+        where: { id: userId },
+      }).then((user) => {
+        if (user) {
+          const currentRoom = roomStore.getRoom(upperCode);
+          if (currentRoom) {
+            const p = currentRoom.players.find((pl) => pl.id === userId);
+            if (p) {
+              p.avatar = user.avatar;
+              p.profileFrame = user.profileFrame;
+              io.to(upperCode).emit('room_state_updated', currentRoom);
+            }
+          }
+        }
+      }).catch((err) => {
+        console.error("Error fetching user profile for socket join:", err);
       });
     } catch (err: any) {
       socket.emit('error', err.message);

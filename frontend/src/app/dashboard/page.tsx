@@ -29,7 +29,7 @@ export default function Dashboard() {
   const router = useRouter();
   const socket = useSocket();
   const { user, stats, refreshProfile, logout, loading } = useAuth(true);
-  const { t } = useTranslation();
+  const { t, currentLanguage } = useTranslation();
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [leaderboardType, setLeaderboardType] = useState<'global' | 'friends'>('global');
@@ -148,7 +148,6 @@ export default function Dashboard() {
       localStorage.setItem('gravityx_setting_sound', String(sound));
       localStorage.setItem('gravityx_setting_volume', String(volume));
       localStorage.setItem('gravityx_setting_notifications', String(notifications));
-      localStorage.setItem('gravityx_setting_language', language);
       localStorage.setItem('gravityx_setting_privacy', privacy);
 
       const res = await fetch(getApiUrl('/api/auth/profile'), {
@@ -157,7 +156,7 @@ export default function Dashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ username: editUsername, avatar: editAvatar }),
+        body: JSON.stringify({ username: editUsername, avatar: editAvatar, language: currentLanguage }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update profile');

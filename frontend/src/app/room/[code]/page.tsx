@@ -59,6 +59,7 @@ export default function RoomPage() {
   
   const [rounds, setRounds] = useState(3);
   const [matchEndedData, setMatchEndedData] = useState<any | null>(null);
+  const [localReturnToLobby, setLocalReturnToLobby] = useState(false);
   const [copied, setCopied] = useState(false);
   const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
 
@@ -122,6 +123,7 @@ export default function RoomPage() {
       }
       if (roomData.status === 'LOBBY') {
         setMatchEndedData(null);
+        setLocalReturnToLobby(false);
       }
     };
 
@@ -271,7 +273,7 @@ export default function RoomPage() {
       {/* Game gameplay layout OR waiting room layout */}
       <div className="flex-grow flex flex-col overflow-y-auto h-full p-4 md:p-6 min-h-0">
         
-        {room.status === 'PLAYING' || matchEndedData !== null ? (
+        {(room.status === 'PLAYING' && !localReturnToLobby) || matchEndedData !== null ? (
           // In Game Render orstandings screen
           room.gameType === 'RAMUDU_SEETHA' ? (
             <RamuduSeethaGame 
@@ -280,7 +282,13 @@ export default function RoomPage() {
               socket={socket} 
               isHost={room.hostId === user.id} 
               matchEndedData={matchEndedData?.gameType === 'RAMUDU_SEETHA' ? matchEndedData.data : null}
-              onReturnToLobby={() => setMatchEndedData(null)}
+              onReturnToLobby={() => {
+                if (isHost) {
+                  socket.emit('rs_return_to_lobby', roomCode);
+                }
+                setLocalReturnToLobby(true);
+                setMatchEndedData(null);
+              }}
             />
           ) : room.gameType === 'CHESS' ? (
             <ChessGame 
