@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { ArrowLeft, Volume2, ShieldAlert, Check, HelpCircle, Lock } from 'lucide-react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, refreshProfile, loading } = useAuth(true);
+  const { t } = useTranslation();
 
   const [music, setMusic] = useState(true);
   const [sound, setSound] = useState(true);
@@ -17,7 +19,7 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState('');
 
   const handleSave = () => {
-    setSuccess('Settings cached in terminal logs.');
+    setSuccess(t('settingsSaved', 'Settings cached in terminal logs.'));
     setTimeout(() => setSuccess(''), 3000);
   };
 
@@ -25,7 +27,7 @@ export default function SettingsPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">decrypting config logs...</p>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">{t('decryptingConfig', 'decrypting config logs...')}</p>
       </div>
     );
   }
@@ -41,8 +43,8 @@ export default function SettingsPage() {
           <ArrowLeft size={18} />
         </button>
         <div>
-          <span className="text-[10px] uppercase font-bold text-cyberblue tracking-wider">telemetry configuration</span>
-          <h2 className="text-3xl font-black text-white mt-0.5">Lobby Settings</h2>
+          <span className="text-[10px] uppercase font-bold text-cyberblue tracking-wider">{t('telemetryConfig', 'telemetry configuration')}</span>
+          <h2 className="text-3xl font-black text-white mt-0.5">{t('lobbySettings', 'Lobby Settings')}</h2>
         </div>
       </div>
 
@@ -59,12 +61,12 @@ export default function SettingsPage() {
         {/* Audio section */}
         <div className="space-y-4">
           <h3 className="text-sm uppercase font-extrabold text-cyberpink tracking-wider flex items-center gap-2">
-            <Volume2 size={18} /> Audio Telemetry
+            <Volume2 size={18} /> {t('audioTelemetry', 'Audio Telemetry')}
           </h3>
 
           <div className="space-y-4 pt-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-200">Ambient Background Music</span>
+              <span className="font-bold text-gray-200">{t('bgMusic', 'Ambient Background Music')}</span>
               <button 
                 onClick={() => setMusic(!music)}
                 className={`w-12 h-6 rounded-full p-1 transition-all ${music ? 'bg-primary' : 'bg-white/10'}`}
@@ -74,7 +76,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-200">Interactive Game Sound Effects</span>
+              <span className="font-bold text-gray-200">{t('gameSounds', 'Interactive Game Sound Effects')}</span>
               <button 
                 onClick={() => setSound(!sound)}
                 className={`w-12 h-6 rounded-full p-1 transition-all ${sound ? 'bg-primary' : 'bg-white/10'}`}
@@ -85,7 +87,7 @@ export default function SettingsPage() {
 
             <div className="space-y-2 pt-2">
               <div className="flex justify-between text-xs font-bold text-gray-400">
-                <span>Console Volume</span>
+                <span>{t('consoleVolume', 'Console Volume')}</span>
                 <span>{volume}%</span>
               </div>
               <input 
@@ -105,12 +107,12 @@ export default function SettingsPage() {
         {/* System telemetry section */}
         <div className="space-y-4">
           <h3 className="text-sm uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-2">
-            <Lock size={18} /> Comms & Privacy
+            <Lock size={18} /> {t('commsPrivacy', 'Comms & Privacy')}
           </h3>
 
           <div className="space-y-4 pt-2">
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-200">Desktop Notifications</span>
+              <span className="font-bold text-gray-200">{t('desktopNotifications', 'Desktop Notifications')}</span>
               <button 
                 onClick={() => setNotifications(!notifications)}
                 className={`w-12 h-6 rounded-full p-1 transition-all ${notifications ? 'bg-primary' : 'bg-white/10'}`}
@@ -122,15 +124,15 @@ export default function SettingsPage() {
 
 
             <div className="flex justify-between items-center text-sm">
-              <span className="font-bold text-gray-200">Profile Visibility</span>
+              <span className="font-bold text-gray-200">{t('profileVisibility', 'Profile Visibility')}</span>
               <select 
                 value={privacy}
                 onChange={(e) => setPrivacy(e.target.value)}
                 className="glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberblue"
               >
-                <option value="Public">Public (Global Leaderboards)</option>
-                <option value="Friends">Friends Only</option>
-                <option value="Private">Private</option>
+                <option value="Public">{t('visibilityPublic', 'Public (Global Leaderboards)')}</option>
+                <option value="Friends">{t('visibilityFriends', 'Friends Only')}</option>
+                <option value="Private">{t('visibilityPrivate', 'Private')}</option>
               </select>
             </div>
           </div>
@@ -141,7 +143,7 @@ export default function SettingsPage() {
             onClick={handleSave}
             className="w-full py-4 rounded-xl bg-gradient-to-r from-primary via-cyberblue to-primary bg-[size:200%] hover:bg-[100%] font-bold shadow-neon-blue transition-all active:scale-[0.99]"
           >
-            Save Telemetry Settings
+            {t('saveSettings', 'Save Telemetry Settings')}
           </button>
         </div>
       </div>
