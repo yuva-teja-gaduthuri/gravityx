@@ -31,6 +31,8 @@ export interface UserStats {
   winRate: number;
 }
 
+let activeProfilePromise: Promise<any> | null = null;
+
 export function useAuth(requireAuth = true) {
   const router = useRouter();
   
@@ -78,19 +80,22 @@ export function useAuth(requireAuth = true) {
     }
 
     try {
-      const url = getApiUrl('/api/auth/profile');
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(`Profile fetch failed status: ${res.status}`);
+      if (!activeProfilePromise) {
+        const url = getApiUrl('/api/auth/profile');
+        activeProfilePromise = fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }).then((res) => {
+          if (!res.ok) throw new Error(`Profile fetch failed status: ${res.status}`);
+          return res.json();
+        }).finally(() => {
+          activeProfilePromise = null;
+        });
       }
 
-      const data = await res.json();
+      const data = await activeProfilePromise;
       
       setUser(data.user);
       setStats(data.stats);

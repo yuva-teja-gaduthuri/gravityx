@@ -3,6 +3,7 @@ import { Outfit } from 'next/font/google';
 import '../styles/globals.css';
 
 import SpaceBackground from '../components/SpaceBackground';
+import { LanguageProvider } from '../hooks/useTranslation';
 
 const outfit = Outfit({ 
   subsets: ['latin'],
@@ -40,10 +41,12 @@ export default function RootLayout({
         {/* Interactive 3D Space Parallax Background */}
         <SpaceBackground />
         
-        {/* Main Content Area */}
-        <div className="relative z-10 flex flex-col min-h-screen">
-          {children}
-        </div>
+        {/* Main Content Area Wrapped in Client-Side Localization Provider */}
+        <LanguageProvider>
+          <div className="relative z-10 flex flex-col min-h-screen">
+            {children}
+          </div>
+        </LanguageProvider>
       </body>
     </html>
   );

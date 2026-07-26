@@ -1,11 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './useAuth';
 import { translations, Language } from '../utils/translations';
 import { getApiUrl } from '../utils/api';
 
-export function useTranslation() {
+interface LanguageContextType {
+  currentLanguage: Language;
+  setLanguage: (lang: Language) => Promise<void>;
+  t: (key: string, fallbackText?: string) => string;
+}
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
   const { user, refreshProfile } = useAuth(false);
   const [currentLanguage, setCurrentLanguageState] = useState<Language>('en');
 
@@ -55,6 +63,10 @@ export function useTranslation() {
       if (enTranslations && enTranslations[key] !== undefined) {
         return enTranslations[key];
       }
+      // Log missing key for developers
+      if (fallbackText === undefined) {
+        console.warn(`[i18n] Missing translation key: "${key}"`);
+      }
       return fallbackText || key;
     },
     [currentLanguage]
@@ -98,9 +110,28 @@ export function useTranslation() {
     [user, refreshProfile]
   );
 
-  return {
-    t,
-    currentLanguage,
-    setLanguage,
-  };
+  return (
+    <LanguageContext.Provider value={{ currentLanguage, setLanguage, t }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useTranslation() {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    // Graceful fallback to prevent crashes if used outside provider
+    return {
+      t: (key: string, fallbackText?: string): string => {
+        const enTranslations = translations['en'];
+        if (enTranslations && enTranslations[key] !== undefined) {
+          return enTranslations[key];
+        }
+        return fallbackText || key;
+      },
+      currentLanguage: 'en' as Language,
+      setLanguage: async () => {},
+    };
+  }
+  return context;
 }
