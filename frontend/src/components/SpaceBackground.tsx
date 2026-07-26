@@ -55,9 +55,9 @@ export default function SpaceBackground() {
       draw(c: CanvasRenderingContext2D, isLightMode: boolean) {
         const px = (this.x / this.z) * width + width / 2 + mouseX;
         const py = (this.y / this.z) * height + height / 2 + mouseY;
-        const size = (1 - this.z / width) * 3.5;
+        const size = Math.max(0, (1 - this.z / width) * 3.5);
 
-        if (px >= 0 && px <= width && py >= 0 && py <= height) {
+        if (px >= 0 && px <= width && py >= 0 && py <= height && size > 0) {
           c.fillStyle = isLightMode 
             ? (this.color === '#6C63FF' ? 'rgba(74, 66, 255, 0.35)' : 'rgba(209, 34, 172, 0.35)') 
             : this.color;

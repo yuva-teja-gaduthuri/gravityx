@@ -175,9 +175,9 @@ export default function ProfilePage() {
       draw(c: CanvasRenderingContext2D) {
         const px = (this.x / this.z) * width + width / 2;
         const py = (this.y / this.z) * height + height / 2;
-        const size = (1 - this.z / width) * 4;
+        const size = Math.max(0, (1 - this.z / width) * 4);
 
-        if (px >= 0 && px <= width && py >= 0 && py <= height) {
+        if (px >= 0 && px <= width && py >= 0 && py <= height && size > 0) {
           c.fillStyle = this.color;
           c.beginPath();
           c.arc(px, py, size, 0, Math.PI * 2);

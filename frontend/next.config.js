@@ -3,7 +3,7 @@ const csp = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline';
   style-src 'self' 'unsafe-inline';
-  connect-src 'self' wss: https://gravityx-nu.vercel.app;
+  connect-src 'self' wss: ws: https://gravityx-nu.vercel.app https://gravityx-api.onrender.com wss://gravityx-api.onrender.com http://localhost:3001 ws://localhost:3001;
   img-src 'self' data: blob:;
   font-src 'self' data:;
   frame-ancestors 'none';
