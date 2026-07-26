@@ -86,12 +86,14 @@ export function handleRoom(io: Server, socket: Socket) {
         return socket.emit('error', 'Room not found');
       }
 
-      if (room.status === 'PLAYING') {
+      // Synchronous check if player is already in room
+      const existingPlayer = room.players.find((p) => p.id === userId);
+
+      if (room.status === 'PLAYING' && !existingPlayer) {
         return socket.emit('error', 'Game already in progress');
       }
 
-      // Synchronous check if player is already in room or room is full
-      const existingPlayer = room.players.find((p) => p.id === userId);
+      // Check if room is full
       if (!existingPlayer && room.players.length >= room.maxPlayers) {
         return socket.emit('error', 'Room is full');
       }
@@ -111,6 +113,7 @@ export function handleRoom(io: Server, socket: Socket) {
       } else {
         // Re-use existing ready status and details but update socketId
         existingPlayer.socketId = socket.id;
+        roomStore.clearDisconnectTimeout(upperCode, userId);
       }
 
       if (!updatedRoom) {
@@ -125,7 +128,7 @@ export function handleRoom(io: Server, socket: Socket) {
       io.to(upperCode).emit('chat_message', {
         id: Math.random().toString(),
         senderName: 'SYSTEM',
-        content: `${username} joined the room.`,
+        content: existingPlayer ? `${username} reconnected.` : `${username} joined the room.`,
         createdAt: new Date(),
       });
 
@@ -157,6 +160,7 @@ export function handleRoom(io: Server, socket: Socket) {
   socket.on('leave_room', async ({ roomCode, userId }: { roomCode: string; userId: string }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
+      roomStore.clearDisconnectTimeout(upperCode, userId);
       const room = roomStore.getRoom(upperCode);
       if (!room) return;
 
@@ -315,6 +319,7 @@ export function handleRoom(io: Server, socket: Socket) {
   socket.on('kick_player', ({ roomCode, userId }: { roomCode: string; userId: string }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
+      roomStore.clearDisconnectTimeout(upperCode, userId);
       const room = roomStore.getRoom(upperCode);
       if (!room) return socket.emit('error', 'Room not found');
 

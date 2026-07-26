@@ -30,6 +30,28 @@ export interface Room {
 
 class RoomStore {
   private rooms: Map<string, Room> = new Map();
+  private disconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
+
+  setDisconnectTimeout(code: string, userId: string, timeout: NodeJS.Timeout) {
+    const key = `${userId}_${code}`;
+    const existing = this.disconnectTimeouts.get(key);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    this.disconnectTimeouts.set(key, timeout);
+  }
+
+  clearDisconnectTimeout(code: string, userId: string): boolean {
+    const key = `${userId}_${code}`;
+    const existing = this.disconnectTimeouts.get(key);
+    if (existing) {
+      clearTimeout(existing);
+      this.disconnectTimeouts.delete(key);
+      return true;
+    }
+    return false;
+  }
+
 
   createRoom(code: string, roomData: Omit<Room, 'players' | 'spectators' | 'gameState' | 'status' | 'createdAt'>): Room {
     const room: Room = {
@@ -84,7 +106,7 @@ class RoomStore {
     // Reassign host to the first human player if host leaves
     if (room.hostId === userId && room.players.length > 0) {
       const firstHuman = room.players.find((p) => !p.isBot);
-      room.hostId = firstHuman ? firstHuman.id : room.players[0].id;
+      room.hostId = firstHuman ? firstHuman.id : '';
     }
 
     // Delete room if no human players left

@@ -80,22 +80,36 @@ io.on('connection', (socket: Socket) => {
     for (const room of activeRooms) {
       const player = room.players.find((p) => p.socketId === socket.id);
       if (player) {
-        const updated = roomStore.removePlayer(room.code, player.id);
-        if (updated) {
-          if (updated.status === 'LOBBY') {
+        // Emit a warning to room that the player lost connection and has a grace period to reconnect
+        io.to(room.code).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${player.username} lost connection. Reconnecting...`,
+          createdAt: new Date(),
+        });
+
+        // Delay removal by 5 seconds to allow reconnection
+        const timeout = setTimeout(() => {
+          roomStore.clearDisconnectTimeout(room.code, player.id);
+          const updated = roomStore.removePlayer(room.code, player.id);
+          if (updated) {
+            if (updated.status === 'LOBBY') {
+              clearRSRoundTimeout(room.code);
+            }
+            io.to(room.code).emit('room_state_updated', updated);
+            io.to(room.code).emit('chat_message', {
+              id: Math.random().toString(),
+              senderName: 'SYSTEM',
+              content: `${player.username} disconnected.`,
+              createdAt: new Date(),
+            });
+          } else {
             clearRSRoundTimeout(room.code);
+            io.to(room.code).emit('room_deleted');
           }
-          io.to(room.code).emit('room_state_updated', updated);
-          io.to(room.code).emit('chat_message', {
-            id: Math.random().toString(),
-            senderName: 'SYSTEM',
-            content: `${player.username} disconnected.`,
-            createdAt: new Date(),
-          });
-        } else {
-          clearRSRoundTimeout(room.code);
-          io.to(room.code).emit('room_deleted');
-        }
+        }, 5000);
+
+        roomStore.setDisconnectTimeout(room.code, player.id, timeout);
       }
     }
   });
