@@ -607,7 +607,7 @@ export default function RoomPage() {
         <MessageSquare size={20} />
       </button>
 
-      {room.voiceChat && (
+      {room.voiceChat && socket && (
         <VoiceChat 
           roomCode={roomCode} 
           socket={socket} 

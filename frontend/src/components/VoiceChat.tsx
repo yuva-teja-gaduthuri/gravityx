@@ -260,6 +260,9 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     // Connection state & auto-reconnect trigger
     pc.onconnectionstatechange = () => {
       console.log(`WebRTC Connection State for peer ${peerSocketId}: ${pc.connectionState}`);
+      if (peersRef.current.get(peerSocketId) !== pc) {
+        return;
+      }
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         closePeer(peerSocketId);
         
@@ -286,12 +289,12 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
-        audio.style.display = 'none';
-        document.body.appendChild(audio);
+        audio.playsInline = true;
         audioElementsRef.current.set(peerSocketId, audio);
       }
       
       audio.srcObject = remoteStream;
+      document.body.appendChild(audio);
       audio.muted = speakerDeafenedRef.current;
       
       audio.play().catch((err) => {
@@ -357,11 +360,12 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
 
   // Automatically join voice on mount
   useEffect(() => {
+    if (!socket) return;
     handleJoinVoice();
     return () => {
       cleanupAll();
     };
-  }, []);
+  }, [socket]);
 
   // Listen to socket connection status for auto-rejoin
   useEffect(() => {

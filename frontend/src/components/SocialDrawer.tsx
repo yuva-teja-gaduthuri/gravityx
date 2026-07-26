@@ -32,6 +32,7 @@ interface DirectMessage {
 
 export default function SocialDrawer({ currentUserId }: { currentUserId: string }) {
   const socket = useSocket();
+  const { t } = useTranslation();
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pending, setPending] = useState<PendingRequest[]>([]);
@@ -256,7 +257,7 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
           >
             <input
               type="text"
-              placeholder="Send message..."
+              placeholder={t('sendMessagePlaceholder', 'Send message...')}
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               className="flex-grow glass-input rounded-xl px-4 py-2 text-sm focus:border-cyberblue"
@@ -271,11 +272,11 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
         <div className="flex flex-col h-full">
           {/* Add Friend Form */}
           <div className="p-4 border-b border-white/5">
-            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">Add Friend</h3>
+            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('addFriend', 'Add Friend')}</h3>
             <form onSubmit={sendRequest} className="flex gap-2">
               <input
                 type="text"
-                placeholder="Username..."
+                placeholder={t('usernamePlaceholder', 'Username...')}
                 value={searchUsername}
                 onChange={(e) => setSearchUsername(e.target.value)}
                 className="flex-grow glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberpink"
@@ -291,7 +292,7 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
           {/* Pending Requests */}
           {pending.length > 0 && (
             <div className="p-4 border-b border-white/5 bg-primary/5 max-h-48 overflow-y-auto">
-              <h3 className="text-xs uppercase font-extrabold tracking-widest text-cyberpink mb-3">Requests ({pending.length})</h3>
+              <h3 className="text-xs uppercase font-extrabold tracking-widest text-cyberpink mb-3">{t('requests', 'Requests')} ({pending.length})</h3>
               <div className="space-y-3">
                 {pending.map((req) => (
                   <div key={req.requestId} className="flex items-center justify-between gap-2">
@@ -317,9 +318,9 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
 
           {/* Friends List */}
           <div className="flex-1 p-4 overflow-y-auto">
-            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">Friends</h3>
+            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('friends', 'Friends')}</h3>
             {friends.length === 0 ? (
-              <div className="text-center text-xs text-gray-500 py-10">Lonesome orbit... Search for crew.</div>
+              <div className="text-center text-xs text-gray-500 py-10">{t('lonesomeOrbit', 'Lonesome orbit... Search for crew.')}</div>
             ) : (
               <div className="space-y-3">
                 {friends.map((f) => (
@@ -333,7 +334,7 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
                       </div>
                       <div>
                         <div className="text-xs font-bold text-gray-200">{f.username}</div>
-                        <div className="text-[10px] text-gray-500">Level {f.level} &bull; {f.rank}</div>
+                        <div className="text-[10px] text-gray-500">{t('level', 'Level')} {f.level} &bull; {f.rank}</div>
                       </div>
                     </div>
                     <button 

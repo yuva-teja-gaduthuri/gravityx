@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
+import { useTranslation } from '../../hooks/useTranslation';
 import { getApiUrl, fetchWithCache, invalidateCache } from '../../utils/api';
 import { Coins, ArrowLeft, ShieldAlert, Sparkles, Check, User } from 'lucide-react';
 
@@ -18,6 +19,7 @@ interface StoreItem {
 export default function StorePage() {
   const router = useRouter();
   const { user, inventory, refreshProfile, loading } = useAuth(true);
+  const { t } = useTranslation();
 
   const [items, setItems] = useState<StoreItem[]>([]);
   const [activeTab, setActiveTab] = useState<'AVATAR' | 'DICE' | 'BOARD' | 'FRAME'>('AVATAR');
@@ -103,7 +105,7 @@ export default function StorePage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">Decrypting Shop Matrix...</p>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">{t('decryptingShop', 'Decrypting Shop Matrix...')}</p>
       </div>
     );
   }
@@ -132,8 +134,8 @@ export default function StorePage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <span className="text-[10px] uppercase font-bold text-cyberpink tracking-wider">personalization depot</span>
-            <h2 className="text-3xl font-black text-white mt-0.5">Gravity Shop</h2>
+            <span className="text-[10px] uppercase font-bold text-cyberpink tracking-wider">{t('personalizationDepot', 'personalization depot')}</span>
+            <h2 className="text-3xl font-black text-white mt-0.5">{t('gravityShop', 'Gravity Shop')}</h2>
           </div>
         </div>
 
@@ -167,7 +169,7 @@ export default function StorePage() {
               activeTab === tab ? 'bg-primary shadow-lg text-white font-black' : 'text-gray-400 hover:text-white'
             }`}
           >
-            {tab === 'AVATAR' ? 'Borders' : tab === 'DICE' ? 'Dices' : tab === 'BOARD' ? 'Boards' : 'Frames'}
+            {tab === 'AVATAR' ? t('itemBorders', 'Borders') : tab === 'DICE' ? t('itemDice', 'Dices') : tab === 'BOARD' ? t('itemBoards', 'Boards') : t('itemFrames', 'Frames')}
           </button>
         ))}
       </div>
@@ -176,7 +178,7 @@ export default function StorePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
         {filteredItems.length === 0 ? (
           <div className="col-span-full py-16 text-center text-xs text-gray-500 font-semibold">
-            Catalog is empty. New blueprints arriving soon.
+            {t('shopEmpty', 'Catalog is empty. New blueprints arriving soon.')}
           </div>
         ) : (
           filteredItems.map((item) => {
@@ -284,13 +286,13 @@ export default function StorePage() {
                           user.coins < item.price ? 'opacity-30 cursor-default' : 'active:scale-95'
                         }`}
                       >
-                        Buy Blueprint
+                        {t('buyBtn', 'Buy Blueprint')}
                       </button>
                     </>
                   ) : (
                     <>
                       <span className="text-xs font-bold text-cybersuccess flex items-center gap-1">
-                        <Check size={12} /> Blueprint Owned
+                        <Check size={12} /> {t('itemOwned', 'Blueprint Owned')}
                       </span>
                       <button
                         onClick={() => handleEquip(item.identifier, item.type)}
@@ -301,7 +303,7 @@ export default function StorePage() {
                             : 'bg-white/5 hover:bg-white/10 text-white'
                         }`}
                       >
-                        {activeEquip ? 'Equipped' : 'Equip Skin'}
+                        {activeEquip ? t('equipped', 'Equipped') : t('equipBtn', 'Equip Skin')}
                       </button>
                     </>
                   )}

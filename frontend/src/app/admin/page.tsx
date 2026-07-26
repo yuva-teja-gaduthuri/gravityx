@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { getApiUrl } from '../../utils/api';
 import { ArrowLeft, Users, ShieldAlert, BarChart3, Database, Coins, RefreshCw } from 'lucide-react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 interface SystemStats {
   users: { total: number; guests: number; banned: number; registered: number };
@@ -27,6 +28,7 @@ interface UserRow {
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading } = useAuth(true);
+  const { t } = useTranslation();
 
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -103,7 +105,7 @@ export default function AdminPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">Calibrating Admin credentials...</p>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">{t('decryptingAdmin', 'Calibrating Admin credentials...')}</p>
       </div>
     );
   }
@@ -120,8 +122,8 @@ export default function AdminPage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <span className="text-[10px] uppercase font-bold text-cyberpink tracking-wider">central command node</span>
-            <h2 className="text-3xl font-black text-white mt-0.5">Admin Arena Control</h2>
+            <span className="text-[10px] uppercase font-bold text-cyberpink tracking-wider">{t('centralCommand', 'central command node')}</span>
+            <h2 className="text-3xl font-black text-white mt-0.5">{t('adminControl', 'Admin Arena Control')}</h2>
           </div>
         </div>
 
@@ -130,7 +132,7 @@ export default function AdminPage() {
           disabled={refreshing}
           className="p-3 rounded-xl glass-card border-white/10 hover:border-cyberpink text-gray-400 hover:text-white transition-all flex gap-2 items-center text-xs font-bold"
         >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Sync Systems
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {t('syncSystems', 'Sync Systems')}
         </button>
       </div>
 
@@ -152,33 +154,33 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-3">
             <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider flex items-center gap-2">
-              <Users size={16} className="text-cyberblue" /> Users Population
+              <Users size={16} className="text-cyberblue" /> {t('userPopulation', 'Users Population')}
             </h4>
             <div className="flex justify-between items-baseline pt-2">
               <span className="text-3xl font-black">{stats.users.total}</span>
-              <span className="text-xs text-gray-500 font-semibold">Registered: {stats.users.registered}</span>
+              <span className="text-xs text-gray-500 font-semibold">{t('registered', 'Registered')}: {stats.users.registered}</span>
             </div>
-            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Guests: {stats.users.guests} &bull; Banned: {stats.users.banned}</div>
+            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t('guests', 'Guests')}: {stats.users.guests} &bull; {t('banned', 'Banned')}: {stats.users.banned}</div>
           </div>
 
           <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-3">
             <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider flex items-center gap-2">
-              <BarChart3 size={16} className="text-cyberpink" /> Arena Matches
+              <BarChart3 size={16} className="text-cyberpink" /> {t('arenaMatches', 'Arena Matches')}
             </h4>
             <div className="flex justify-between items-baseline pt-2">
               <span className="text-3xl font-black">{stats.matches.total}</span>
-              <span className="text-xs text-gray-500 font-semibold">Ludo: {stats.matches.ludo}</span>
+              <span className="text-xs text-gray-500 font-semibold">{t('ludoLobbies', 'Cosmic Ludo')}: {stats.matches.ludo}</span>
             </div>
-            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Ramudu-Seetha Lobbies: {stats.matches.ramuduSeetha}</div>
+            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t('rsLobbies', 'Ramudu-Seetha Lobbies')}: {stats.matches.ramuduSeetha}</div>
           </div>
 
           <div className="glass-panel rounded-2xl p-5 border-white/5 space-y-3">
             <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider flex items-center gap-2">
-              <Coins size={16} className="text-cybergold" /> Coin Ledger
+              <Coins size={16} className="text-cybergold" /> {t('coinLedger', 'Coin Ledger')}
             </h4>
             <div className="flex justify-between items-baseline pt-2">
               <span className="text-3xl font-black">{stats.economy.totalCoinsCirculating}</span>
-              <span className="text-xs text-gray-500 font-semibold">Average: {stats.economy.averageCoinsPerUser} 🪙</span>
+              <span className="text-xs text-gray-500 font-semibold">{t('averageCoins', 'Average')}: {stats.economy.averageCoinsPerUser} 🪙</span>
             </div>
             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Dynamic Token Distribution</div>
           </div>
@@ -188,7 +190,7 @@ export default function AdminPage() {
       {/* Users management table */}
       <div className="space-y-4">
         <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 flex items-center gap-2">
-          <Database size={16} /> User Databases
+          <Database size={16} /> {t('userDatabases', 'User Databases')}
         </h3>
 
         <div className="glass-card rounded-2xl border-white/5 overflow-hidden">

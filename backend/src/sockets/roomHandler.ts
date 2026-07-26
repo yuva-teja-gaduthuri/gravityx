@@ -262,6 +262,13 @@ export function handleRoom(io: Server, socket: Socket) {
 
   // WebRTC voice chat signaling
   socket.on('voice_signal', ({ roomCode, targetSocketId, signal }: { roomCode: string; targetSocketId: string; signal: any }) => {
+    const upperCode = roomCode.trim().toUpperCase();
+    const roomSockets = io.sockets.adapter.rooms.get(upperCode);
+    if (!roomSockets || !roomSockets.has(socket.id) || !roomSockets.has(targetSocketId)) {
+      console.warn(`Unauthorized voice signaling bridged from ${socket.id} to ${targetSocketId} for room ${upperCode}`);
+      return;
+    }
+
     io.to(targetSocketId).emit('voice_signal_received', {
       senderSocketId: socket.id,
       signal,

@@ -12,20 +12,20 @@ export default function LandingClient() {
 
   const faqs = [
     {
-      q: "What is GravityX?",
-      a: "GravityX is a real-time online multiplayer gaming platform designed around space themes. You can create private lobbies to play with friends or matchmake globally with players."
+      q: t('faq1Q', 'What is GravityX?'),
+      a: t('faq1A', 'GravityX is a real-time online multiplayer gaming platform designed around space themes. You can create private lobbies to play with friends or matchmake globally with players.')
     },
     {
-      q: "What is the Ramudu-Seetha game?",
-      a: "Ramudu-Seetha is an exclusive social deduction game. In a room of 3 to 10 players, one player is secretly Ramudu, one is Seetha, and others are protective mythological characters. Ramudu must guess who Seetha is before time/attempts run out, while players protect her identity."
+      q: t('faq2Q', 'What is the Ramudu-Seetha game?'),
+      a: t('faq2A', 'Ramudu-Seetha is an exclusive social deduction game. In a room of 3 to 10 players, one player is secretly Ramudu, one is Seetha, and others are protective mythological characters. Ramudu must guess who Seetha is before time/attempts run out, while players protect her identity.')
     },
     {
-      q: "Does GravityX support voice chat?",
-      a: "Yes! Lobbies have built-in voice chat capabilities that can be toggled on/off by the host during room creation."
+      q: t('faq3Q', 'Does GravityX support voice chat?'),
+      a: t('faq3A', 'Yes! Lobbies have built-in voice chat capabilities that can be toggled on/off by the host during room creation.')
     },
     {
-      q: "How do I purchase custom skins?",
-      a: "You earn coins by playing matches and leveling up. Use these coins in the Store to purchase customized dice skins, avatar borders, and board frames."
+      q: t('faq4Q', 'How do I purchase custom skins?'),
+      a: t('faq4A', 'You earn coins by playing matches and leveling up. Use these coins in the Store to purchase customized dice skins, avatar borders, and board frames.')
     }
   ];
 
@@ -137,27 +137,27 @@ export default function LandingClient() {
       <section id="features" className="py-20 bg-darkbg/40 border-y border-white/5">
         <div className="max-w-6xl mx-auto px-6 md:px-12 w-full">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-extrabold mb-4">Orbital Systems</h2>
-            <p className="text-gray-400 max-w-xl mx-auto">Advanced design framework built to ensure clean interactions and low-latency fun.</p>
+            <h2 className="text-3xl md:text-5xl font-extrabold mb-4">{t('featuresTitle', 'Orbital Systems')}</h2>
+            <p className="text-gray-400 max-w-xl mx-auto">{t('featuresSubtitle', 'Advanced design framework built to ensure clean interactions and low-latency fun.')}</p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="glass-card rounded-2xl p-6 border-white/5">
               <div className="text-cyberblue mb-4"><Users size={32} /></div>
-              <h4 className="text-lg font-bold mb-2">Live Social Drawer</h4>
-              <p className="text-sm text-gray-400">Add friends, send invites, chat privately, and inspect user profile ranks directly in the dashboard overlay.</p>
+              <h4 className="text-lg font-bold mb-2">{t('feat1Title', 'Live Social Drawer')}</h4>
+              <p className="text-sm text-gray-400">{t('feat1Desc', 'Add friends, send invites, chat privately, and inspect user profile ranks directly in the dashboard overlay.')}</p>
             </div>
 
             <div className="glass-card rounded-2xl p-6 border-white/5">
               <div className="text-cyberpink mb-4"><Rocket size={32} /></div>
-              <h4 className="text-lg font-bold mb-2">Glassmorphism Aesthetic</h4>
-              <p className="text-sm text-gray-400">Premium visual language designed with rich gradients, neon-glowing components, and orbital starfields.</p>
+              <h4 className="text-lg font-bold mb-2">{t('feat2Title', 'Glassmorphism Aesthetic')}</h4>
+              <p className="text-sm text-gray-400">{t('feat2Desc', 'Premium visual language designed with rich gradients, neon-glowing components, and orbital starfields.')}</p>
             </div>
 
             <div className="glass-card rounded-2xl p-6 border-white/5">
               <div className="text-cybergold mb-4"><Trophy size={32} /></div>
-              <h4 className="text-lg font-bold mb-2">XP Progression</h4>
-              <p className="text-sm text-gray-400">Unlock level tiers, accumulate reward coins, climb division boards, and achieve legendary game medals.</p>
+              <h4 className="text-lg font-bold mb-2">{t('feat3Title', 'XP Progression')}</h4>
+              <p className="text-sm text-gray-400">{t('feat3Desc', 'Unlock level tiers, accumulate reward coins, climb division boards, and achieve legendary game medals.')}</p>
             </div>
           </div>
         </div>
@@ -165,7 +165,7 @@ export default function LandingClient() {
 
       {/* FAQ Section */}
       <section id="faq" className="py-20 max-w-3xl mx-auto px-6 w-full z-10">
-        <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-12">Security & Telemetry FAQ</h2>
+        <h2 className="text-3xl md:text-5xl font-extrabold text-center mb-12">{t('faqTitle', 'Security & Telemetry FAQ')}</h2>
         <div className="flex flex-col gap-4">
           {faqs.map((faq, idx) => (
             <div key={idx} className="glass-card rounded-2xl border-white/5 overflow-hidden">
@@ -188,11 +188,11 @@ export default function LandingClient() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-white/5 glass-panel py-10 px-6 md:px-12 flex flex-col sm:flex-row items-center justify-between text-sm text-gray-500 gap-6">
-        <div>&copy; 2026 GravityX Systems. All Rights Reserved.</div>
+        <div>&copy; 2026 {t('footerCopy', 'GravityX Systems. All Rights Reserved.')}</div>
         <div className="flex gap-6">
-          <a href="#" className="hover:text-white">Privacy Policy</a>
-          <a href="#" className="hover:text-white">Terms of Use</a>
-          <a href="#" className="hover:text-white">Status API</a>
+          <a href="#" className="hover:text-white">{t('footerPrivacy', 'Privacy Policy')}</a>
+          <a href="#" className="hover:text-white">{t('footerTerms', 'Terms of Use')}</a>
+          <a href="#" className="hover:text-white">{t('footerStatus', 'Status API')}</a>
         </div>
       </footer>
     </div>
