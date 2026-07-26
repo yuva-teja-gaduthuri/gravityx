@@ -69,21 +69,60 @@ async function sendMailHelper(to: string, subject: string, html: string, flowNam
   }
 
   const isProd = process.env.NODE_ENV === 'production';
+  const resendApiKey = process.env.RESEND_API_KEY;
   const brevoApiKey = process.env.BREVO_API_KEY;
   const emailFrom = process.env.EMAIL_FROM;
 
   // Production validation
   if (isProd) {
-    if (!brevoApiKey || !emailFrom) {
-      console.error('❌ [MAILER CONFIG ERROR]: BREVO_API_KEY and EMAIL_FROM are required in production.');
+    if ((!resendApiKey && !brevoApiKey) || !emailFrom) {
+      console.error('❌ [MAILER CONFIG ERROR]: RESEND_API_KEY or BREVO_API_KEY, and EMAIL_FROM are required in production.');
       throw new Error('Email delivery failed due to a server configuration error.');
     }
   }
 
-  // Determine if we should use Brevo or fall back to Ethereal in development
-  const useBrevo = !!brevoApiKey;
+  if (resendApiKey) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
 
-  if (useBrevo) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: emailFrom || 'onboarding@resend.dev',
+          to: [to],
+          subject: subject,
+          html: html,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let resBody: any = {};
+        try {
+          resBody = await response.json();
+        } catch (_) {}
+        console.error(`❌ [MAILER ERROR]: Resend API failed (status ${response.status}): ${JSON.stringify(resBody)}`);
+        throw new Error('Email delivery failed due to a provider error.');
+      }
+
+      console.log(`📬 [MAILER SUCCESS]: Email successfully dispatched via Resend to ${to}`);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        console.error('❌ [MAILER ERROR]: Resend email delivery request timed out.');
+      } else {
+        console.error(`❌ [MAILER ERROR]: Resend failed: ${err.message}`);
+      }
+      throw new Error('Email delivery failed due to a provider error.');
+    }
+  } else if (brevoApiKey) {
     if (!emailFrom) {
       console.error('❌ [MAILER CONFIG ERROR]: EMAIL_FROM is required when using Brevo API.');
       throw new Error('EMAIL_FROM configuration is missing.');

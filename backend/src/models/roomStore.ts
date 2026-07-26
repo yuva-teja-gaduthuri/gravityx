@@ -7,6 +7,7 @@ export interface Player {
   ready: boolean;
   role?: string; // used for Ramudu-Seetha role names
   isBot?: boolean;
+  disconnected?: boolean;
 }
 
 export interface Room {
@@ -133,6 +134,17 @@ class RoomStore {
     room.status = status;
     return room;
   }
+
+  cleanStaleRooms() {
+    const now = Date.now();
+    const cutoff = 12 * 60 * 60 * 1000; // 12 hours
+    for (const [code, room] of this.rooms.entries()) {
+      if (now - room.createdAt > cutoff) {
+        this.rooms.delete(code);
+      }
+    }
+  }
 }
 
 export const roomStore = new RoomStore();
+export const playerDisconnectTimeouts = new Map<string, NodeJS.Timeout>();

@@ -4,17 +4,18 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import prisma from './utils/prisma';
 
 dotenv.config();
 
 import apiRouter from './routes/api';
-import { roomStore } from './models/roomStore';
+import { roomStore, playerDisconnectTimeouts } from './models/roomStore';
 import { handleRoom } from './sockets/roomHandler';
 import { handleRamuduSeetha, clearRSRoundTimeout } from './sockets/ramuduSeethaHandler';
 import { handleLudo } from './sockets/ludoHandler';
 import { handleChess } from './sockets/chessHandler';
 
-const app = express();
+export const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'gravityx-secret-key-space-anti-gravity';
 
@@ -33,7 +34,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', uptime: process.uptime() });
 });
 
-const httpServer = createServer(app);
+export const httpServer = createServer(app);
 
 // Initialize Socket.IO with relaxed CORS
 const io = new Server(httpServer, {
@@ -43,24 +44,23 @@ const io = new Server(httpServer, {
   },
 });
 
-// Middleware to authorize WebSockets connections with JWT (optional, falls back to Guest)
+// Middleware to authorize WebSockets connections with JWT (Required)
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
 
   if (!token) {
-    // Allow guest socket connection without token
-    return next();
+    return next(new Error('Authentication token required'));
   }
 
   jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
     if (err) {
-      // Don't fail connection, connect as guest
-      return next();
+      return next(new Error('Invalid authentication token'));
     }
     socket.data.user = decoded;
     next();
   });
 });
+
 
 io.on('connection', (socket: Socket) => {
   console.log(`Socket connected: ${socket.id} (User: ${socket.data.user?.username || 'Guest'})`);
@@ -80,31 +80,94 @@ io.on('connection', (socket: Socket) => {
     for (const room of activeRooms) {
       const player = room.players.find((p) => p.socketId === socket.id);
       if (player) {
-        const updated = roomStore.removePlayer(room.code, player.id);
-        if (updated) {
-          if (updated.status === 'LOBBY') {
-            clearRSRoundTimeout(room.code);
-          }
-          io.to(room.code).emit('room_state_updated', updated);
-          io.to(room.code).emit('chat_message', {
-            id: Math.random().toString(),
-            senderName: 'SYSTEM',
-            content: `${player.username} disconnected.`,
-            createdAt: new Date(),
-          });
-        } else {
-          clearRSRoundTimeout(room.code);
-          io.to(room.code).emit('room_deleted');
+        // Mark player as disconnected in memory
+        player.disconnected = true;
+        
+        // Broadcast that the user disconnected (visual indicator in frontend)
+        io.to(room.code).emit('room_state_updated', room);
+        io.to(room.code).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${player.username} disconnected.`,
+          createdAt: new Date(),
+        });
+
+        // Set grace period timeout based on room status
+        const graceDuration = room.status === 'PLAYING' ? 15000 : 5000; // 15s if playing, 5s if lobby
+        const timeoutKey = `${room.code}_${player.id}`;
+
+        // Clear any existing timeout for this player
+        if (playerDisconnectTimeouts.has(timeoutKey)) {
+          clearTimeout(playerDisconnectTimeouts.get(timeoutKey)!);
         }
+
+        const timeoutId = setTimeout(async () => {
+          playerDisconnectTimeouts.delete(timeoutKey);
+
+          // Recheck if player is still disconnected
+          const currentRoom = roomStore.getRoom(room.code);
+          if (currentRoom) {
+            const pl = currentRoom.players.find(p => p.id === player.id);
+            if (pl && pl.disconnected) {
+              const updated = roomStore.removePlayer(room.code, player.id);
+              if (updated) {
+                if (updated.status === 'LOBBY') {
+                  clearRSRoundTimeout(room.code);
+                }
+                io.to(room.code).emit('room_state_updated', updated);
+                io.to(room.code).emit('chat_message', {
+                  id: Math.random().toString(),
+                  senderName: 'SYSTEM',
+                  content: `${player.username} session expired. Left the room.`,
+                  createdAt: new Date(),
+                });
+              } else {
+                clearRSRoundTimeout(room.code);
+                io.to(room.code).emit('room_deleted');
+              }
+            }
+          }
+        }, graceDuration);
+
+        playerDisconnectTimeouts.set(timeoutKey, timeoutId);
       }
     }
   });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`====================================================`);
-  console.log(` GravityX Backend is running on port ${PORT}`);
-  console.log(` API Endpoint: http://localhost:${PORT}/api`);
-  console.log(` Health Check: http://localhost:${PORT}/health`);
-  console.log(`====================================================`);
-});
+// Database cleanup function for stale guest accounts
+async function cleanupStaleGuestAccounts() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+    const deleted = await prisma.user.deleteMany({
+      where: {
+        isGuest: true,
+        createdAt: { lt: cutoff },
+      },
+    });
+    if (deleted.count > 0) {
+      console.log(`🧹 [DATABASE CLEANUP]: Removed ${deleted.count} stale guest accounts older than 24 hours.`);
+    }
+
+    // Clean up stale in-memory rooms older than 12 hours
+    roomStore.cleanStaleRooms();
+  } catch (err: any) {
+    console.error('❌ [DATABASE CLEANUP ERROR]: Failed to clean up stale data:', err.message);
+  }
+}
+
+// Start HTTP server and trigger cleanup
+if (process.env.NODE_ENV !== 'test') {
+  httpServer.listen(PORT, async () => {
+    console.log(`====================================================`);
+    console.log(` GravityX Backend is running on port ${PORT}`);
+    console.log(` API Endpoint: http://localhost:${PORT}/api`);
+    console.log(` Health Check: http://localhost:${PORT}/health`);
+    console.log(`====================================================`);
+    
+    // Run initial cleanup
+    await cleanupStaleGuestAccounts();
+    // Schedule hourly cleanup
+    setInterval(cleanupStaleGuestAccounts, 60 * 60 * 1000);
+  });
+}

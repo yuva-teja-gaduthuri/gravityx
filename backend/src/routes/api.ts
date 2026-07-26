@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, guestLogin, getProfile, updateProfile, verifyEmail, resendVerification, forgotPassword, resetPassword } from '../controllers/authController';
+import { register, login, guestLogin, getProfile, updateProfile, verifyEmail, resendVerification, forgotPassword, resetPassword, refreshToken } from '../controllers/authController';
 import {
   getFriends,
   getPendingRequests,
@@ -32,6 +32,8 @@ router.post('/auth/verify', verifyEmail);
 router.post('/auth/resend-verification', resendVerification);
 router.post('/auth/forgot-password', rateLimitMiddleware, forgotPassword);
 router.post('/auth/reset-password', rateLimitMiddleware, resetPassword);
+router.post('/auth/refresh', refreshToken);
+
 
 // Social Routes
 router.get('/social/friends', authenticateJWT, getFriends);

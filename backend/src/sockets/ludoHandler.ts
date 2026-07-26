@@ -589,17 +589,19 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
     const reward = placementsRewards[i] || { xp: 50, coins: 10 };
     const placement = i + 1;
 
-    await awardUserStats(p.id, reward.xp, reward.coins);
+    if (!p.id.startsWith('bot_')) {
+      await awardUserStats(p.id, reward.xp, reward.coins);
 
-    await prisma.matchPlayer.create({
-      data: {
-        matchId: match.id,
-        userId: p.id,
-        score: reward.xp * 2, // arbitrary score representation
-        coinsEarned: reward.coins,
-        placement,
-      },
-    });
+      await prisma.matchPlayer.create({
+        data: {
+          matchId: match.id,
+          userId: p.id,
+          score: reward.xp * 2, // arbitrary score representation
+          coinsEarned: reward.coins,
+          placement,
+        },
+      });
+    }
 
     scoreboardData.push({
       userId: p.id,

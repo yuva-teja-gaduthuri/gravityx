@@ -224,8 +224,8 @@ export const likePlayer = async (req: AuthenticatedRequest, res: Response) => {
     if (!targetUsername) return res.status(400).json({ error: 'Target username is required' });
 
     const { addLike, getLikesCount } = require('../utils/likesReviewsStore');
-    addLike(targetUsername, likerUsername);
-    const count = getLikesCount(targetUsername);
+    await addLike(targetUsername, likerUsername);
+    const count = await getLikesCount(targetUsername);
 
     res.json({ message: 'Player liked successfully', likesCount: count });
   } catch (error: any) {
@@ -244,7 +244,7 @@ export const reviewPlayer = async (req: AuthenticatedRequest, res: Response) => 
     }
 
     const { addReview } = require('../utils/likesReviewsStore');
-    addReview(targetUsername, reviewerName, Number(rating), comment);
+    await addReview(targetUsername, reviewerName, Number(rating), comment);
     res.status(201).json({ message: 'Review saved successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -257,7 +257,7 @@ export const getPlayerReviews = async (req: AuthenticatedRequest, res: Response)
     if (!username) return res.status(400).json({ error: 'Username is required' });
 
     const { getReviews } = require('../utils/likesReviewsStore');
-    const list = getReviews(username);
+    const list = await getReviews(username);
     res.json(list);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -270,7 +270,7 @@ export const getPlayerLikes = async (req: AuthenticatedRequest, res: Response) =
     if (!username) return res.status(400).json({ error: 'Username is required' });
 
     const { getLikesCount } = require('../utils/likesReviewsStore');
-    const count = getLikesCount(username);
+    const count = await getLikesCount(username);
     res.json({ likesCount: count });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

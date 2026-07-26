@@ -222,7 +222,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-10 h-10 rounded-full border-4 border-cybergold/20 border-t-cybergold animate-spin mb-4" />
-        <span className="text-xs uppercase font-extrabold tracking-widest text-gray-500">Initializing Tactical Board...</span>
+        <span className="text-xs uppercase font-extrabold tracking-widest text-gray-500">{t('chessInit', 'Initializing Tactical Board...')}</span>
       </div>
     );
   }
@@ -368,7 +368,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
       <div className="w-full max-w-4xl flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
           <Trophy className="text-cybergold" size={20} />
-          <h2 className="text-sm font-black uppercase tracking-wider text-white">Tactical Arena</h2>
+          <h2 className="text-sm font-black uppercase tracking-wider text-white">{t('chessTacticalArena', 'Tactical Arena')}</h2>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -403,7 +403,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
             {gameState.turn === (isFlipped ? 'w' : 'b') && (
               <div className="flex items-center gap-1.5 bg-cybererror/10 border border-cybererror/20 px-2.5 py-1 rounded-xl text-cybererror text-xs font-black animate-pulse">
                 <Timer size={12} />
-                <span>{t('chessActiveTurn', 'ACTIVE TURN')}</span>
+                <span>{t('activeTurn', 'ACTIVE TURN')}</span>
               </div>
             )}
           </div>
@@ -584,11 +584,11 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
               <X size={16} />
             </button>
             <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">
-              {t('writeReviewFor', 'Write Review for')} {reviewModalUser}
+              {t('writeReview', 'Write Review for')} {reviewModalUser}
             </h4>
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('selectStarRating', 'Select Star Rating')}</label>
+                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('selectRating', 'Select Star Rating')}</label>
                 <div className="flex items-center gap-1 mt-1">
                   {[1, 2, 3, 4, 5].map((val) => (
                     <button
@@ -607,7 +607,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                 <textarea
                   value={reviewComment}
                   onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder={t('tellHowPlayed', 'Tell others how this user played...')}
+                  placeholder={t('reviewPlaceholder', 'Tell others how this user played...')}
                   className="w-full h-24 mt-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:border-cyberblue focus:outline-none"
                 />
               </div>

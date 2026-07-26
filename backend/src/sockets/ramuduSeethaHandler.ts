@@ -161,16 +161,18 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     });
 
     for (const row of finalScoreboard) {
-      await awardUserStats(row.userId, row.xpEarned, row.coinsEarned);
-      await prisma.matchPlayer.create({
-        data: {
-          matchId: match.id,
-          userId: row.userId,
-          score: row.score,
-          coinsEarned: row.coinsEarned,
-          placement: row.placement,
-        },
-      });
+      if (!row.userId.startsWith('bot_')) {
+        await awardUserStats(row.userId, row.xpEarned, row.coinsEarned);
+        await prisma.matchPlayer.create({
+          data: {
+            matchId: match.id,
+            userId: row.userId,
+            score: row.score,
+            coinsEarned: row.coinsEarned,
+            placement: row.placement,
+          },
+        });
+      }
     }
 
     // Broadcast match ended details (keep status as PLAYING so scorecard remains open)
