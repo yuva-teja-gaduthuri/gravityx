@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { HelpCircle, Star, ShieldCheck, Crown, Heart, UserPlus, MessageSquare, ThumbsUp, X, Award } from 'lucide-react';
+import { HelpCircle, Star, ShieldCheck, Crown, Heart, UserPlus, MessageSquare, ThumbsUp, X, Award, User } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -168,6 +168,8 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
   const [reviewModalUser, setReviewModalUser] = useState<string | null>(null);
   const [reviewRating, setReviewRating] = useState<number>(5);
   const [reviewComment, setReviewComment] = useState<string>('');
+  const [likedPlayersInGame, setLikedPlayersInGame] = useState<string[]>([]);
+  const [socialModalUser, setSocialModalUser] = useState<Player | null>(null);
 
   // Match ended state
   const [matchEnded, setMatchEnded] = useState(false);
@@ -274,6 +276,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setCurrentRound(data.currentRound || 1);
       setMaxRounds(data.maxRounds || 3);
       setSessionScoreboard(data.sessionScoreboard || {});
+      setLikedPlayersInGame([]); // Reset in-game likes
     });
 
     socket.on('rs_guess_result', (data: any) => {
@@ -634,7 +637,22 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                     isClickable ? 'hover:scale-105 hover:-translate-y-1 hover:border-cyberblue active:scale-95' : 'cursor-default'
                   }`}
                 >
-                  <div className="w-full flex justify-end shrink-0">
+                  <div className="w-full flex justify-between items-center shrink-0">
+                    {p.id !== user.id ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSocialModalUser(p);
+                        }}
+                        className="p-1 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full text-cyberblue hover:scale-110 transition-all"
+                        title="View Profile & Social Actions"
+                      >
+                        <User size={12} />
+                      </button>
+                    ) : (
+                      <div />
+                    )}
                     {isTargetRevealed && (
                       <span className="p-1 bg-cybersuccess/10 text-cybersuccess border border-cybersuccess/30 rounded-full text-[10px] font-bold flex items-center gap-1">
                         <ShieldCheck size={12} /> Revealed
@@ -970,6 +988,67 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                 Waiting for Captain to return to Lobby...
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* In-Game Player Social Modal */}
+      {socialModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="w-full max-w-xs glass-panel rounded-3xl p-6 border border-white/10 relative shadow-neon-blue text-center space-y-4">
+            <button 
+              onClick={() => setSocialModalUser(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+            
+            <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-tr from-cyberblue/20 to-cyberpink/20 border border-white/10 flex items-center justify-center text-3xl">
+              {socialModalUser.avatar === 'cyborg' ? '🤖' : '👽'}
+            </div>
+
+            <div className="space-y-1">
+              <h4 className="text-base font-black text-white">{socialModalUser.username}</h4>
+              <p className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Active Crew Member</p>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-2">
+              {/* Like Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (likedPlayersInGame.includes(socialModalUser.username)) return;
+                  handleLike(socialModalUser.username);
+                  setLikedPlayersInGame(prev => [...prev, socialModalUser.username]);
+                }}
+                disabled={likedPlayersInGame.includes(socialModalUser.username)}
+                className={`px-4 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  likedPlayersInGame.includes(socialModalUser.username)
+                    ? 'bg-cyberpink/20 border-cyberpink/30 text-cyberpink cursor-not-allowed opacity-80'
+                    : 'bg-white/5 border-white/10 hover:border-cyberpink text-gray-300 hover:text-white active:scale-95'
+                }`}
+              >
+                <Heart size={14} className={likedPlayersInGame.includes(socialModalUser.username) ? "fill-cyberpink text-cyberpink animate-pulse" : ""} />
+                <span>{likedPlayersInGame.includes(socialModalUser.username) ? 'Liked' : 'Like'}</span>
+              </button>
+
+              {/* Add Friend Button */}
+              <button
+                type="button"
+                onClick={() => handleAddFriendClick(socialModalUser.username)}
+                disabled={friendStatus[socialModalUser.username] === 'sent' || friendStatus[socialModalUser.username] === 'sending'}
+                className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:border-cyberblue text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition-all disabled:opacity-50"
+              >
+                <UserPlus size={14} />
+                <span>
+                  {friendStatus[socialModalUser.username] === 'sent'
+                    ? 'Added'
+                    : friendStatus[socialModalUser.username] === 'sending'
+                    ? 'Sending...'
+                    : 'Add Friend'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -463,7 +463,9 @@ export default function RoomPage() {
                       })}
                       className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cyberblue mt-1 bg-white/5 text-white"
                     >
-                      <option value={2} className="bg-[#0b0f19] text-white">2 Players</option>
+                      {room.gameType !== 'RAMUDU_SEETHA' && (
+                        <option value={2} className="bg-[#0b0f19] text-white">2 Players</option>
+                      )}
                       <option value={3} className="bg-[#0b0f19] text-white">3 Players</option>
                       <option value={4} className="bg-[#0b0f19] text-white">4 Players</option>
                       <option value={6} className="bg-[#0b0f19] text-white">6 Players</option>

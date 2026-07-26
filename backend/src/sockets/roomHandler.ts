@@ -69,6 +69,7 @@ export function handleRoom(io: Server, socket: Socket) {
 
       roomStore.addPlayer(code, hostPlayer);
       await socket.join(code);
+      await socket.join(userId);
 
       socket.emit('room_created', room);
       io.to(code).emit('room_state_updated', room);
@@ -156,6 +157,7 @@ export function handleRoom(io: Server, socket: Socket) {
       }
 
       await socket.join(upperCode);
+      await socket.join(userId);
       socket.emit('room_joined', updatedRoom);
       io.to(upperCode).emit('room_state_updated', updatedRoom);
 

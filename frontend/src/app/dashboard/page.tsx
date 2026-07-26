@@ -246,13 +246,15 @@ export default function Dashboard() {
     setCreateError('');
     if (!user || !socket) return;
 
+    const finalMaxPlayers = selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
+
     socket.emit('create_room', {
       userId: user.id,
       username: user.username,
       name: roomName || `${user.username}'s Lobby`,
       gameType: selectedGame,
       type: roomType,
-      maxPlayers: Number(maxPlayers),
+      maxPlayers: finalMaxPlayers,
       voiceChat,
       allowSpectators,
     });
@@ -274,6 +276,10 @@ export default function Dashboard() {
   useEffect(() => {
     if (selectedGame === 'LUDO') {
       setMaxPlayers(4); // Default to 4
+    } else if (selectedGame === 'CHESS') {
+      setMaxPlayers(2);
+    } else if (selectedGame === 'RAMUDU_SEETHA') {
+      setMaxPlayers(4);
     } else {
       setMaxPlayers(4);
     }
@@ -291,6 +297,125 @@ export default function Dashboard() {
   // Next level progress percentage
   const nextLevelXp = user.level * 200;
   const xpPercent = Math.round((user.xp / nextLevelXp) * 100);
+
+  const renderDetailsPanel = () => {
+    if (!expandedGame) return null;
+    return (
+      <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5 space-y-6 mt-6 animate-fade-in text-left">
+        
+        {/* Header Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-4">
+          <div>
+            <span className="text-[10px] uppercase font-black tracking-widest text-cyberblue">game command console</span>
+            <h3 className="text-2xl font-black text-white">
+              {expandedGame === 'LUDO' ? 'Cosmic Ludo' : expandedGame === 'CHESS' ? 'Chess Strategy' : 'Ramudu-Seetha'}
+            </h3>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setSelectedGame(expandedGame); setShowCreateModal(true); }}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 text-xs font-black uppercase tracking-wider shadow-neon-blue"
+            >
+              Host Arena Lobby
+            </button>
+            <button
+              onClick={() => { setShowJoinModal(true); }}
+              className="px-5 py-2.5 rounded-xl glass-card text-xs font-black uppercase tracking-wider hover:border-white/20"
+            >
+              Join Via Code
+            </button>
+          </div>
+        </div>
+
+        {/* Instructions & Reviews grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Rules instructions */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-black text-white uppercase tracking-wider">Flight Instructions (How to Play)</h4>
+            {expandedGame === 'LUDO' ? (
+              <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
+                <li>Each operator starts with 4 spaceships in their respective corner home yard.</li>
+                <li>Roll a <strong className="text-cyberblue">6</strong> to deploy a ship onto the launching track.</li>
+                <li>Move clockwise according to the dice roll. Safety stars protect your ship from elimination.</li>
+                <li>Landing on an opponent's ship destroys it, returning it to their home yard.</li>
+                <li>Navigate all 4 ships through the track and home stretch to the center home terminal to win!</li>
+              </ul>
+            ) : expandedGame === 'CHESS' ? (
+              <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
+                <li>Classic 8x8 chess.com style board with green-and-white grid UI.</li>
+                <li>Plays with standard FIDE rules (White makes the first move).</li>
+                <li>Click on your piece to highlight all valid movement targets.</li>
+                <li>Checkmate the opponent's king to secure victory.</li>
+                <li>Features real-time socket syncing, active clocks, and spectator features.</li>
+              </ul>
+            ) : (
+              <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
+                <li>One operator is assigned the role of <strong className="text-cyberpink">Ramudu</strong>, and one is <strong className="text-cyberpink">Seetha</strong>.</li>
+                <li>Other operators are given secret profiles.</li>
+                <li>Ramudu must query the crew members and deduce which player is the secret Seetha.</li>
+                <li>Query players to gather clues, and submit your guesses.</li>
+                <li>Seetha must evade detection. Earn points by guessing correctly or evading guess cycles!</li>
+              </ul>
+            )}
+          </div>
+
+          {/* Reviews Section */}
+          <div className="space-y-4 border-l border-white/5 pl-0 md:pl-8">
+            <h4 className="text-sm font-black text-white uppercase tracking-wider">Crew Ratings & Feedback</h4>
+            
+            {/* Add Review form */}
+            <form onSubmit={(e) => handleSubmitReview(e, expandedGame)} className="space-y-3 p-4 rounded-xl bg-white/5 border border-white/5">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-400 uppercase">Submit Telemetry Feedback</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setNewRating(val)}
+                      className={`text-sm ${val <= newRating ? 'text-cybergold' : 'text-gray-600'}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Write a feedback log..."
+                  className="flex-grow glass-input rounded-xl px-3.5 py-2 text-xs focus:border-cyberblue"
+                />
+                <button type="submit" className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all">
+                  Submit
+                </button>
+              </div>
+            </form>
+
+            {/* Review logs */}
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+              {reviews[expandedGame].map((rev, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-gray-400">
+                    <span className="font-extrabold">{rev.username}</span>
+                    <span>{rev.date}</span>
+                  </div>
+                  <div className="flex justify-between items-start gap-4">
+                    <p className="text-gray-300 leading-normal">{rev.comment}</p>
+                    <span className="text-cybergold text-[10px] whitespace-nowrap">{'★'.repeat(rev.rating)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col flex-grow">
@@ -438,205 +563,116 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-4xl mx-auto w-full">
               
               {/* Ramudu-Seetha Card */}
-              <div 
-                onClick={() => setExpandedGame(expandedGame === 'RAMUDU_SEETHA' ? null : 'RAMUDU_SEETHA')}
-                className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberpink group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-pink duration-300 ${expandedGame === 'RAMUDU_SEETHA' ? 'border-cyberpink shadow-neon-pink ring-1 ring-cyberpink' : ''}`}
-                style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🕵️</text></svg>"), auto` }}
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyberpink/5 rounded-full blur-3xl group-hover:bg-cyberpink/10 transition-all"></div>
-                
-                {/* Artwork Top */}
-                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberpink/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-4xl filter drop-shadow-neon-pink transform group-hover:scale-110 transition-all duration-300">🕵️</span>
-                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black uppercase text-cyberpink">
-                    deduction
-                  </span>
-                </div>
+              <div className="flex flex-col gap-4">
+                <div 
+                  onClick={() => setExpandedGame(expandedGame === 'RAMUDU_SEETHA' ? null : 'RAMUDU_SEETHA')}
+                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberpink group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-pink duration-300 ${expandedGame === 'RAMUDU_SEETHA' ? 'border-cyberpink shadow-neon-pink ring-1 ring-cyberpink' : ''}`}
+                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🕵️</text></svg>"), auto` }}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyberpink/5 rounded-full blur-3xl group-hover:bg-cyberpink/10 transition-all"></div>
+                  
+                  {/* Artwork Top */}
+                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberpink/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
+                    <span className="text-4xl filter drop-shadow-neon-pink transform group-hover:scale-110 transition-all duration-300">🕵️</span>
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black uppercase text-cyberpink">
+                      deduction
+                    </span>
+                  </div>
 
-                <div>
-                  <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberpink transition-colors">Ramudu-Seetha</h4>
-                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Deduce target profiles. Ramudu seeks Seetha. Exclusively built multiplayer deduction room.</p>
-                </div>
+                  <div>
+                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberpink transition-colors">Ramudu-Seetha</h4>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Deduce target profiles. Ramudu seeks Seetha. Exclusively built multiplayer deduction room.</p>
+                  </div>
 
-                <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                  <span>3-10 Players</span>
-                  <span className="text-cyberpink font-black">{expandedGame === 'RAMUDU_SEETHA' ? 'Close Panel' : 'Control Deck'}</span>
+                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                    <span>3-10 Players</span>
+                    <span className="text-cyberpink font-black">{expandedGame === 'RAMUDU_SEETHA' ? 'Close Panel' : 'Control Deck'}</span>
+                  </div>
                 </div>
+                {expandedGame === 'RAMUDU_SEETHA' && (
+                  <div className="block md:hidden">
+                    {renderDetailsPanel()}
+                  </div>
+                )}
               </div>
 
               {/* Ludo Card */}
-              <div 
-                onClick={() => setExpandedGame(expandedGame === 'LUDO' ? null : 'LUDO')}
-                className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberblue group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-blue duration-300 ${expandedGame === 'LUDO' ? 'border-cyberblue shadow-neon-blue ring-1 ring-cyberblue' : ''}`}
-                style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🎲</text></svg>"), auto` }}
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyberblue/5 rounded-full blur-3xl group-hover:bg-cyberblue/10 transition-all"></div>
-                
-                {/* Artwork Top */}
-                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberblue/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-4xl filter drop-shadow-neon-blue transform group-hover:scale-110 transition-all duration-300">🎲</span>
-                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberblue/20 border border-cyberblue/30 text-[8px] font-black uppercase text-cyberblue">
-                    classic
-                  </span>
-                </div>
+              <div className="flex flex-col gap-4">
+                <div 
+                  onClick={() => setExpandedGame(expandedGame === 'LUDO' ? null : 'LUDO')}
+                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberblue group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-blue duration-300 ${expandedGame === 'LUDO' ? 'border-cyberblue shadow-neon-blue ring-1 ring-cyberblue' : ''}`}
+                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🎲</text></svg>"), auto` }}
+                >
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyberblue/5 rounded-full blur-3xl group-hover:bg-cyberblue/10 transition-all"></div>
+                  
+                  {/* Artwork Top */}
+                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberblue/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
+                    <span className="text-4xl filter drop-shadow-neon-blue transform group-hover:scale-110 transition-all duration-300">🎲</span>
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberblue/20 border border-cyberblue/30 text-[8px] font-black uppercase text-cyberblue">
+                      classic
+                    </span>
+                  </div>
 
-                <div>
-                  <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberblue transition-colors">Cosmic Ludo</h4>
-                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Roll virtual dice, knock back spaceships, reach home terminal first. Standard board dynamics.</p>
-                </div>
+                  <div>
+                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberblue transition-colors">Cosmic Ludo</h4>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Roll virtual dice, knock back spaceships, reach home terminal first. Standard board dynamics.</p>
+                  </div>
 
-                <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                  <span>2-6 Players</span>
-                  <span className="text-cyberblue font-black">{expandedGame === 'LUDO' ? 'Close Panel' : 'Control Deck'}</span>
+                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                    <span>2-6 Players</span>
+                    <span className="text-cyberblue font-black">{expandedGame === 'LUDO' ? 'Close Panel' : 'Control Deck'}</span>
+                  </div>
                 </div>
+                {expandedGame === 'LUDO' && (
+                  <div className="block md:hidden">
+                    {renderDetailsPanel()}
+                  </div>
+                )}
               </div>
 
               {/* Chess Card */}
-              <div 
-                onClick={() => alert("Chess Game module is deploying soon! Stay tuned.")}
-                className="glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] opacity-60 hover:-translate-y-2 transition-all duration-300"
-                style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
-              >
-                <div className="absolute inset-0 bg-[#050816]/75 flex flex-col items-center justify-center z-10">
-                  <Lock className="text-cyberpink mb-2 animate-pulse" size={24} />
-                  <span className="text-[9px] font-black uppercase text-cyberpink tracking-widest">Launching Soon</span>
-                </div>
+              <div className="flex flex-col gap-4">
+                <div 
+                  onClick={() => alert("Chess Game module is deploying soon! Stay tuned.")}
+                  className="glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] opacity-60 hover:-translate-y-2 transition-all duration-300"
+                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
+                >
+                  <div className="absolute inset-0 bg-[#050816]/75 flex flex-col items-center justify-center z-10">
+                    <Lock className="text-cyberpink mb-2 animate-pulse" size={24} />
+                    <span className="text-[9px] font-black uppercase text-cyberpink tracking-widest">Launching Soon</span>
+                  </div>
 
-                {/* Artwork Top */}
-                <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-4xl filter drop-shadow-neon-gold">♟️</span>
-                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
-                    tactical
-                  </span>
-                </div>
+                  {/* Artwork Top */}
+                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
+                    <span className="text-4xl filter drop-shadow-neon-gold">♟️</span>
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
+                      tactical
+                    </span>
+                  </div>
 
-                <div>
-                  <h4 className="font-extrabold text-lg mt-3 text-white">Chess Strategy</h4>
-                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess.</p>
-                </div>
+                  <div>
+                    <h4 className="font-extrabold text-lg mt-3 text-white">Chess Strategy</h4>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess.</p>
+                  </div>
 
-                <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                  <span>2 Players</span>
-                  <span className="text-gray-500 font-black">LOCKED</span>
+                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                    <span>2 Players</span>
+                    <span className="text-gray-500 font-black">LOCKED</span>
+                  </div>
                 </div>
+                {expandedGame === 'CHESS' && (
+                  <div className="block md:hidden">
+                    {renderDetailsPanel()}
+                  </div>
+                )}
               </div>
 
             </div>
 
-            {/* Expanded Game Details Panel */}
+            {/* Expanded Game Details Panel (Desktop only) */}
             {expandedGame && (
-              <div className="glass-panel rounded-3xl p-6 md:p-8 border-white/5 space-y-6 mt-6 animate-fade-in">
-                
-                {/* Header Actions */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-4">
-                  <div>
-                    <span className="text-[10px] uppercase font-black tracking-widest text-cyberblue">game command console</span>
-                    <h3 className="text-2xl font-black text-white">
-                      {expandedGame === 'LUDO' ? 'Cosmic Ludo' : expandedGame === 'CHESS' ? 'Chess Strategy' : 'Ramudu-Seetha'}
-                    </h3>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => { setSelectedGame(expandedGame); setShowCreateModal(true); }}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 text-xs font-black uppercase tracking-wider shadow-neon-blue"
-                    >
-                      Host Arena Lobby
-                    </button>
-                    <button
-                      onClick={() => { setShowJoinModal(true); }}
-                      className="px-5 py-2.5 rounded-xl glass-card text-xs font-black uppercase tracking-wider hover:border-white/20"
-                    >
-                      Join Via Code
-                    </button>
-                  </div>
-                </div>
-
-                {/* Instructions & Reviews grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Rules instructions */}
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-black text-white uppercase tracking-wider">Flight Instructions (How to Play)</h4>
-                    {expandedGame === 'LUDO' ? (
-                      <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
-                        <li>Each operator starts with 4 spaceships in their respective corner home yard.</li>
-                        <li>Roll a <strong className="text-cyberblue">6</strong> to deploy a ship onto the launching track.</li>
-                        <li>Move clockwise according to the dice roll. Safety stars protect your ship from elimination.</li>
-                        <li>Landing on an opponent's ship destroys it, returning it to their home yard.</li>
-                        <li>Navigate all 4 ships through the track and home stretch to the center home terminal to win!</li>
-                      </ul>
-                    ) : expandedGame === 'CHESS' ? (
-                      <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
-                        <li>Classic 8x8 chess.com style board with green-and-white grid UI.</li>
-                        <li>Plays with standard FIDE rules (White makes the first move).</li>
-                        <li>Click on your piece to highlight all valid movement targets.</li>
-                        <li>Checkmate the opponent's king to secure victory.</li>
-                        <li>Features real-time socket syncing, active clocks, and spectator features.</li>
-                      </ul>
-                    ) : (
-                      <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
-                        <li>One operator is assigned the role of <strong className="text-cyberpink">Ramudu</strong>, and one is <strong className="text-cyberpink">Seetha</strong>.</li>
-                        <li>Other operators are given secret profiles.</li>
-                        <li>Ramudu must query the crew members and deduce which player is the secret Seetha.</li>
-                        <li>Query players to gather clues, and submit your guesses.</li>
-                        <li>Seetha must evade detection. Earn points by guessing correctly or evading guess cycles!</li>
-                      </ul>
-                    )}
-                  </div>
-
-                  {/* Reviews Section */}
-                  <div className="space-y-4 border-l border-white/5 pl-0 md:pl-8">
-                    <h4 className="text-sm font-black text-white uppercase tracking-wider">Crew Ratings & Feedback</h4>
-                    
-                    {/* Add Review form */}
-                    <form onSubmit={(e) => handleSubmitReview(e, expandedGame)} className="space-y-3 p-4 rounded-xl bg-white/5 border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-gray-400 uppercase">Submit Telemetry Feedback</span>
-                        <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map((val) => (
-                            <button
-                              key={val}
-                              type="button"
-                              onClick={() => setNewRating(val)}
-                              className={`text-sm ${val <= newRating ? 'text-cybergold' : 'text-gray-600'}`}
-                            >
-                              ★
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          required
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          placeholder="Write a feedback log..."
-                          className="flex-grow glass-input rounded-xl px-3.5 py-2 text-xs focus:border-cyberblue"
-                        />
-                        <button type="submit" className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-bold transition-all">
-                          Submit
-                        </button>
-                      </div>
-                    </form>
-
-                    {/* Review logs */}
-                    <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
-                      {reviews[expandedGame].map((rev, idx) => (
-                        <div key={idx} className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs space-y-1.5">
-                          <div className="flex justify-between items-center text-[10px] text-gray-400">
-                            <span className="font-extrabold">{rev.username}</span>
-                            <span>{rev.date}</span>
-                          </div>
-                          <div className="flex justify-between items-start gap-4">
-                            <p className="text-gray-300 leading-normal">{rev.comment}</p>
-                            <span className="text-cybergold text-[10px] whitespace-nowrap">{'★'.repeat(rev.rating)}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+              <div className="hidden md:block">
+                {renderDetailsPanel()}
               </div>
             )}
 
