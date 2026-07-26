@@ -5,8 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, User, ShieldAlert, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { getApiUrl } from '../../utils/api';
+import { useTranslation } from '../../hooks/useTranslation';
 
 function AuthContent() {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') || 'login';
@@ -301,13 +303,13 @@ function AuthContent() {
               onClick={() => { setTab('login'); setError(''); setSuccess(''); }}
               className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${tab === 'login' ? 'bg-primary shadow-lg text-white' : 'text-gray-400 hover:text-white'}`}
             >
-              Sign In
+              {t('login', 'Sign In')}
             </button>
             <button
               onClick={() => { setTab('register'); setError(''); setSuccess(''); }}
               className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${tab === 'register' ? 'bg-primary shadow-lg text-white' : 'text-gray-400 hover:text-white'}`}
             >
-              Register
+              {t('createAccount', 'Register')}
             </button>
           </div>
         )}
@@ -316,7 +318,7 @@ function AuthContent() {
         {tab === 'login' && (
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Username or Email</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('emailOrUser', 'Username or Email')}</label>
               <div className="relative">
                 <User size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
@@ -332,9 +334,9 @@ function AuthContent() {
 
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Password</label>
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('password', 'Password')}</label>
                 <button type="button" onClick={() => { setTab('forgot'); setError(''); setSuccess(''); }} className="text-xs text-cyberblue hover:underline">
-                  Forgot?
+                  {t('forgotPassword', 'Forgot Password?')}
                 </button>
               </div>
               <div className="relative">
@@ -361,16 +363,16 @@ function AuthContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Logging In...</span>
+                  <span>{t('verifying', 'Logging In...')}</span>
                 </>
               ) : (
-                'Sign In'
+                t('login', 'Sign In')
               )}
             </button>
 
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-white/5"></div>
-              <span className="flex-shrink mx-4 text-xs font-bold text-gray-500 uppercase">Or Continue As</span>
+              <span className="flex-shrink mx-4 text-xs font-bold text-gray-500 uppercase">{t('guestSession', 'Or Continue As')}</span>
               <div className="flex-grow border-t border-white/5"></div>
             </div>
 
@@ -386,10 +388,10 @@ function AuthContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Logging In...</span>
+                  <span>{t('verifying', 'Logging In...')}</span>
                 </>
               ) : (
-                'Play as Guest (Zero Setup)'
+                t('startGuest', 'Play as Guest')
               )}
             </button>
           </form>
@@ -399,7 +401,7 @@ function AuthContent() {
         {tab === 'register' && (
           <form onSubmit={handleRegister} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Username</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('username', 'Username')}</label>
               <div className="relative">
                 <User size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
@@ -414,7 +416,7 @@ function AuthContent() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email Address</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('email', 'Email Address')}</label>
               <div className="relative">
                 <Mail size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
@@ -429,7 +431,7 @@ function AuthContent() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Password</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t('password', 'Password')}</label>
               <div className="relative">
                 <Lock size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
@@ -454,10 +456,10 @@ function AuthContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Signing Up...</span>
+                  <span>{t('registering', 'Signing Up...')}</span>
                 </>
               ) : (
-                'Create Account'
+                t('createAccount', 'Create Account')
               )}
             </button>
           </form>

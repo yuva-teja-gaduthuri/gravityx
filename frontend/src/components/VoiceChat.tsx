@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { Mic, MicOff, Volume2, VolumeX, Radio, PhoneOff, Users } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface Player {
   id: string;
@@ -22,6 +23,7 @@ interface VoiceChatProps {
 }
 
 export default function VoiceChat({ roomCode, socket, players, currentUser }: VoiceChatProps) {
+  const { t } = useTranslation();
   const [joined, setJoined] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
   const [speakerDeafened, setSpeakerDeafened] = useState(false);
@@ -32,6 +34,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const analysersRef = useRef<Map<string, () => void>>(new Map());
+  const candidateQueuesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
   // Refs to allow async callbacks to read fresh state without re-binding
   const joinedRef = useRef(false);
@@ -159,6 +162,9 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     }));
     setActiveSpeakers((prev) => prev.filter(id => id !== peerSocketId));
 
+    // Clean up ICE candidate queue
+    candidateQueuesRef.current.delete(peerSocketId);
+
     // 2. Close peer connection
     const pc = peersRef.current.get(peerSocketId);
     if (pc) {
@@ -177,6 +183,11 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
   };
 
   const cleanupAll = () => {
+    // Tell backend we left voice
+    if (socket && joinedRef.current) {
+      socket.emit('leave_voice', roomCode);
+    }
+
     // 1. Clear analysers
     analysersRef.current.forEach((cleanup) => {
       cleanup();
@@ -190,6 +201,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }));
     }
     setActiveSpeakers([]);
+    candidateQueuesRef.current.clear();
 
     // 2. Close peer connections
     peersRef.current.forEach((pc, socketId) => {
@@ -220,6 +232,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       closePeer(peerSocketId);
     }
 
+    console.log(`Initializing peer connection for ${peerSocketId}, initiating: ${initiateOffer}`);
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -229,11 +242,6 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     });
 
     peersRef.current.set(peerSocketId, pc);
-
-    // Add local tracks
-    stream.getTracks().forEach((track) => {
-      pc.addTrack(track, stream);
-    });
 
     // ICE Candidates
     pc.onicecandidate = (event) => {
@@ -294,10 +302,11 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       startAnalyzingStream(peerSocketId, remoteStream);
     };
 
-    // If we are initiating, create offer on negotiation needed
+    // Negotiation
     if (initiateOffer) {
       pc.onnegotiationneeded = async () => {
         try {
+          console.log(`Creating WebRTC offer for peer ${peerSocketId}`);
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket.emit('voice_signal', {
@@ -313,6 +322,11 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
         }
       };
     }
+
+    // Add local tracks (onnegotiationneeded must be set BEFORE adding tracks)
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream);
+    });
 
     return pc;
   };
@@ -333,35 +347,83 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
         startAnalyzingStream(socket.id, stream);
       }
 
-      // Connect to existing active players
-      const otherPlayers = players.filter(
-        (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
-      );
-
-      otherPlayers.forEach((p) => {
-        const initiate = socket.id ? socket.id < p.socketId : false;
-        initializePeer(p.socketId, stream, initiate);
-      });
+      // Tell backend we joined voice
+      socket.emit('join_voice', roomCode);
     } catch (err: any) {
       console.error('Failed to join voice chat:', err);
       setStatus('Access Blocked');
-      alert(`Could not access microphone: ${err.message}. Please check browser settings.`);
     }
   };
 
-  // Listen to remote signaling
+  // Automatically join voice on mount
+  useEffect(() => {
+    handleJoinVoice();
+    return () => {
+      cleanupAll();
+    };
+  }, []);
+
+  // Listen to socket connection status for auto-rejoin
+  useEffect(() => {
+    if (!socket) return;
+
+    const onConnect = () => {
+      console.log('Socket connected/reconnected. Joining voice room:', roomCode);
+      if (joinedRef.current) {
+        socket.emit('join_voice', roomCode);
+      }
+    };
+
+    socket.on('connect', onConnect);
+    return () => {
+      socket.off('connect', onConnect);
+    };
+  }, [socket, roomCode]);
+
+  // Listen to remote signaling and voice events
   useEffect(() => {
     if (!joined) return;
+
+    const handleVoicePeersList = (peerSocketIds: string[]) => {
+      console.log('Received voice peers list:', peerSocketIds);
+      const stream = localStreamRef.current;
+      if (!stream) return;
+
+      peerSocketIds.forEach((peerId) => {
+        initializePeer(peerId, stream, true); // Initiate connection to existing voice peers
+      });
+    };
+
+    const handleUserJoinedVoice = ({ socketId }: { socketId: string }) => {
+      console.log(`User joined voice: ${socketId}. Waiting for them to initiate...`);
+    };
+
+    const handleUserLeftVoice = ({ socketId }: { socketId: string }) => {
+      console.log(`User left voice: ${socketId}. Cleaning up peer.`);
+      closePeer(socketId);
+    };
 
     const handleSignal = async ({ senderSocketId, signal }: { senderSocketId: string; signal: any }) => {
       try {
         let pc = peersRef.current.get(senderSocketId);
 
         if (signal.type === 'offer') {
+          console.log(`Received WebRTC offer from ${senderSocketId}`);
           const stream = await getLocalStream();
           pc = initializePeer(senderSocketId, stream, false);
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
           
+          // Apply queued candidates
+          const queue = candidateQueuesRef.current.get(senderSocketId) || [];
+          for (const cand of queue) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {
+              console.error('Error applying queued candidate:', e);
+            }
+          }
+          candidateQueuesRef.current.delete(senderSocketId);
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           
@@ -374,12 +436,29 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
             },
           });
         } else if (signal.type === 'answer') {
+          console.log(`Received WebRTC answer from ${senderSocketId}`);
           if (pc) {
             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            
+            // Apply queued candidates
+            const queue = candidateQueuesRef.current.get(senderSocketId) || [];
+            for (const cand of queue) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand));
+              } catch (e) {
+                console.error('Error applying queued candidate:', e);
+              }
+            }
+            candidateQueuesRef.current.delete(senderSocketId);
           }
         } else if (signal.type === 'candidate') {
-          if (pc) {
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
             await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } else {
+            // Queue candidate
+            const queue = candidateQueuesRef.current.get(senderSocketId) || [];
+            queue.push(signal.candidate);
+            candidateQueuesRef.current.set(senderSocketId, queue);
           }
         }
       } catch (err) {
@@ -387,41 +466,18 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       }
     };
 
+    socket.on('voice_peers_list', handleVoicePeersList);
+    socket.on('user_joined_voice', handleUserJoinedVoice);
+    socket.on('user_left_voice', handleUserLeftVoice);
     socket.on('voice_signal_received', handleSignal);
 
     return () => {
+      socket.off('voice_peers_list', handleVoicePeersList);
+      socket.off('user_joined_voice', handleUserJoinedVoice);
+      socket.off('user_left_voice', handleUserLeftVoice);
       socket.off('voice_signal_received', handleSignal);
     };
   }, [joined, socket, roomCode, micMuted, speakerDeafened]);
-
-  // Mesh reconciliation on player roster updates
-  useEffect(() => {
-    if (!joined) return;
-
-    const stream = localStreamRef.current;
-    if (!stream) return;
-
-    const otherPlayers = players.filter(
-      (p) => !p.isBot && p.socketId !== socket.id && p.socketId && p.socketId !== 'BOT_SOCKET'
-    );
-
-    const activeSocketIds = new Set(otherPlayers.map((p) => p.socketId));
-
-    // 1. Close peers that left
-    peersRef.current.forEach((pc, socketId) => {
-      if (!activeSocketIds.has(socketId)) {
-        closePeer(socketId);
-      }
-    });
-
-    // 2. Initialize new peers
-    otherPlayers.forEach((p) => {
-      if (!peersRef.current.has(p.socketId)) {
-        const initiate = socket.id ? socket.id < p.socketId : false;
-        initializePeer(p.socketId, stream, initiate);
-      }
-    });
-  }, [players, joined, socket]);
 
   // Handle Mute Mic
   const toggleMuteMic = () => {
@@ -450,28 +506,31 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
     });
   };
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupAll();
-    };
-  }, []);
-
   const connectedPeersCount = peersRef.current.size;
+
+  const renderStatus = () => {
+    if (status === 'Connected') return t('voiceConnected', 'Connected');
+    if (status === 'Offline') return t('voiceOffline', 'Offline');
+    if (status === 'Acquiring Microphone...') return t('voiceConnecting', 'Connecting Voice...');
+    if (status === 'Access Blocked') return t('voiceBlocked', 'Access Blocked');
+    return status;
+  };
 
   return (
     <div className="fixed bottom-6 left-6 z-50 glass-panel rounded-2xl border border-white/10 p-4 w-64 shadow-2xl flex flex-col gap-3 transition-all duration-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Radio size={16} className={`text-cyberpink ${joined ? 'animate-pulse' : ''}`} />
-          <span className="text-xs uppercase font-extrabold tracking-widest text-gray-200">Devavani Voice</span>
+          <span className="text-xs uppercase font-extrabold tracking-widest text-gray-200">
+            {t('voiceHeader', 'Devavani Voice')}
+          </span>
         </div>
         <span className={`text-[9px] px-2 py-0.5 rounded font-bold ${
           status === 'Connected' ? 'bg-cybersuccess/10 border border-cybersuccess/30 text-cybersuccess' :
           status === 'Offline' ? 'bg-white/5 border border-white/10 text-gray-400' :
           'bg-cyberblue/10 border border-cyberblue/30 text-cyberblue'
         }`}>
-          {status}
+          {renderStatus()}
         </span>
       </div>
 
@@ -480,7 +539,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
           onClick={handleJoinVoice}
           className="w-full py-2.5 rounded-xl btn-mythic font-extrabold uppercase text-[10px] tracking-wider flex items-center justify-center gap-1.5"
         >
-          🎙️ Connect Voice Chat
+          {t('connectVoiceBtn', '🎙️ Connect Voice Chat')}
         </button>
       ) : (
         <div className="flex flex-col gap-3">
@@ -495,7 +554,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
               title={micMuted ? 'Unmute Mic' : 'Mute Mic'}
             >
               {micMuted ? <MicOff size={14} /> : <Mic size={14} />}
-              <span>{micMuted ? 'Muted' : 'Talk'}</span>
+              <span>{micMuted ? t('off', 'Muted') : t('talkBtn', 'Talk')}</span>
             </button>
 
             <button
@@ -508,13 +567,15 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
               title={speakerDeafened ? 'Listen' : 'Deafen'}
             >
               {speakerDeafened ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              <span>{speakerDeafened ? 'Deafened' : 'Listen'}</span>
+              <span>{speakerDeafened ? t('deafenedBtn', 'Deafened') : t('listenBtn', 'Listen')}</span>
             </button>
           </div>
 
           {activeSpeakers.length > 0 && (
             <div className="flex flex-col gap-1 border-t border-white/5 pt-2">
-              <span className="text-[8px] uppercase font-bold text-gray-500">Currently Speaking:</span>
+              <span className="text-[8px] uppercase font-bold text-gray-500">
+                {t('speakingLabel', 'Currently Speaking:')}
+              </span>
               <div className="flex flex-wrap gap-1">
                 {activeSpeakers.map((socketId) => {
                   const pl = players.find(p => p.socketId === socketId);
@@ -533,16 +594,16 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
           <div className="flex items-center justify-between text-[10px] text-gray-500 border-t border-white/5 pt-2 font-bold">
             <div className="flex items-center gap-1">
               <Users size={12} />
-              <span>Voice Channel Connections</span>
+              <span>{t('connectionsLabel', 'Voice Channel Connections')}</span>
             </div>
-            <span className="text-gray-300">{connectedPeersCount} connected</span>
+            <span className="text-gray-300">{connectedPeersCount} {t('connected', 'connected')}</span>
           </div>
 
           <button
             onClick={cleanupAll}
             className="w-full py-2 rounded-xl bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white transition-all font-extrabold uppercase text-[9px] tracking-wider flex items-center justify-center gap-1"
           >
-            <PhoneOff size={12} /> Disconnect Channel
+            <PhoneOff size={12} /> {t('disconnectBtn', 'Disconnect Channel')}
           </button>
         </div>
       )}

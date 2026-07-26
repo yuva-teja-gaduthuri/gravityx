@@ -120,6 +120,7 @@ export const login = async (req: Request, res: Response) => {
         avatar: user.avatar,
         profileFrame: user.profileFrame,
         bio: user.bio,
+        language: user.language,
       },
     });
   } catch (error: any) {
@@ -304,6 +305,7 @@ export const guestLogin = async (req: Request, res: Response) => {
         avatar: user.avatar,
         profileFrame: user.profileFrame,
         bio: user.bio,
+        language: user.language,
       },
     });
   } catch (error: any) {
@@ -363,6 +365,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         victoryEffect: user.victoryEffect,
         role: user.role,
         bio: user.bio,
+        language: user.language,
         createdAt: user.createdAt,
       },
       stats: {
@@ -394,7 +397,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
 export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    const { username, avatar, bio } = req.body;
+    const { username, avatar, bio, language } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -419,6 +422,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
         ...(username && { username }),
         ...(avatar && { avatar }),
         ...(bio !== undefined && { bio }),
+        ...(language && { language }),
       },
     });
 
@@ -436,6 +440,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
         level: updatedUser.level,
         rank: updatedUser.rank,
         bio: updatedUser.bio,
+        language: updatedUser.language,
       },
     });
   } catch (error: any) {

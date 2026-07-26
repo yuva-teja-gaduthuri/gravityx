@@ -7,6 +7,7 @@ import { useSocket } from '../../hooks/useSocket';
 import SocialDrawer from '../../components/SocialDrawer';
 import ThemeToggle from '../../components/ThemeToggle';
 import { getApiUrl, fetchWithCache } from '../../utils/api';
+import { useTranslation } from '../../hooks/useTranslation';
 import { 
   Trophy, Coins, LogOut, Settings, ShoppingBag, 
   Plus, Users, Flame, PlusCircle, HelpCircle, Gamepad2, ShieldAlert, Edit3, CheckCircle2,
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const router = useRouter();
   const socket = useSocket();
   const { user, stats, refreshProfile, logout, loading } = useAuth(true);
+  const { t } = useTranslation();
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [leaderboardType, setLeaderboardType] = useState<'global' | 'friends'>('global');
@@ -390,7 +392,7 @@ export default function Dashboard() {
                   <PlusCircle size={24} />
                 </div>
                 <div className="text-left">
-                  <h4 className="font-bold text-base">Create Room</h4>
+                  <h4 className="font-bold text-base">{t('createRoomBtn', 'Create Room')}</h4>
                   <p className="text-xs text-gray-500 mt-0.5">Spin up a custom lobby</p>
                 </div>
               </div>
@@ -405,7 +407,7 @@ export default function Dashboard() {
                   <Users size={24} />
                 </div>
                 <div className="text-left">
-                  <h4 className="font-bold text-base">Join Room</h4>
+                  <h4 className="font-bold text-base">{t('joinRoomBtn', 'Join Room')}</h4>
                   <p className="text-xs text-gray-500 mt-0.5">Enter code to join friends</p>
                 </div>
               </div>
@@ -630,7 +632,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="text-[10px] uppercase font-black tracking-widest text-cyberpink">live multiplayer feeds</span>
-                  <h3 className="text-xl font-black text-white mt-0.5">Active Public Lobbies</h3>
+                  <h3 className="text-xl font-black text-white mt-0.5">{t('activeLobbies', 'Active Public Lobbies')}</h3>
                 </div>
                 <button 
                   onClick={fetchPublicRooms}
@@ -642,7 +644,7 @@ export default function Dashboard() {
 
               {publicRooms.length === 0 ? (
                 <div className="glass-card rounded-2xl p-8 border-white/5 text-center space-y-2">
-                  <p className="text-xs text-gray-400 font-semibold">No open lobbies detected on the matchmaking radar.</p>
+                  <p className="text-xs text-gray-400 font-semibold">{t('noActiveLobbies', 'No open lobbies detected on the matchmaking radar.')}</p>
                   <p className="text-[10px] text-gray-500 uppercase tracking-wider">Host a custom room to start a new transmission!</p>
                 </div>
               ) : (

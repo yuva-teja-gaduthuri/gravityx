@@ -5,6 +5,7 @@ import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { HelpCircle, Star, ShieldCheck, Crown, Heart, UserPlus, MessageSquare, ThumbsUp, X, Award } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface Player {
   id: string;
@@ -139,6 +140,7 @@ const CHARACTER_STYLES: { [role: string]: CharacterStyle } = {
 };
 
 export default function RamuduSeethaGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: RSGameProps) {
+  const { t } = useTranslation();
   const [myRole, setMyRole] = useState<string>('');
   const [ramuduId, setRamuduId] = useState<string>('');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -502,7 +504,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
             <div className="flex items-center gap-3 mb-2 sm:mb-0">
               <span className="text-2xl">🏹</span>
               <div>
-                <div className="font-black text-base uppercase">You are Ramudu</div>
+                <div className="font-black text-base uppercase">{t('guessPrompt', 'Ramudu, locate Seetha!')}</div>
                 <div className="text-xs font-semibold opacity-80">
                   {hasGuessed || guesses > 0 
                     ? 'Ramudu has used his only chance.' 
@@ -511,7 +513,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               </div>
             </div>
             <div className="shrink-0 flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
-              <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">Attempts Remaining:</span>
+              <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">{t('attemptsRemaining', 'Guesses Left')}:</span>
               <span className="text-lg font-black">{hasGuessed || guesses > 0 ? 0 : 1}</span>
             </div>
           </div>

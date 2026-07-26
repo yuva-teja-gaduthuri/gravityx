@@ -20,6 +20,7 @@ export interface UserProfile {
   victoryEffect: string;
   role: 'USER' | 'ADMIN';
   bio?: string;
+  language: string;
   createdAt: string;
 }
 

@@ -23,6 +23,7 @@ model User {
   profileFrame   String            @default("default_frame")
   victoryEffect  String            @default("default_victory")
   bio            String?           @default("")
+  language       String            @default("en")
   isBanned       Boolean           @default(false)
   role           String            @default("USER") // USER or ADMIN
   emailVerified  Boolean           @default(false)

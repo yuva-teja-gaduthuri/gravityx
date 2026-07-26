@@ -7,6 +7,7 @@ import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
 import VoiceChat from '../../../components/VoiceChat';
+import { useTranslation } from '../../../hooks/useTranslation';
 import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
 
 interface Player {
@@ -43,6 +44,7 @@ export default function RoomPage() {
   const router = useRouter();
   const params = useParams();
   const roomCode = (params?.code as string)?.toUpperCase();
+  const { t } = useTranslation();
 
   const socket = useSocket();
   const { user, loading } = useAuth(true);
@@ -459,7 +461,7 @@ export default function RoomPage() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto">
                 {isHost && room.gameType === 'RAMUDU_SEETHA' && (
                   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-                    <label className="text-xs font-bold text-gray-400 whitespace-nowrap">Rounds:</label>
+                    <label className="text-xs font-bold text-gray-400 whitespace-nowrap">{t('roundsLabel', 'Session Rounds count')}:</label>
                     <select
                       value={rounds}
                       onChange={(e) => setRounds(Number(e.target.value))}
@@ -482,7 +484,7 @@ export default function RoomPage() {
                       !canStart ? 'opacity-30 cursor-default bg-white/5 border border-white/10 text-gray-500' : 'btn-mythic-gold active:scale-95'
                     }`}
                   >
-                    Start Match
+                    {t('startGameBtn', 'Start Game Operation')}
                   </button>
                 ) : (
                   <button
@@ -493,7 +495,7 @@ export default function RoomPage() {
                         : 'btn-mythic active:scale-95'
                     }`}
                   >
-                    {isReady ? 'Ready' : 'Not Ready'}
+                    {isReady ? t('readyBtn', 'READY') : t('notReadyBtn', 'NOT READY')}
                   </button>
                 )}
               </div>
@@ -512,7 +514,7 @@ export default function RoomPage() {
         <div className="p-3 border-b border-white/5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MessageSquare size={16} className="text-cyberblue" />
-            <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">Lobby Chat</span>
+            <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">{t('chatConsole', 'Chat Console')}</span>
           </div>
           {/* Close button visible only on mobile/tablet */}
           <button 
@@ -541,7 +543,7 @@ export default function RoomPage() {
           <input
             type="text"
             required
-            placeholder="Comms chat..."
+            placeholder={t('chatPlaceholder', 'Comms chat...')}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             className="flex-grow glass-input rounded-xl px-4 py-2 text-xs focus:border-cyberblue"

@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import ThemeToggle from '../../components/ThemeToggle';
 import { getApiUrl } from '../../utils/api';
+import { useTranslation } from '../../hooks/useTranslation';
+import { languages } from '../../utils/translations';
 import { 
   Trophy, Coins, LogOut, Settings, ShieldAlert, CheckCircle2,
   Volume2, ArrowLeft, Zap, Shield, Sparkles, User, PlayCircle, BarChart2,
-  Heart, Star, MessageSquare
+  Heart, Star, MessageSquare, ChevronDown
 } from 'lucide-react';
 
 const AVATAR_GRAPHICS: { [key: string]: string } = {
@@ -25,6 +27,7 @@ const AVATAR_GRAPHICS: { [key: string]: string } = {
 export default function ProfilePage() {
   const router = useRouter();
   const { user, loading, refreshProfile, logout } = useAuth(true);
+  const { t, currentLanguage, setLanguage: updateAppLanguage } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Profile Edit states
@@ -343,7 +346,7 @@ export default function ProfilePage() {
                   onClick={() => setIsEditing(true)}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-cyberpink text-white font-bold text-xs uppercase tracking-wider shadow-neon-pink hover:opacity-90 active:scale-95 transition-all"
                 >
-                  Edit Profile
+                  {t('editProfile', 'Edit Profile')}
                 </button>
             </div>
           </div>
@@ -351,7 +354,9 @@ export default function ProfilePage() {
           // Edit Profile Mode
           <div className="space-y-6 flex-grow flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-black text-slate-800 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2 mb-4">Edit Profile</h3>
+                <h3 className="text-lg font-black text-slate-800 dark:text-white border-b border-slate-200 dark:border-white/5 pb-2 mb-4">
+                  {t('editProfile', 'Edit Profile')}
+                </h3>
                 
                 <form onSubmit={handleUpdateProfile} className="space-y-4">
                   {profileError && (
@@ -366,7 +371,9 @@ export default function ProfilePage() {
                   )}
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Change Display Name</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">
+                      {t('username', 'Change Display Name')}
+                    </label>
                     <input 
                       type="text" 
                       required
@@ -377,7 +384,9 @@ export default function ProfilePage() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Bio Description</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">
+                      {t('bio', 'Bio Description')}
+                    </label>
                     <textarea 
                       value={editBio}
                       onChange={(e) => setEditBio(e.target.value)}
@@ -388,7 +397,9 @@ export default function ProfilePage() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Select Identity Avatar</label>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">
+                      {t('avatar', 'Select Identity Avatar')}
+                    </label>
                     <div className="grid grid-cols-4 gap-2 mt-2">
                       {Object.keys(AVATAR_GRAPHICS).map((av) => (
                         <button
@@ -597,7 +608,27 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Language Selection Option Removed */}
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">
+                {t('selectLanguage', 'Language Selection')}
+              </label>
+              <div className="relative">
+                <select
+                  value={currentLanguage}
+                  onChange={(e) => updateAppLanguage(e.target.value as any)}
+                  className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-800 dark:text-white rounded-xl px-4 py-2.5 text-xs font-bold focus:border-cyberblue appearance-none outline-none cursor-pointer"
+                >
+                  {languages.map((lang) => (
+                    <option key={lang.code} value={lang.code} className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white font-bold">
+                      {lang.flag} {lang.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-slate-500">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-2">
               <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-gray-400 tracking-wider">Profile Privacy</label>

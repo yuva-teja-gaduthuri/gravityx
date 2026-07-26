@@ -5,6 +5,7 @@ import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
 import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface LudoToken {
   id: number;
@@ -313,6 +314,7 @@ interface VisualToken {
 }
 
 export default function LudoGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: LudoGameProps) {
+  const { t } = useTranslation();
   const [gameState, setGameState] = useState<LudoState | null>(null);
   const [validTokens, setValidTokens] = useState<number[]>([]);
   const [isRolling, setIsRolling] = useState(false);
@@ -1660,14 +1662,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               </span>
             </div>
             <p className="text-[10px] text-gray-400 mt-0.5">
-              {isMyTurn ? "Your Command Matrix is active. Roll your base dice." : "Observing opponent telemetry..."}
+              {isMyTurn ? t('yourTurn', 'Your Turn!') : t('waitingTurn', 'Waiting for player turn...')}
             </p>
           </div>
         </div>
         
         {/* Turn timer indicator */}
         <div className="flex flex-col items-end gap-1">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time Left</span>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{t('timeLeft', 'Time Left')}</span>
           <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div 
               className={`h-full transition-all duration-1000 ease-linear ${

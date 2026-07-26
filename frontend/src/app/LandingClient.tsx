@@ -4,8 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Gamepad2, Users, Rocket, Trophy, MessageSquare, ShieldAlert, ChevronDown, Activity, Star } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
+import { useTranslation } from '../hooks/useTranslation';
 
 export default function LandingClient() {
+  const { t } = useTranslation();
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
   const faqs = [
@@ -45,19 +47,19 @@ export default function LandingClient() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300">
-          <a href="#games" className="hover:text-cyberblue transition-colors">Games</a>
-          <a href="#features" className="hover:text-cyberblue transition-colors">Features</a>
-          <a href="#leaderboard" className="hover:text-cyberblue transition-colors">Leaderboards</a>
-          <a href="#faq" className="hover:text-cyberblue transition-colors">FAQ</a>
+          <a href="#games" className="hover:text-cyberblue transition-colors">{t('navGames', 'Games')}</a>
+          <a href="#features" className="hover:text-cyberblue transition-colors">{t('navFeatures', 'Features')}</a>
+          <a href="#leaderboard" className="hover:text-cyberblue transition-colors">{t('navLeaderboard', 'Leaderboards')}</a>
+          <a href="#faq" className="hover:text-cyberblue transition-colors">{t('navFaq', 'FAQ')}</a>
         </nav>
 
         <div className="flex items-center gap-4">
           <ThemeToggle />
           <Link href="/auth" className="px-5 py-2 text-sm font-semibold rounded-xl glass-card text-white hover:border-cyberpink transition-all">
-            Login
+            {t('login', 'Login')}
           </Link>
           <Link href="/auth?tab=guest" className="px-5 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 shadow-neon-blue transition-all">
-            Play Now
+            {t('playNow', 'Play Now')}
           </Link>
         </div>
       </header>
@@ -66,22 +68,19 @@ export default function LandingClient() {
       <section className="relative flex flex-col items-center justify-center text-center px-6 pt-24 pb-16 md:pt-36 md:pb-28 max-w-5xl mx-auto z-10">
 
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight mb-6">
-          Play Together. <br />
-          <span className="bg-gradient-to-r from-cyberblue via-primary to-cyberpink bg-clip-text text-transparent">
-            Anywhere. Anytime.
-          </span>
+          {t('heroTitle', 'Play Together. Anywhere. Anytime.')}
         </h1>
 
         <p className="text-lg md:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
-          Step into a futuristic orbital arena. Join rooms, launch games, and challenge your friends in classic matches and exclusive local board designs.
+          {t('heroSubtitle', 'Step into a futuristic orbital arena. Join rooms, launch games, and challenge your friends in classic matches and exclusive local board designs.')}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-5 items-center justify-center w-full">
           <Link href="/auth?tab=guest" className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-primary via-cyberblue to-primary bg-[size:200%] hover:bg-[100%] text-base font-bold shadow-neon-purple hover:scale-105 transition-all text-center">
-            Launch Guest Session
+            {t('launchGuest', 'Launch Guest Session')}
           </Link>
           <Link href="/auth?tab=register" className="w-full sm:w-auto px-8 py-4 rounded-2xl glass-card border-white/10 hover:border-cyberpink text-base font-bold hover:scale-105 transition-all text-center">
-            Create Account
+            {t('createAccount', 'Create Account')}
           </Link>
         </div>
       </section>
@@ -89,8 +88,8 @@ export default function LandingClient() {
       {/* Games Showcase */}
       <section id="games" className="py-20 px-6 md:px-12 max-w-6xl mx-auto w-full z-10">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-extrabold mb-4">The Launch Bay</h2>
-          <p className="text-gray-400 max-w-xl mx-auto">Two distinct real-time experiences engineered with low latency synchronization.</p>
+          <h2 className="text-3xl md:text-5xl font-extrabold mb-4">{t('gamesTitle', 'The Launch Bay')}</h2>
+          <p className="text-gray-400 max-w-xl mx-auto">{t('gamesSubtitle', 'Two distinct real-time experiences engineered with low latency synchronization.')}</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-10">
@@ -101,15 +100,15 @@ export default function LandingClient() {
               <div className="w-14 h-14 rounded-2xl bg-cyberpink/10 flex items-center justify-center text-cyberpink mb-6 group-hover:scale-110 transition-transform">
                 <Gamepad2 size={28} />
               </div>
-              <span className="text-xs uppercase font-extrabold text-cyberpink tracking-wider">Mythological Deduction</span>
-              <h3 className="text-2xl md:text-3xl font-extrabold mt-2 mb-4 group-hover:text-cyberpink transition-colors">Ramudu-Seetha</h3>
+              <span className="text-xs uppercase font-extrabold text-cyberpink tracking-wider">{t('rsCategory', 'Mythological Deduction')}</span>
+              <h3 className="text-2xl md:text-3xl font-extrabold mt-2 mb-4 group-hover:text-cyberpink transition-colors">{t('rsTitle', 'Ramudu-Seetha')}</h3>
               <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                An exclusive hidden identity deduction game for 3 to 10 players. Ramudu searches for Seetha through direct reveal clicks. Keep Seetha safe from discovery while maintaining your cover.
+                {t('rsDesc', 'An exclusive hidden identity deduction game for 3 to 10 players. Ramudu searches for Seetha through direct reveal clicks. Keep Seetha safe from discovery while maintaining your cover.')}
               </p>
             </div>
             <div className="flex justify-between items-center border-t border-white/5 pt-6 mt-4">
-              <span className="text-xs text-gray-500 font-semibold uppercase">3-10 Players</span>
-              <Link href="/auth" className="text-sm font-bold text-cyberpink group-hover:underline">Play Game &rarr;</Link>
+              <span className="text-xs text-gray-500 font-semibold uppercase">{t('rsPlayers', '3-10 Players')}</span>
+              <Link href="/auth" className="text-sm font-bold text-cyberpink group-hover:underline">{t('playGame', 'Play Game')} &rarr;</Link>
             </div>
           </div>
 
@@ -120,15 +119,15 @@ export default function LandingClient() {
               <div className="w-14 h-14 rounded-2xl bg-cyberblue/10 flex items-center justify-center text-cyberblue mb-6 group-hover:scale-110 transition-transform">
                 <Trophy size={28} />
               </div>
-              <span className="text-xs uppercase font-extrabold text-cyberblue tracking-wider">Classic Strategy</span>
-              <h3 className="text-2xl md:text-3xl font-extrabold mt-2 mb-4 group-hover:text-cyberblue transition-colors">Cosmic Ludo</h3>
+              <span className="text-xs uppercase font-extrabold text-cyberblue tracking-wider">{t('ludoCategory', 'Classic Strategy')}</span>
+              <h3 className="text-2xl md:text-3xl font-extrabold mt-2 mb-4 group-hover:text-cyberblue transition-colors">{t('ludoTitle', 'Cosmic Ludo')}</h3>
               <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                A fully multiplayer-ready, turn-based Ludo match. Roll animated 3D dice, navigate tokens through orbital safe stars, knock back adversaries, and secure top placement with turn timers and connection guards.
+                {t('ludoDesc', 'A fully multiplayer-ready, turn-based Ludo match. Roll animated 3D dice, navigate tokens through orbital safe stars, knock back adversaries, and secure top placement with turn timers and connection guards.')}
               </p>
             </div>
             <div className="flex justify-between items-center border-t border-white/5 pt-6 mt-4">
-              <span className="text-xs text-gray-500 font-semibold uppercase">2 or 4 Players</span>
-              <Link href="/auth" className="text-sm font-bold text-cyberblue group-hover:underline">Play Game &rarr;</Link>
+              <span className="text-xs text-gray-500 font-semibold uppercase">{t('ludoPlayers', '2 or 4 Players')}</span>
+              <Link href="/auth" className="text-sm font-bold text-cyberblue group-hover:underline">{t('playGame', 'Play Game')} &rarr;</Link>
             </div>
           </div>
         </div>

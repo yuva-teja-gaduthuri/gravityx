@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { getApiUrl, fetchWithCache } from '../../utils/api';
 import { Trophy, ArrowLeft, ShieldAlert, Coins } from 'lucide-react';
+import { useTranslation } from '../../hooks/useTranslation';
 
 export default function LeaderboardPage() {
   const router = useRouter();
   const { user, loading } = useAuth(true);
+  const { t } = useTranslation();
   
   const [boardType, setBoardType] = useState<'GLOBAL' | 'LUDO' | 'RAMUDU_SEETHA'>('GLOBAL');
   const [rankings, setRankings] = useState<any[]>([]);
@@ -63,13 +65,13 @@ export default function LeaderboardPage() {
           </button>
           <div>
             <span className="text-[10px] uppercase font-bold text-cyberpink tracking-wider">galaxy stats console</span>
-            <h2 className="text-3xl font-black text-white mt-0.5">Leaderboards</h2>
+            <h2 className="text-3xl font-black text-white mt-0.5">{t('navLeaderboard', 'Leaderboards')}</h2>
           </div>
         </div>
 
         <div className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
           <Trophy className="text-cybergold w-5 h-5" />
-          <span className="text-sm font-black text-gray-200">Rank: <strong className="text-cyberblue">{user.rank}</strong></span>
+          <span className="text-sm font-black text-gray-200">{t('rank', 'Rank')}: <strong className="text-cyberblue">{user.rank}</strong></span>
         </div>
       </div>
 
