@@ -86,7 +86,7 @@ export default function RoomPage() {
       socket.emit('leave_room', { roomCode, userId: user.id });
       socket.off('connect', handleConnect);
     };
-  }, [socket, roomCode]); // DO NOT run when user updates to avoid leave/join cycles
+  }, [socket, roomCode, user?.id, user?.username]);
 
   // Register socket event listeners
   useEffect(() => {
