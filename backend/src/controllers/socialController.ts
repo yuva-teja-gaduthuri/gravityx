@@ -214,3 +214,65 @@ export const sendDirectMessage = async (req: AuthenticatedRequest, res: Response
     res.status(500).json({ error: error.message });
   }
 };
+
+export const likePlayer = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const likerUsername = req.user?.username;
+    const { targetUsername } = req.body;
+
+    if (!likerUsername) return res.status(401).json({ error: 'Unauthorized' });
+    if (!targetUsername) return res.status(400).json({ error: 'Target username is required' });
+
+    const { addLike, getLikesCount } = require('../utils/likesReviewsStore');
+    addLike(targetUsername, likerUsername);
+    const count = getLikesCount(targetUsername);
+
+    res.json({ message: 'Player liked successfully', likesCount: count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const reviewPlayer = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const reviewerName = req.user?.username;
+    const { targetUsername, rating, comment } = req.body;
+
+    if (!reviewerName) return res.status(401).json({ error: 'Unauthorized' });
+    if (!targetUsername || !rating || !comment) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    const { addReview } = require('../utils/likesReviewsStore');
+    addReview(targetUsername, reviewerName, Number(rating), comment);
+    res.status(201).json({ message: 'Review saved successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getPlayerReviews = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+    if (!username) return res.status(400).json({ error: 'Username is required' });
+
+    const { getReviews } = require('../utils/likesReviewsStore');
+    const list = getReviews(username);
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getPlayerLikes = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username } = req.params;
+    if (!username) return res.status(400).json({ error: 'Username is required' });
+
+    const { getLikesCount } = require('../utils/likesReviewsStore');
+    const count = getLikesCount(username);
+    res.json({ likesCount: count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

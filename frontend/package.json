@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.6.0",
+    "chess.js": "^1.4.0",
     "lucide-react": "^0.292.0",
     "next": "^14.0.3",
     "react": "^18.2.0",

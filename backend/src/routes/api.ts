@@ -8,6 +8,10 @@ import {
   rejectFriendRequest,
   getDirectMessages,
   sendDirectMessage,
+  likePlayer,
+  reviewPlayer,
+  getPlayerReviews,
+  getPlayerLikes,
 } from '../controllers/socialController';
 import { getItems, buyItem, equipItem } from '../controllers/storeController';
 import { getLeaderboard } from '../controllers/leaderboardController';
@@ -36,6 +40,10 @@ router.post('/social/accept', authenticateJWT, acceptFriendRequest);
 router.post('/social/reject', authenticateJWT, rejectFriendRequest);
 router.get('/social/messages/:friendId', authenticateJWT, getDirectMessages);
 router.post('/social/messages/:friendId', authenticateJWT, sendDirectMessage);
+router.post('/social/like', authenticateJWT, likePlayer);
+router.post('/social/review', authenticateJWT, reviewPlayer);
+router.get('/social/reviews/:username', authenticateJWT, getPlayerReviews);
+router.get('/social/likes/:username', authenticateJWT, getPlayerLikes);
 
 // Store Routes
 router.get('/store/items', authenticateJWT, getItems);
