@@ -289,7 +289,7 @@ export default function VoiceChat({ roomCode, socket, players, currentUser }: Vo
       if (!audio) {
         audio = document.createElement('audio');
         audio.autoplay = true;
-        audio.playsInline = true;
+        audio.setAttribute('playsinline', 'true');
         audioElementsRef.current.set(peerSocketId, audio);
       }
       

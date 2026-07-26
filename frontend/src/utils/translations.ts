@@ -169,8 +169,21 @@ export const translations: Record<Language, Record<string, string>> = {
     rolesHeader: 'Assigned Role Card',
     rsStatusActive: 'Active turn in progress.',
     guessSuccess: 'Correct! Seetha was discovered!',
-    guessFailed: 'Incorrect guess. Target was',
     rsLobbyWaiting: 'Waiting for host to initiate next round...',
+    gameLabel: 'Game:',
+    chessTitle: 'Chess Strategy',
+    codeLabel: 'Code:',
+    linkCopied: 'Link Copied!',
+    shareLobby: 'Share Lobby',
+    leaveDeck: 'Leave Deck',
+    hostCaptain: 'Captain',
+    readyToLaunch: 'Ready to launch',
+    calibrating: 'Calibrating',
+    disbandLobby: 'Disband Lobby Room',
+    hostReadyToStart: 'All ready status telemetry approved. Captain is cleared to launch the match.',
+    hostWaitingForPlayers: 'Waiting for all crew members to toggle ready status. Ludo requires 2/4 players; RS requires 3+.',
+    playerWaitingForHost: 'Telemetry active. Waiting for Captain to launch the room.',
+    playerConfirmReady: 'Confirm ready status telemetry once loaded.',
 
     // Additional keys for Settings, Store, Admin, Social
     telemetryConfig: 'telemetry configuration',
@@ -178,7 +191,6 @@ export const translations: Record<Language, Record<string, string>> = {
     audioTelemetry: 'Audio Telemetry',
     bgMusic: 'Ambient Background Music',
     gameSounds: 'Interactive Game Sound Effects',
-    consoleVolume: 'Console Volume',
     commsPrivacy: 'Comms & Privacy',
     desktopNotifications: 'Desktop Notifications',
     profileVisibility: 'Profile Visibility',
@@ -418,7 +430,6 @@ export const translations: Record<Language, Record<string, string>> = {
     rolesHeader: 'మీకు కేటాయించిన పాత్ర',
     rsStatusActive: 'ఆట కొనసాగుతోంది.',
     guessSuccess: 'సరైన సమాధానం! సీత కనుగొనబడింది!',
-    guessFailed: 'తప్పు సమాధానం. ఆ పాత్ర',
     rsLobbyWaiting: 'తదుపరి రౌండ్ ప్రారంభించడానికి హోస్ట్ కోసం వేచి ఉంది...',
 
     // Additional keys for Settings, Store, Admin, Social
@@ -427,7 +438,6 @@ export const translations: Record<Language, Record<string, string>> = {
     audioTelemetry: 'ఆడియో టెలిమెట్రీ',
     bgMusic: 'నేపథ్య సంగీతం',
     gameSounds: 'ఆట ధ్వని ప్రభావాలు',
-    consoleVolume: 'కన్సోల్ వాల్యూమ్',
     commsPrivacy: 'కమ్యూనికేషన్స్ & గోప్యత',
     desktopNotifications: 'డెస్క్‌టాప్ నోటిఫికేషన్‌లు',
     profileVisibility: 'ప్రొఫైల్ దృశ్యమానత',
@@ -612,7 +622,6 @@ export const translations: Record<Language, Record<string, string>> = {
     ambientMusic: 'पृष्ठभूमि संगीत',
     soundEffects: 'खेल ध्वनि प्रभाव',
     volume: 'वॉल्यूम',
-    consoleVolume: 'कंसोल वॉल्यूम',
     profilePrivacy: 'प्रोफाइल गोपनीयता',
     applyConfig: 'मार्केटिंग लागू करें',
     configSuccess: 'कॉन्फ़िगरेशन सफलतापूर्वक सहेजा गया!',
@@ -667,7 +676,6 @@ export const translations: Record<Language, Record<string, string>> = {
     rolesHeader: 'सौंपी गई भूमिका',
     rsStatusActive: 'खेल प्रगति पर है।',
     guessSuccess: 'सही अनुमान! सीता मिल गईं!',
-    guessFailed: 'गलत अनुमान। वह भूमिका थी',
     rsLobbyWaiting: 'अगले दौर के लिए होस्ट की प्रतीक्षा की जा रही है...',
 
     // Additional keys for Settings, Store, Admin, Social

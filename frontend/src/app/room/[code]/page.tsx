@@ -86,7 +86,7 @@ export default function RoomPage() {
       socket.emit('leave_room', { roomCode, userId: user.id });
       socket.off('connect', handleConnect);
     };
-  }, [socket, roomCode]); // DO NOT run when user updates to avoid leave/join cycles
+  }, [socket, roomCode, user?.id, user?.username]);
 
   // Register socket event listeners
   useEffect(() => {
@@ -307,23 +307,23 @@ export default function RoomPage() {
                 <span className="text-[10px] font-black uppercase text-cyberblue tracking-wider">Lobby terminal ready</span>
                 <h2 className="text-2xl font-black text-white mt-0.5">{room.name}</h2>
                 <div className="text-xs text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
-                  <span>Game: <strong className="text-cyberpink">{room.gameType === 'LUDO' ? 'Cosmic Ludo' : room.gameType === 'CHESS' ? 'Chess Strategy' : 'Ramudu-Seetha'}</strong></span>
+                  <span>{t('gameLabel', 'Game:')} <strong className="text-cyberpink">{room.gameType === 'LUDO' ? t('ludoTitle', 'Cosmic Ludo') : room.gameType === 'CHESS' ? t('chessTitle', 'Chess Strategy') : t('rsTitle', 'Ramudu-Seetha')}</strong></span>
                   <span>&bull;</span>
-                  <span>Code: <strong className="text-white tracking-widest">{room.code}</strong></span>
+                  <span>{t('codeLabel', 'Code:')} <strong className="text-white tracking-widest">{room.code}</strong></span>
                   <button
                     onClick={handleCopyLink}
                     className="ml-2 px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberblue text-[10px] font-black text-gray-400 hover:text-white transition-all flex items-center gap-1 active:scale-95 uppercase tracking-wider"
                   >
-                    {copied ? 'Link Copied!' : 'Share Lobby'}
+                    {copied ? t('linkCopied', 'Link Copied!') : t('shareLobby', 'Share Lobby')}
                   </button>
                 </div>
               </div>
 
-              <button 
+               <button 
                 onClick={handleLeaveRoom}
                 className="px-5 py-2.5 rounded-xl border border-cybererror/35 bg-cybererror/10 hover:bg-cybererror text-cybererror hover:text-white transition-all text-xs font-bold flex items-center gap-2"
               >
-                <LogOut size={14} /> Leave Deck
+                <LogOut size={14} /> {t('leaveDeck', 'Leave Deck')}
               </button>
             </div>
 
@@ -338,14 +338,14 @@ export default function RoomPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 flex items-center gap-2">
-                  <Users size={16} /> Joined Crew ({room.players.length}/{room.maxPlayers})
+                  <Users size={16} /> {t('joinedCrew', 'Joined Crew')} ({room.players.length}/{room.maxPlayers})
                 </h3>
                 {isHost && room.players.length < room.maxPlayers && (
                   <button
                     onClick={() => socket.emit('add_bot', { roomCode })}
                     className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all active:scale-95 flex items-center gap-1 shadow-sm"
                   >
-                    Add AI Crew
+                    {t('addAiCrew', 'Add AI Crew')}
                   </button>
                 )}
               </div>
@@ -404,7 +404,7 @@ export default function RoomPage() {
                         )}
                       </h4>
                       <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                        {isPlayerHost ? 'Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
+                        {isPlayerHost ? t('hostCaptain', 'Captain') : player.ready ? t('readyToLaunch', 'Ready to launch') : t('calibrating', 'Calibrating')}
                       </p>
                     </div>
                   );
@@ -416,11 +416,11 @@ export default function RoomPage() {
             {isHost && (
               <div className="glass-card rounded-3xl p-6 border-white/5 space-y-4">
                 <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400">
-                  Lobby Settings Configuration
+                  {t('hostCommandCenter', 'Lobby Settings Configuration')}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Visibility</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t('lobbyPrivacy', 'Lobby Privacy')}</label>
                     <select
                       value={room.type}
                       onChange={(e) => socket.emit('edit_room_settings', {
@@ -437,7 +437,7 @@ export default function RoomPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Max Players</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t('maxPlayers', 'Max Players')}</label>
                     <select
                       value={room.maxPlayers}
                       onChange={(e) => socket.emit('edit_room_settings', {
@@ -457,7 +457,7 @@ export default function RoomPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Voice Chat</label>
+                    <label className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">{t('voiceChatLabel', 'Real-time Voice Chat')}</label>
                     <select
                       value={room.voiceChat ? 'true' : 'false'}
                       onChange={(e) => socket.emit('edit_room_settings', {
@@ -482,7 +482,7 @@ export default function RoomPage() {
                       }}
                       className="w-full py-2 rounded-xl bg-cybererror/10 hover:bg-cybererror border border-cybererror/20 hover:border-transparent text-cybererror hover:text-white transition-all text-xs font-bold text-center"
                     >
-                      Disband Lobby Room
+                      {t('disbandLobby', 'Disband Lobby Room')}
                     </button>
                   </div>
                 </div>
@@ -494,12 +494,12 @@ export default function RoomPage() {
               <div className="text-xs text-gray-400 leading-relaxed max-w-md">
                 {isHost ? (
                   canStart ? 
-                    "All ready status telemetry approved. Captain is cleared to launch the match." : 
-                    "Waiting for all crew members to toggle ready status. Ludo requires 2/4 players; RS requires 3+."
+                    t('hostReadyToStart', 'All ready status telemetry approved. Captain is cleared to launch the match.') : 
+                    t('hostWaitingForPlayers', 'Waiting for all crew members to toggle ready status. Ludo requires 2/4 players; RS requires 3+.')
                 ) : (
                   isReady ? 
-                    "Telemetry active. Waiting for Captain to launch the room." : 
-                    "Confirm ready status telemetry once loaded."
+                    t('playerWaitingForHost', 'Telemetry active. Waiting for Captain to launch the room.') : 
+                    t('playerConfirmReady', 'Confirm ready status telemetry once loaded.')
                 )}
               </div>
 
