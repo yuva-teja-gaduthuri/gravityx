@@ -173,30 +173,16 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       });
     }
 
-    const rolesBeforeReset = { ...room.gameState.roles };
-    const seethaIdBeforeReset = room.gameState.seethaId;
-    const guessCountBeforeReset = room.gameState.guessCount;
-
-    // Reset room properties for return to lobby
-    room.status = 'LOBBY';
-    room.players.forEach((p: any) => {
-      p.ready = false;
-      p.role = undefined;
-    });
-    room.gameState = null;
-
-    // Broadcast match ended details
+    // Broadcast match ended details (keep status as PLAYING so scorecard remains open)
     io.to(room.code).emit('rs_match_ended', {
       winnerId: finalScoreboard[0]?.userId || '',
-      seethaId: seethaIdBeforeReset,
-      guessCount: guessCountBeforeReset,
+      seethaId: room.gameState.seethaId,
+      guessCount: room.gameState.guessCount,
       scoreboard: finalScoreboard,
       isCorrect,
-      roles: rolesBeforeReset,
+      roles: room.gameState.roles,
       won: isCorrect,
     });
-
-    io.to(room.code).emit('room_state_updated', room);
   };
 
   // Helper to start a round

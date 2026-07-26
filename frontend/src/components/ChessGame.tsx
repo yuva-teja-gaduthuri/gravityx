@@ -4,6 +4,7 @@ import { Chess } from 'chess.js';
 import confetti from 'canvas-confetti';
 import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Maximize, Minimize, Heart, UserPlus, MessageSquare, X } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface ChessGameProps {
   roomCode: string;
@@ -28,6 +29,7 @@ interface ChessState {
 }
 
 export default function ChessGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: ChessGameProps) {
+  const { t } = useTranslation();
   const [gameState, setGameState] = useState<ChessState | null>(null);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
@@ -166,7 +168,6 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
   };
 
   const handleSaveReview = async (username: string) => {
-    if (user.isGuest) return;
     try {
       const token = localStorage.getItem('gravityx_token');
       const res = await fetch(getApiUrl('/api/social/review'), {
@@ -394,7 +395,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                   {isFlipped ? gameState.whiteUsername : gameState.blackUsername}
                 </span>
                 <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
-                  {isFlipped ? 'WHITE (1st)' : 'BLACK (2nd)'}
+                  {isFlipped ? t('chessWhite', 'WHITE (1st)') : t('chessBlack', 'BLACK (2nd)')}
                 </p>
               </div>
             </div>
@@ -402,7 +403,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
             {gameState.turn === (isFlipped ? 'w' : 'b') && (
               <div className="flex items-center gap-1.5 bg-cybererror/10 border border-cybererror/20 px-2.5 py-1 rounded-xl text-cybererror text-xs font-black animate-pulse">
                 <Timer size={12} />
-                <span>ACTIVE TURN</span>
+                <span>{t('chessActiveTurn', 'ACTIVE TURN')}</span>
               </div>
             )}
           </div>
@@ -425,7 +426,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                   {isFlipped ? gameState.blackUsername : gameState.whiteUsername}
                 </span>
                 <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
-                  {isFlipped ? 'BLACK (2nd)' : 'WHITE (1st)'}
+                  {isFlipped ? t('chessBlack', 'BLACK (2nd)') : t('chessWhite', 'WHITE (1st)')}
                 </p>
               </div>
             </div>
@@ -433,7 +434,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
             {gameState.turn === (isFlipped ? 'b' : 'w') && (
               <div className="flex items-center gap-1.5 bg-cybersuccess/10 border border-cybersuccess/20 px-2.5 py-1 rounded-xl text-cybersuccess text-xs font-black animate-pulse">
                 <Timer size={12} />
-                <span>YOUR TURN</span>
+                <span>{t('chessYourTurn', 'YOUR TURN')}</span>
               </div>
             )}
           </div>
@@ -443,7 +444,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
         <div className="glass-card rounded-3xl p-6 border-white/5 flex flex-col justify-between h-[450px] lg:h-auto gap-4">
           <div className="space-y-4 flex-grow overflow-y-auto">
             <h3 className="text-xs font-black text-white uppercase tracking-wider border-b border-white/5 pb-2">
-              Command log moves
+              {t('chessLogMoves', 'Command log moves')}
             </h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-semibold text-gray-400">
               {gameState.moveHistory.map((move, idx) => (
@@ -461,11 +462,11 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                 onClick={() => onReturnToLobby && onReturnToLobby()}
                 className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-black uppercase tracking-wider text-white transition-all active:scale-95"
               >
-                Return to Lobby
+                {t('chessReturnLobby', 'Return to Lobby')}
               </button>
             ) : (
               <div className="text-center py-2.5 text-xs text-gray-500 font-bold uppercase tracking-wider animate-pulse">
-                Waiting for host to return...
+                {t('chessWaitingHost', 'Waiting for host to return...')}
               </div>
             )}
           </div>
@@ -481,9 +482,9 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
             <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-cyberpink/10 rounded-full blur-2xl"></div>
 
             <div className="text-center mb-6 relative">
-              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">Match Terminal Ended</span>
-              <h3 className="text-3xl font-extrabold text-white mt-1">Standings Log</h3>
-              <p className="text-sm text-gray-400 mt-1">Placements locked. Transmitting rewards.</p>
+              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">{t('chessEnded', 'Match Terminal Ended')}</span>
+              <h3 className="text-3xl font-extrabold text-white mt-1">{t('chessStandings', 'Standings Log')}</h3>
+              <p className="text-sm text-gray-400 mt-1">{t('chessPlacementsLocked', 'Placements locked. Transmitting rewards.')}</p>
             </div>
 
             <div className="space-y-3 mb-6 relative overflow-y-auto max-h-[50vh] pr-1">
@@ -524,7 +525,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                           className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all active:scale-90"
                         >
                           <Heart size={12} className="fill-cyberpink text-cyberpink" />
-                          <span>Like ({likesMap[row.username] || 0})</span>
+                          <span>{t('like', 'Like')} ({likesMap[row.username] || 0})</span>
                         </button>
 
                         {!isSelf && (
@@ -535,7 +536,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                           >
                             <UserPlus size={12} className="text-cyberblue" />
                             <span>
-                              {isFriendAdded ? 'Friend Request Sent' : isFriendSending ? 'Sending...' : 'Add Friend'}
+                              {isFriendAdded ? t('friendRequestSent', 'Friend Request Sent') : isFriendSending ? 'Sending...' : t('addFriendBtn', 'Add Friend')}
                             </span>
                           </button>
                         )}
@@ -546,7 +547,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                             className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cybergold text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all"
                           >
                             <MessageSquare size={12} className="text-cybergold" />
-                            <span>Review Player</span>
+                            <span>{t('reviewPlayer', 'Review Player')}</span>
                           </button>
                         )}
                       </div>
@@ -561,11 +562,11 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                 onClick={() => onReturnToLobby && onReturnToLobby()}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center relative"
               >
-                Return to Lobby
+                {t('chessReturnLobby', 'Return to Lobby')}
               </button>
             ) : (
               <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
-                Waiting for Captain to return to Lobby...
+                {t('chessWaitingHost', 'Waiting for host to return...')}
               </div>
             )}
           </div>
@@ -583,11 +584,11 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
               <X size={16} />
             </button>
             <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">
-              Write Review for {reviewModalUser}
+              {t('writeReviewFor', 'Write Review for')} {reviewModalUser}
             </h4>
             <div className="space-y-4">
               <div>
-                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Select Star Rating</label>
+                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('selectStarRating', 'Select Star Rating')}</label>
                 <div className="flex items-center gap-1 mt-1">
                   {[1, 2, 3, 4, 5].map((val) => (
                     <button
@@ -602,11 +603,11 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                 </div>
               </div>
               <div>
-                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Comment/Feedback</label>
+                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">{t('commentFeedback', 'Comment/Feedback')}</label>
                 <textarea
                   value={reviewComment}
                   onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder="Tell others how this user played..."
+                  placeholder={t('tellHowPlayed', 'Tell others how this user played...')}
                   className="w-full h-24 mt-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:border-cyberblue focus:outline-none"
                 />
               </div>
@@ -614,7 +615,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
                 onClick={() => handleSaveReview(reviewModalUser)}
                 className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold text-xs uppercase tracking-wider shadow-md hover:opacity-90 active:scale-95 transition-all"
               >
-                Save Review
+                {t('saveReview', 'Save Review')}
               </button>
             </div>
           </div>

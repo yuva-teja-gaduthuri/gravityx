@@ -72,7 +72,7 @@ export default function SpaceBackground() {
 
     const renderLoop = () => {
       const isLightMode = document.documentElement.classList.contains('light');
-      ctx.fillStyle = isLightMode ? 'rgba(243, 240, 255, 0.75)' : 'rgba(5, 8, 22, 0.2)';
+      ctx.fillStyle = isLightMode ? 'rgba(243, 240, 255, 0.2)' : 'rgba(5, 8, 22, 0.2)';
       ctx.fillRect(0, 0, width, height);
 
       stars.forEach((s) => {

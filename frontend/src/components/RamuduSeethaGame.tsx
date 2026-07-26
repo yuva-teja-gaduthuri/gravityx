@@ -199,6 +199,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
     isCorrect?: boolean;
     roles?: { [key: string]: string };
   } | null>(null);
+  const [likedScoreboardPlayers, setLikedScoreboardPlayers] = useState<string[]>([]);
 
   const playersRef = useRef<Player[]>([]);
   useEffect(() => {
@@ -277,11 +278,17 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setMaxRounds(data.maxRounds || 3);
       setSessionScoreboard(data.sessionScoreboard || {});
       setLikedPlayersInGame([]); // Reset in-game likes
+      setLikedScoreboardPlayers([]);
     });
 
     socket.on('rs_guess_result', (data: any) => {
       setRevealedIds(data.revealedIds);
-      setHasGuessed(true);
+      setGuesses(data.guesses);
+      if (data.guesses > 0) {
+        setHasGuessed(true);
+      } else {
+        setHasGuessed(false);
+      }
       
       if (data.targetUserId) {
         setPlayers((prev) =>
@@ -403,7 +410,6 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
   };
 
   const handleSaveReview = async (username: string) => {
-    if (user.isGuest) return;
     try {
       const token = localStorage.getItem('gravityx_token');
       const res = await fetch(getApiUrl('/api/social/review'), {
@@ -908,27 +914,108 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               </p>
             </div>
 
-            <div className="space-y-4 mb-6">
-              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Final Standings</h4>
-              <div className="divide-y divide-white/5 bg-white/3 rounded-2xl p-4 border border-white/5 space-y-3">
-                {matchResults.scoreboard.map((row) => {
-                  const finalRole = matchResults.roles?.[row.userId];
-                  const finalBadge = finalRole ? CHARACTER_STYLES[finalRole]?.badge : '';
+            {/* Grand Champion section */}
+            {matchResults.scoreboard.length > 0 && (() => {
+              const winner = matchResults.scoreboard[0];
+              const isWinnerSelf = winner.username === user.username;
+              const winnerRole = 'Ramudu';
+              const winnerStyle = CHARACTER_STYLES[winnerRole];
+              const isWinnerFriendAdded = friendStatus[winner.username] === 'sent';
+              const isWinnerFriendSending = friendStatus[winner.username] === 'sending';
+              const hasLikedWinner = likedScoreboardPlayers.includes(winner.username);
+
+              return (
+                <div className="glass-card rounded-3xl p-6 border-cybergold/50 bg-gradient-to-b from-cybergold/20 to-cybergold/5 text-center flex flex-col items-center relative overflow-hidden shadow-[0_0_25px_rgba(255,213,79,0.25)] border-2 mb-6">
+                  <div className="absolute -top-10 -left-10 w-24 h-24 bg-cybergold/10 rounded-full blur-xl"></div>
+                  <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-cybergold/10 rounded-full blur-xl"></div>
+                  
+                  <span className="text-[10px] font-black uppercase text-cybergold tracking-widest flex items-center gap-1.5 animate-bounce mb-2">
+                    👑 RAMUDU / WINNER #1 👑
+                  </span>
+                  
+                  <div className="w-16 h-16 rounded-full bg-cybergold/20 border-2 border-cybergold flex items-center justify-center text-4xl mb-3 shadow-[0_0_15px_rgba(255,213,79,0.4)]">
+                    {winnerStyle?.badge || '🏹'}
+                  </div>
+
+                  <h3 className="text-xl font-black text-white">{winner.username} {isWinnerSelf && <span className="text-xs text-gray-400">(you)</span>}</h3>
+                  <p className="text-xs font-black text-cybergold uppercase tracking-widest mt-1">
+                    {winner.score} POINTS
+                  </p>
+                  
+                  <div className="flex items-center gap-2 mt-4 flex-wrap justify-center">
+                    {/* Like Button */}
+                    <button
+                      onClick={() => {
+                        if (hasLikedWinner) return;
+                        handleLike(winner.username);
+                        setLikedScoreboardPlayers(prev => [...prev, winner.username]);
+                      }}
+                      disabled={hasLikedWinner}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        hasLikedWinner
+                          ? 'bg-cyberpink/20 border-cyberpink/30 text-cyberpink cursor-not-allowed opacity-80'
+                          : 'bg-white/5 border-white/10 hover:border-cyberpink text-gray-300 hover:text-white active:scale-95'
+                      }`}
+                    >
+                      <Heart size={12} className={hasLikedWinner ? "fill-cyberpink text-cyberpink" : ""} />
+                      <span>{hasLikedWinner ? 'Liked 👍' : 'Like'} ({likesMap[winner.username] || 0})</span>
+                    </button>
+
+                    {/* Add Friend Button */}
+                    {!isWinnerSelf && (
+                      <button
+                        onClick={() => handleAddFriendClick(winner.username)}
+                        disabled={isWinnerFriendAdded || isWinnerFriendSending}
+                        className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-cyberblue text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        <UserPlus size={12} className="text-cyberblue" />
+                        <span>
+                          {isWinnerFriendAdded ? 'Friend Added' : isWinnerFriendSending ? 'Sending...' : 'Add Friend'}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Review Button */}
+                    {!isWinnerSelf && (
+                      <button
+                        onClick={() => setReviewModalUser(winner.username)}
+                        className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-cybergold text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition-all"
+                      >
+                        <MessageSquare size={12} className="text-cybergold" />
+                        <span>Review</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Remaining players section */}
+            <div className="space-y-3 mb-6">
+              <h4 className="text-xs uppercase font-extrabold text-gray-400 tracking-wider">Remaining Standings</h4>
+              <div className="divide-y divide-white/5 bg-white/3 rounded-2xl p-4 border border-white/5 space-y-3 overflow-y-auto max-h-[220px]">
+                {matchResults.scoreboard.slice(1).map((row, idx) => {
+                  const sortedIdx = idx + 1; // because we sliced the winner
+                  const FINAL_STANDINGS_ROSTER = ['Ramudu', 'Lakshmana', 'Seetha', 'Hanumanthudu', 'Bharathudu', 'Shatrugnudu', 'Jambavanthudu', 'Sugrivudu', 'Vibhishana'];
+                  const finalRole = FINAL_STANDINGS_ROSTER[sortedIdx] || 'Vibhishana';
+                  const finalBadge = CHARACTER_STYLES[finalRole]?.badge || '📿';
                   const isSelf = row.username === user.username;
                   const isFriendAdded = friendStatus[row.username] === 'sent';
                   const isFriendSending = friendStatus[row.username] === 'sending';
+                  const hasLiked = likedScoreboardPlayers.includes(row.username);
 
                   return (
                     <div key={row.userId} className="flex flex-col py-3 first:pt-0 last:pb-0 gap-3">
                       <div className="flex justify-between items-center text-sm">
                         <div className="flex items-center gap-3 min-w-0">
-                          <span className="font-black text-cybergold w-4">#{row.placement}</span>
+                          <span className="font-black text-gray-400 w-4">#{sortedIdx + 1}</span>
                           <span className="font-bold text-gray-200 truncate">{row.username} {isSelf && <span className="text-[9px] text-gray-500">(you)</span>}</span>
-                          {finalRole && (
-                            <span className="text-xs shrink-0" title={finalRole}>{finalBadge}</span>
-                          )}
+                          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[9px] text-gray-400 flex items-center gap-1 font-bold">
+                            <span>{finalBadge}</span>
+                            <span className="uppercase text-[8px] tracking-wider">{finalRole}</span>
+                          </span>
                         </div>
-                        <div className="flex items-center gap-4 shrink-0">
+                        <div className="flex items-center gap-4 shrink-0 font-bold">
                           <span className="text-[10px] text-gray-400">+{row.xpEarned} XP &bull; +{row.coinsEarned} 🪙</span>
                           <span className="font-black text-cyberpink">{row.score} pts</span>
                         </div>
@@ -938,11 +1025,20 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                       <div className="flex items-center gap-2 flex-wrap pl-7">
                         {/* Like Button */}
                         <button
-                          onClick={() => handleLike(row.username)}
-                          className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all active:scale-90"
+                          onClick={() => {
+                            if (hasLiked) return;
+                            handleLike(row.username);
+                            setLikedScoreboardPlayers(prev => [...prev, row.username]);
+                          }}
+                          disabled={hasLiked}
+                          className={`px-2.5 py-1 rounded border text-[10px] font-bold flex items-center gap-1.5 transition-all ${
+                            hasLiked
+                              ? 'bg-cyberpink/20 border-cyberpink/30 text-cyberpink cursor-not-allowed opacity-80'
+                              : 'bg-white/5 border-white/10 hover:border-cyberpink text-gray-300 hover:text-white active:scale-95'
+                          }`}
                         >
-                          <Heart size={12} className="fill-cyberpink text-cyberpink" />
-                          <span>Like ({likesMap[row.username] || 0})</span>
+                          <Heart size={10} className={hasLiked ? "fill-cyberpink text-cyberpink" : ""} />
+                          <span>{hasLiked ? 'Liked 👍' : 'Like'} ({likesMap[row.username] || 0})</span>
                         </button>
 
                         {/* Add Friend option (show to all users but not yourself) */}
@@ -952,20 +1048,20 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
                             disabled={isFriendAdded || isFriendSending}
                             className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberblue text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all disabled:opacity-50"
                           >
-                            <UserPlus size={12} className="text-cyberblue" />
+                            <UserPlus size={10} className="text-cyberblue" />
                             <span>
                               {isFriendAdded ? 'Friend Added' : isFriendSending ? 'Sending...' : 'Add Friend'}
                             </span>
                           </button>
                         )}
 
-                        {/* Review Option (Only for registered users, not for guests, and not for themselves) */}
-                        {!user.isGuest && !isSelf && (
+                        {/* Review Option (Only for registered users, but let guests rate too, and not for themselves) */}
+                        {!isSelf && (
                           <button
                             onClick={() => setReviewModalUser(row.username)}
                             className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cybergold text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all"
                           >
-                            <MessageSquare size={12} className="text-cybergold" />
+                            <MessageSquare size={10} className="text-cybergold" />
                             <span>Review Player</span>
                           </button>
                         )}
@@ -976,18 +1072,12 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               </div>
             </div>
 
-            {isHost ? (
-              <button 
-                onClick={onReturnToLobby}
-                className="w-full py-4 rounded-xl btn-mythic font-extrabold uppercase text-xs tracking-wider text-center"
-              >
-                Return to Lobby
-              </button>
-            ) : (
-              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
-                Waiting for Captain to return to Lobby...
-              </div>
-            )}
+            <button 
+              onClick={onReturnToLobby}
+              className="w-full py-4 rounded-xl btn-mythic font-extrabold uppercase text-xs tracking-wider text-center"
+            >
+              Return to Lobby
+            </button>
           </div>
         </div>
       )}

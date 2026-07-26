@@ -416,3 +416,69 @@ select, select option {
 .btn-mythic-gold:active {
   transform: translateY(1px);
 }
+
+/* Light Mode Visibility and Contrast overrides */
+.light .glass-card, 
+.light .glass-panel {
+  color: #0f172a !important; /* Force dark text in light mode */
+  border-color: rgba(108, 99, 255, 0.25) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Fix text contrast inside light-colored cards and panels */
+.light .glass-card.text-white,
+.light .glass-card .text-white,
+.light .glass-panel .text-white,
+.light button.glass-card,
+.light a.glass-card,
+.light [role="button"].glass-card {
+  color: #0f172a !important;
+}
+
+/* Ensure filled buttons keep white text in light mode */
+.light .bg-primary,
+.light .bg-cyberblue,
+.light .bg-cyberpink,
+.light .bg-cybersuccess,
+.light .bg-cybererror,
+.light .btn-mythic,
+.light .bg-gradient-to-r,
+.light .bg-gradient-to-br {
+  color: #ffffff !important;
+}
+
+.light .bg-primary *,
+.light .bg-cyberblue *,
+.light .bg-cyberpink *,
+.light .bg-cybersuccess *,
+.light .bg-cybererror *,
+.light .btn-mythic *,
+.light .bg-gradient-to-r *,
+.light .bg-gradient-to-br * {
+  color: #ffffff !important;
+}
+
+/* Ensure inputs and selections are dark text on light background */
+.light input.glass-input,
+.light select.glass-input,
+.light textarea.glass-input,
+.light input,
+.light select,
+.light textarea {
+  color: #0f172a !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(108, 99, 255, 0.3) !important;
+}
+
+.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Fix generic text items inside layout */
+.light .text-gray-400 {
+  color: #334155 !important;
+}
+.light .text-gray-300 {
+  color: #1e293b !important;
+}

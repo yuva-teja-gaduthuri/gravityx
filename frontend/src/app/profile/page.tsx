@@ -226,7 +226,7 @@ export default function ProfilePage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ username: editUsername, avatar: editAvatar, bio: editBio })
+        body: JSON.stringify({ username: editUsername, avatar: editAvatar, bio: editBio, language: currentLanguage })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update profile');

@@ -107,7 +107,8 @@ export function handleRoom(io: Server, socket: Socket) {
       };
 
       let updatedRoom: any = room;
-      if (!existingPlayer) {
+      const isNewJoin = !existingPlayer;
+      if (isNewJoin) {
         updatedRoom = roomStore.addPlayer(upperCode, player);
       } else {
         // Re-use existing ready status and details but update socketId
@@ -123,13 +124,15 @@ export function handleRoom(io: Server, socket: Socket) {
       socket.emit('room_joined', updatedRoom);
       io.to(upperCode).emit('room_state_updated', updatedRoom);
 
-      // System Message
-      io.to(upperCode).emit('chat_message', {
-        id: Math.random().toString(),
-        senderName: 'SYSTEM',
-        content: `${username} joined the room.`,
-        createdAt: new Date(),
-      });
+      // System Message - ONLY if player newly joined
+      if (isNewJoin) {
+        io.to(upperCode).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `${username} joined the room.`,
+          createdAt: new Date(),
+        });
+      }
 
       // Asynchronous background profile enrichment to eliminate database loading delays
       prisma.user.findUnique({
