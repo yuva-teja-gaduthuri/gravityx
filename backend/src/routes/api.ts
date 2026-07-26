@@ -17,20 +17,21 @@ import { getItems, buyItem, equipItem } from '../controllers/storeController';
 import { getLeaderboard } from '../controllers/leaderboardController';
 import { getUsers, banUser, unbanUser, getSystemStats } from '../controllers/adminController';
 import { authenticateJWT, requireAdmin } from '../middleware/auth';
+import { rateLimitMiddleware } from '../middleware/rateLimit';
 import { roomStore } from '../models/roomStore';
 
 const router = Router();
 
 // Auth Routes
-router.post('/auth/register', register);
-router.post('/auth/login', login);
+router.post('/auth/register', rateLimitMiddleware, register);
+router.post('/auth/login', rateLimitMiddleware, login);
 router.post('/auth/guest', guestLogin);
 router.get('/auth/profile', authenticateJWT, getProfile);
 router.put('/auth/profile', authenticateJWT, updateProfile);
 router.post('/auth/verify', verifyEmail);
 router.post('/auth/resend-verification', resendVerification);
-router.post('/auth/forgot-password', forgotPassword);
-router.post('/auth/reset-password', resetPassword);
+router.post('/auth/forgot-password', rateLimitMiddleware, forgotPassword);
+router.post('/auth/reset-password', rateLimitMiddleware, resetPassword);
 
 // Social Routes
 router.get('/social/friends', authenticateJWT, getFriends);

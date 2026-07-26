@@ -6,7 +6,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
-import ChessGame from '../../../components/ChessGame';
+import ChessGame from '@/components/ChessGame';
 import VoiceChat from '../../../components/VoiceChat';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
@@ -64,6 +64,7 @@ export default function RoomPage() {
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Join room on mount and leave on unmount
   useEffect(() => {
     if (!socket || !user || !roomCode) return;
 
@@ -81,15 +82,25 @@ export default function RoomPage() {
 
     socket.on('connect', handleConnect);
 
-    socket.on('room_joined', (roomData: RoomData) => {
+    return () => {
+      socket.emit('leave_room', { roomCode, userId: user.id });
+      socket.off('connect', handleConnect);
+    };
+  }, [socket, roomCode]); // DO NOT run when user updates to avoid leave/join cycles
+
+  // Register socket event listeners
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleRoomJoined = (roomData: RoomData) => {
       setRoom(roomData);
       const myPlayer = roomData.players.find((p) => p.id === user.id);
       if (myPlayer) {
         setIsReady(myPlayer.ready);
       }
-    });
+    };
 
-    socket.on('room_state_updated', (roomData: RoomData) => {
+    const handleRoomStateUpdated = (roomData: RoomData) => {
       setRoom(roomData);
       const myPlayer = roomData.players.find((p) => p.id === user.id);
       if (myPlayer) {
@@ -98,54 +109,61 @@ export default function RoomPage() {
       if (roomData.status === 'LOBBY') {
         setMatchEndedData(null);
       }
-    });
+    };
 
-    socket.on('room_kicked', ({ message }: { message: string }) => {
+    const handleRoomKicked = ({ message }: { message: string }) => {
       alert(message);
       router.push('/dashboard');
-    });
+    };
 
-    socket.on('chat_message', (msg: ChatMessage) => {
+    const handleChatMessage = (msg: ChatMessage) => {
       setChatList((prev) => [...prev, msg]);
-    });
+    };
 
-    socket.on('room_deleted', () => {
+    const handleRoomDeleted = () => {
       alert('The lobby was disbanded.');
       router.push('/dashboard');
-    });
+    };
 
-    socket.on('error', (msg: string) => {
+    const handleError = (msg: string) => {
       setErrorMsg(msg);
       setTimeout(() => setErrorMsg(''), 5000);
-    });
+    };
 
-    socket.on('rs_match_ended', (data: any) => {
+    const handleRsMatchEnded = (data: any) => {
       setMatchEndedData({ gameType: 'RAMUDU_SEETHA', data });
-    });
+    };
 
-    socket.on('ludo_match_ended', (data: any) => {
+    const handleLudoMatchEnded = (data: any) => {
       setMatchEndedData({ gameType: 'LUDO', data });
-    });
+    };
 
-    socket.on('chess_match_ended', (data: any) => {
+    const handleChessMatchEnded = (data: any) => {
       setMatchEndedData({ gameType: 'CHESS', data });
-    });
+    };
+
+    socket.on('room_joined', handleRoomJoined);
+    socket.on('room_state_updated', handleRoomStateUpdated);
+    socket.on('room_kicked', handleRoomKicked);
+    socket.on('chat_message', handleChatMessage);
+    socket.on('room_deleted', handleRoomDeleted);
+    socket.on('error', handleError);
+    socket.on('rs_match_ended', handleRsMatchEnded);
+    socket.on('ludo_match_ended', handleLudoMatchEnded);
+    socket.on('chess_match_ended', handleChessMatchEnded);
 
     return () => {
-      // Clean room signals
-      socket.emit('leave_room', { roomCode, userId: user.id });
-      socket.off('connect', handleConnect);
-      socket.off('room_joined');
-      socket.off('room_state_updated');
-      socket.off('room_kicked');
-      socket.off('chat_message');
-      socket.off('room_deleted');
-      socket.off('error');
-      socket.off('rs_match_ended');
-      socket.off('ludo_match_ended');
-      socket.off('chess_match_ended');
+      socket.off('room_joined', handleRoomJoined);
+      socket.off('room_state_updated', handleRoomStateUpdated);
+      socket.off('room_kicked', handleRoomKicked);
+      socket.off('chat_message', handleChatMessage);
+      socket.off('room_deleted', handleRoomDeleted);
+      socket.off('error', handleError);
+      socket.off('rs_match_ended', handleRsMatchEnded);
+      socket.off('ludo_match_ended', handleLudoMatchEnded);
+      socket.off('chess_match_ended', handleChessMatchEnded);
     };
-  }, [socket, user, roomCode, router]);
+  }, [socket, user, router]);
 
   // Scroll chat list automatically
   useEffect(() => {

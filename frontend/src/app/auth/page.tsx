@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, Mail, User, ShieldAlert, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import Turnstile from 'react-turnstile';
 import { getApiUrl } from '../../utils/api';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -27,14 +28,20 @@ function AuthContent() {
   const [forgotSent, setForgotSent] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
 
-  // Sync tab state from URL params
   useEffect(() => {
     const t = searchParams.get('tab');
     if (t && t !== tab) {
       setTab(t);
     }
   }, [searchParams, tab]);
+
+  // Reset Turnstile token on tab changes
+  useEffect(() => {
+    setTurnstileToken(null);
+  }, [tab]);
 
   const verifyDispatched = useRef(false);
   const guestLoginDispatched = useRef(false);
@@ -352,9 +359,18 @@ function AuthContent() {
               </div>
             </div>
 
+            {siteKey && (
+              <div className="flex justify-center my-3">
+                <Turnstile
+                  sitekey={siteKey}
+                  onVerify={(t) => setTurnstileToken(t)}
+                />
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!!siteKey && !turnstileToken)}
               className="w-full py-4 bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 rounded-xl font-bold shadow-neon-blue transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
@@ -445,9 +461,18 @@ function AuthContent() {
               </div>
             </div>
 
+            {siteKey && (
+              <div className="flex justify-center my-3">
+                <Turnstile
+                  sitekey={siteKey}
+                  onVerify={(t) => setTurnstileToken(t)}
+                />
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!!siteKey && !turnstileToken)}
               className="w-full py-4 bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 rounded-xl font-bold shadow-neon-blue transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading ? (
