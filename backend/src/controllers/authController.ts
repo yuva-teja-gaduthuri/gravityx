@@ -19,6 +19,22 @@ export const register = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Username, email and password are required' });
     }
 
+    // Format validation
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    if (!usernameRegex.test(username)) {
+      return res.status(400).json({ error: 'Username must be 3-20 characters long and contain only letters, numbers, and underscores' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address format' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Pre-create check
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [{ username }, { email }],
@@ -26,32 +42,70 @@ export const register = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
+      if (existingUser.username === username) {
+        return res.status(400).json({ error: 'Username is already taken' });
+      }
+      if (existingUser.email === email) {
+        return res.status(400).json({ error: 'Email is already registered' });
+      }
       return res.status(400).json({ error: 'Username or email already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        passwordHash,
-        isGuest: false,
-        emailVerified: false, // Default is unverified
-        verificationToken,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          username,
+          email,
+          passwordHash,
+          isGuest: false,
+          emailVerified: false, // Default is unverified
+          verificationToken,
+        },
+      });
+    } catch (dbError: any) {
+      if (dbError.code === 'P2002') {
+        const target = dbError.meta?.target || [];
+        if (target.includes('username')) {
+          return res.status(400).json({ error: 'Username is already taken' });
+        }
+        if (target.includes('email')) {
+          return res.status(400).json({ error: 'Email is already registered' });
+        }
+        return res.status(400).json({ error: 'Username or email already exists' });
+      }
+      throw dbError;
+    }
 
     try {
       // Send verification email
       await sendVerificationEmail(email, verificationToken, username);
     } catch (emailError: any) {
-      // Rollback user creation if email fails so registration can be retried
-      await prisma.user.delete({
-        where: { id: user.id },
-      });
-      throw emailError;
+      if (process.env.NODE_ENV === 'production') {
+        // Rollback user creation if email fails so registration can be retried in production
+        await prisma.user.delete({
+          where: { id: user.id },
+        });
+        throw emailError;
+      } else {
+        // In development, log and auto-verify user
+        console.warn(`⚠️ [MAILER WARNING]: Failed to send verification email in development: ${emailError.message}`);
+        console.log(`🌌 [DEVELOPMENT AUTO-VERIFICATION]: Auto-verifying user ${username} (${email}) due to mailer failure.`);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            emailVerified: true,
+            verificationToken: null,
+          },
+        });
+        return res.status(201).json({
+          message: 'Registration successful! (Auto-verified in development mode).',
+          autoVerified: true,
+        });
+      }
     }
 
     res.status(201).json({
@@ -312,6 +366,53 @@ export const guestLogin = async (req: Request, res: Response) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+/**
+ * Refresh expired/existing JWT token
+ */
+export const refreshToken = async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }, async (err: any, decoded: any) => {
+      if (err) {
+        return res.status(403).json({ error: 'Invalid token' });
+      }
+
+      const payload = decoded as { id: string; username: string; role: string; exp?: number };
+
+      if (payload.exp) {
+        const now = Math.floor(Date.now() / 1000);
+        const expiredSince = now - payload.exp;
+        const gracePeriod = 7 * 24 * 3600; // 7 days grace period
+        if (expiredSince > gracePeriod) {
+          return res.status(401).json({ error: 'Session expired. Please log in again.' });
+        }
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: payload.id } });
+      if (!user || user.isBanned) {
+        return res.status(401).json({ error: user?.isBanned ? 'Your account has been banned' : 'User not found' });
+      }
+
+      const newToken = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: user.isGuest ? '24h' : '7d' }
+      );
+
+      res.json({ token: newToken });
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 
 /**
  * Retrieve Authenticated Profile

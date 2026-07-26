@@ -80,14 +80,41 @@ export function useAuth(requireAuth = true) {
     }
 
     try {
-      if (!activeProfilePromise) {
-        const url = getApiUrl('/api/auth/profile');
-        activeProfilePromise = fetch(url, {
+      let activeToken = token;
+      try {
+        const refreshUrl = getApiUrl('/api/auth/refresh');
+        const refreshRes = await fetch(refreshUrl, {
+          method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+        });
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          activeToken = refreshData.token;
+          localStorage.setItem('gravityx_token', activeToken);
+        } else if (refreshRes.status === 401 || refreshRes.status === 403) {
+          throw { status: refreshRes.status, message: 'Session expired' };
+        }
+      } catch (refreshErr: any) {
+        if (refreshErr.status === 401 || refreshErr.status === 403) {
+          throw refreshErr;
+        }
+        // Fail-open for other errors like server offline/network hiccups
+      }
+
+      if (!activeProfilePromise) {
+        const url = getApiUrl('/api/auth/profile');
+        activeProfilePromise = fetch(url, {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+            'Content-Type': 'application/json',
+          },
         }).then((res) => {
+          if (res.status === 401 || res.status === 403) {
+            throw { status: res.status, message: 'Unauthorized' };
+          }
           if (!res.ok) throw new Error(`Profile fetch failed status: ${res.status}`);
           return res.json();
         }).finally(() => {
@@ -109,12 +136,18 @@ export function useAuth(requireAuth = true) {
       
       // Dispatch sync event for active client hooks
       window.dispatchEvent(new Event('gravityx_user_updated'));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching profile:', err);
-      localStorage.removeItem('gravityx_token');
-      localStorage.removeItem('gravityx_user');
-      localStorage.removeItem('gravityx_stats');
-      if (requireAuth) router.push('/auth');
+      // ONLY clear credentials and redirect to auth if it is an authorization failure
+      if (err.status === 401 || err.status === 403) {
+        localStorage.removeItem('gravityx_token');
+        localStorage.removeItem('gravityx_user');
+        localStorage.removeItem('gravityx_stats');
+        setUser(null);
+        setStats(null);
+        window.dispatchEvent(new Event('gravityx_user_updated'));
+        if (requireAuth) router.push('/auth');
+      }
     } finally {
       setLoading(false);
     }

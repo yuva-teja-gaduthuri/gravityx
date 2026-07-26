@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { roomStore, Player } from '../models/roomStore';
+import { roomStore, Player, playerDisconnectTimeouts } from '../models/roomStore';
 import prisma from '../utils/prisma';
 import { clearRSRoundTimeout } from './ramuduSeethaHandler';
 
@@ -25,11 +25,20 @@ export function handleRoom(io: Server, socket: Socket) {
     allowSpectators: boolean;
   }) => {
     try {
+      // Check auth
+      if (!socket.data.user || socket.data.user.id !== userId) {
+        return socket.emit('error', 'Unauthorized room operation');
+      }
+
       // Generate alphanumeric 6-digit room code
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let code = '';
       let isUnique = false;
       while (!isUnique) {
-        code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        code = '';
+        for (let i = 0; i < 6; i++) {
+          code += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
         if (!roomStore.getRoom(code)) isUnique = true;
       }
 
@@ -79,6 +88,11 @@ export function handleRoom(io: Server, socket: Socket) {
     username: string;
   }) => {
     try {
+      // Check auth
+      if (!socket.data.user || socket.data.user.id !== userId) {
+        return socket.emit('error', 'Unauthorized room operation');
+      }
+
       const upperCode = roomCode.trim().toUpperCase();
       const room = roomStore.getRoom(upperCode);
 
@@ -86,34 +100,55 @@ export function handleRoom(io: Server, socket: Socket) {
         return socket.emit('error', 'Room not found');
       }
 
-      // Synchronous check if player is already in room
       const existingPlayer = room.players.find((p) => p.id === userId);
 
+      // Bypass PLAYING check if rejoining, otherwise block
       if (room.status === 'PLAYING' && !existingPlayer) {
         return socket.emit('error', 'Game already in progress');
       }
 
-      // Check if room is full
       if (!existingPlayer && room.players.length >= room.maxPlayers) {
         return socket.emit('error', 'Room is full');
       }
+
+      // Cancel any pending disconnect grace timeouts for this user in this room
+      const timeoutKey = `${upperCode}_${userId}`;
+      if (playerDisconnectTimeouts.has(timeoutKey)) {
+        clearTimeout(playerDisconnectTimeouts.get(timeoutKey)!);
+        playerDisconnectTimeouts.delete(timeoutKey);
+      }
+
+      // Enforce exactly one active socket per player (kick older socket if present)
+      if (existingPlayer && existingPlayer.socketId !== socket.id) {
+        const oldSocket = io.sockets.sockets.get(existingPlayer.socketId);
+        if (oldSocket) {
+          oldSocket.emit('error', 'You have joined this room from another tab or device.');
+          oldSocket.leave(upperCode);
+        }
+      }
+
+      // Fetch user profile info synchronously before adding to room (eliminates default avatar flash)
+      const userProfile = await prisma.user.findUnique({
+        where: { id: userId },
+      });
 
       const player: Player = {
         id: userId,
         username: username,
         socketId: socket.id,
-        avatar: 'default_avatar',
-        profileFrame: 'default_frame',
-        ready: false,
+        avatar: userProfile?.avatar || 'default_avatar',
+        profileFrame: userProfile?.profileFrame || 'default_frame',
+        ready: existingPlayer ? existingPlayer.ready : false,
       };
 
       let updatedRoom: any = room;
       if (!existingPlayer) {
         updatedRoom = roomStore.addPlayer(upperCode, player);
       } else {
-        // Re-use existing ready status and details but update socketId
         existingPlayer.socketId = socket.id;
-        roomStore.clearDisconnectTimeout(upperCode, userId);
+        existingPlayer.disconnected = false; // Mark as active
+        existingPlayer.avatar = userProfile?.avatar || existingPlayer.avatar;
+        existingPlayer.profileFrame = userProfile?.profileFrame || existingPlayer.profileFrame;
       }
 
       if (!updatedRoom) {
@@ -128,29 +163,9 @@ export function handleRoom(io: Server, socket: Socket) {
       io.to(upperCode).emit('chat_message', {
         id: Math.random().toString(),
         senderName: 'SYSTEM',
-        content: existingPlayer ? `${username} reconnected.` : `${username} joined the room.`,
+        content: `${username} joined the room.`,
         createdAt: new Date(),
       });
-
-      // Asynchronous background profile enrichment to eliminate database loading delays
-      prisma.user.findUnique({
-        where: { id: userId },
-      }).then((user) => {
-        if (user) {
-          const currentRoom = roomStore.getRoom(upperCode);
-          if (currentRoom) {
-            const p = currentRoom.players.find((pl) => pl.id === userId);
-            if (p) {
-              p.avatar = user.avatar;
-              p.profileFrame = user.profileFrame;
-              io.to(upperCode).emit('room_state_updated', currentRoom);
-            }
-          }
-        }
-      }).catch((err) => {
-        console.error("Error fetching user profile for socket join:", err);
-      });
-
     } catch (err: any) {
       socket.emit('error', err.message);
     }
@@ -160,7 +175,6 @@ export function handleRoom(io: Server, socket: Socket) {
   socket.on('leave_room', async ({ roomCode, userId }: { roomCode: string; userId: string }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
-      roomStore.clearDisconnectTimeout(upperCode, userId);
       const room = roomStore.getRoom(upperCode);
       if (!room) return;
 
@@ -319,7 +333,6 @@ export function handleRoom(io: Server, socket: Socket) {
   socket.on('kick_player', ({ roomCode, userId }: { roomCode: string; userId: string }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
-      roomStore.clearDisconnectTimeout(upperCode, userId);
       const room = roomStore.getRoom(upperCode);
       if (!room) return socket.emit('error', 'Room not found');
 

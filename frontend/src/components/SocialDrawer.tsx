@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
-import { useTranslation } from '../hooks/useTranslation';
 import { getApiUrl } from '../utils/api';
 import { User, MessageSquare, Plus, Check, X, ArrowLeft, Send } from 'lucide-react';
 
@@ -33,7 +32,7 @@ interface DirectMessage {
 
 export default function SocialDrawer({ currentUserId }: { currentUserId: string }) {
   const socket = useSocket();
-  const { t } = useTranslation();
+  const t = (key: string, fallback: string) => fallback;
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pending, setPending] = useState<PendingRequest[]>([]);

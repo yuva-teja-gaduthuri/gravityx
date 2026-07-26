@@ -7,6 +7,7 @@ export interface Player {
   ready: boolean;
   role?: string; // used for Ramudu-Seetha role names
   isBot?: boolean;
+  disconnected?: boolean;
 }
 
 export interface Room {
@@ -30,28 +31,6 @@ export interface Room {
 
 class RoomStore {
   private rooms: Map<string, Room> = new Map();
-  private disconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
-
-  setDisconnectTimeout(code: string, userId: string, timeout: NodeJS.Timeout) {
-    const key = `${userId}_${code}`;
-    const existing = this.disconnectTimeouts.get(key);
-    if (existing) {
-      clearTimeout(existing);
-    }
-    this.disconnectTimeouts.set(key, timeout);
-  }
-
-  clearDisconnectTimeout(code: string, userId: string): boolean {
-    const key = `${userId}_${code}`;
-    const existing = this.disconnectTimeouts.get(key);
-    if (existing) {
-      clearTimeout(existing);
-      this.disconnectTimeouts.delete(key);
-      return true;
-    }
-    return false;
-  }
-
 
   createRoom(code: string, roomData: Omit<Room, 'players' | 'spectators' | 'gameState' | 'status' | 'createdAt'>): Room {
     const room: Room = {
@@ -106,7 +85,7 @@ class RoomStore {
     // Reassign host to the first human player if host leaves
     if (room.hostId === userId && room.players.length > 0) {
       const firstHuman = room.players.find((p) => !p.isBot);
-      room.hostId = firstHuman ? firstHuman.id : '';
+      room.hostId = firstHuman ? firstHuman.id : room.players[0].id;
     }
 
     // Delete room if no human players left
@@ -155,6 +134,17 @@ class RoomStore {
     room.status = status;
     return room;
   }
+
+  cleanStaleRooms() {
+    const now = Date.now();
+    const cutoff = 12 * 60 * 60 * 1000; // 12 hours
+    for (const [code, room] of this.rooms.entries()) {
+      if (now - room.createdAt > cutoff) {
+        this.rooms.delete(code);
+      }
+    }
+  }
 }
 
 export const roomStore = new RoomStore();
+export const playerDisconnectTimeouts = new Map<string, NodeJS.Timeout>();
