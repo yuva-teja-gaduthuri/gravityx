@@ -554,6 +554,44 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Match History / Mission Logs */}
+          <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 w-full">
+            <h3 className="text-xs uppercase font-extrabold text-cyberblue tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">
+              <Trophy size={14} className="text-cybergold" /> Recent Mission Logs
+            </h3>
+            {matchHistory.length === 0 ? (
+              <p className="text-xs text-slate-500 dark:text-gray-400 italic py-2">No completed matches on record. Enter an arena to begin telemetry logs.</p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                {matchHistory.map((match, idx) => {
+                  const isVictory = match.placement === 1;
+                  return (
+                    <div key={match.matchId || idx} className="p-3.5 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-xs flex justify-between items-center">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded ${
+                            isVictory ? 'bg-cybersuccess/10 text-cybersuccess border border-cybersuccess/20' : 'bg-slate-250 dark:bg-white/10 text-slate-500 dark:text-gray-400 border border-slate-350 dark:border-white/5'
+                          }`}>
+                            {isVictory ? 'Victory' : `Rank #${match.placement}`}
+                          </span>
+                          <span className="font-extrabold text-slate-800 dark:text-white">
+                            {match.gameType === 'RAMUDU_SEETHA' ? 'Ramudu Seetha' : match.gameType === 'LUDO' ? 'Cosmic Ludo' : 'Chess Strategy'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-gray-400">
+                          {new Date(match.date).toLocaleDateString()} &bull; {match.score} pts
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-extrabold text-cybersuccess">+{match.coinsEarned} 🪙</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Equipped Skins / Inventory */}
           <div className="glass-panel rounded-3xl p-6 border-white/5 space-y-4 w-full">
             <h3 className="text-xs uppercase font-extrabold text-cyberpink tracking-wider flex items-center gap-1.5 border-b border-slate-200 dark:border-white/5 pb-2">

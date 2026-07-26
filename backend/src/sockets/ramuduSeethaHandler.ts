@@ -244,7 +244,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
 
     // Emit game started to all, but only send their OWN role privatised
     room.players.forEach((p: any) => {
-      io.to(p.socketId).emit('rs_game_started', {
+      const payload = {
         roomCode: room.code,
         myRole: roles[p.id],
         ramuduId: ramuduPlayerId,
@@ -258,7 +258,11 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
           profileFrame: pl.profileFrame,
           isRevealed: false,
         })),
-      });
+      };
+      io.to(p.socketId).emit('rs_game_started', payload);
+      if (!p.isBot) {
+        io.to(p.id).emit('rs_game_started', payload);
+      }
     });
 
     // Broadcast room update
@@ -488,9 +492,14 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       if (!gameState) return socket.emit('error', 'Game state missing');
 
       // Validate guesser is Ramudu
-      const guesser = room.players.find((p) => p.socketId === socket.id);
+      const guesser = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!guesser || guesser.id !== gameState.ramuduId) {
         return socket.emit('error', 'Only Ramudu can make guesses');
+      }
+
+      // Sync socket ID if changed
+      if (guesser.socketId !== socket.id) {
+        guesser.socketId = socket.id;
       }
 
       // Enforce strict one-guess attempt
@@ -542,8 +551,13 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       const room = roomStore.getRoom(upperCode);
       if (!room || room.status !== 'PLAYING' || !room.gameState) return;
 
-      const player = room.players.find((p) => p.socketId === socket.id);
+      const player = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!player) return;
+
+      // Sync socket ID if changed
+      if (player.socketId !== socket.id) {
+        player.socketId = socket.id;
+      }
 
       socket.emit('rs_game_started', {
         roomCode: upperCode,
