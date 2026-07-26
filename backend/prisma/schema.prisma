@@ -137,3 +137,22 @@ model UserInventory {
 
   @@unique([userId, itemId])
 }
+
+model UserLike {
+  id             String   @id @default(uuid())
+  targetUsername String
+  likerUsername  String
+  createdAt      DateTime @default(now())
+
+  @@unique([targetUsername, likerUsername])
+}
+
+model UserReview {
+  id             String   @id @default(uuid())
+  targetUsername String
+  reviewerName   String
+  rating         Int
+  comment        String
+  createdAt      DateTime @default(now())
+}
+

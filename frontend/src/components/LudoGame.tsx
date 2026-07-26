@@ -920,12 +920,27 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   // Load initial likes when scoreboard changes
   useEffect(() => {
     if (matchEnded && scoreboard.length > 0) {
-      const initialLikes: {[username: string]: number} = {};
-      scoreboard.forEach(row => {
-        const count = localStorage.getItem(`gravityx_likes_${row.username}`);
-        initialLikes[row.username] = count ? parseInt(count) : Math.floor(Math.random() * 5) + 12;
-      });
-      setLikesMap(initialLikes);
+      const fetchLikes = async () => {
+        const token = localStorage.getItem('gravityx_token');
+        const initialLikes: {[username: string]: number} = {};
+        for (const row of scoreboard) {
+          try {
+            const res = await fetch(getApiUrl(`/api/social/likes/${row.username}`), {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              initialLikes[row.username] = data.likesCount;
+            } else {
+              initialLikes[row.username] = 15;
+            }
+          } catch (e) {
+            initialLikes[row.username] = 15;
+          }
+        }
+        setLikesMap(initialLikes);
+      };
+      fetchLikes();
     }
   }, [matchEnded, scoreboard]);
 
@@ -954,31 +969,51 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     }
   };
 
-  const handleLike = (username: string) => {
-    const current = likesMap[username] || 0;
-    const next = current + 1;
-    localStorage.setItem(`gravityx_likes_${username}`, String(next));
-    setLikesMap(prev => ({ ...prev, [username]: next }));
+  const handleLike = async (username: string) => {
+    try {
+      const token = localStorage.getItem('gravityx_token');
+      const res = await fetch(getApiUrl('/api/social/like'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetUsername: username })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLikesMap(prev => ({ ...prev, [username]: data.likesCount }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleSaveReview = (username: string) => {
+  const handleSaveReview = async (username: string) => {
     if (user.isGuest) return;
-    const existingStr = localStorage.getItem(`gravityx_reviews_${username}`);
-    const existing = existingStr ? JSON.parse(existingStr) : [];
-    
-    const newRev = {
-      username: user.username,
-      rating: reviewRating,
-      comment: reviewComment,
-      date: new Date().toISOString().split('T')[0]
-    };
-
-    const updated = [newRev, ...existing];
-    localStorage.setItem(`gravityx_reviews_${username}`, JSON.stringify(updated));
-    setReviewModalUser(null);
-    setReviewComment('');
-    setReviewRating(5);
-    alert(`Feedback saved successfully for ${username}!`);
+    try {
+      const token = localStorage.getItem('gravityx_token');
+      const res = await fetch(getApiUrl('/api/social/review'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          targetUsername: username,
+          rating: reviewRating,
+          comment: reviewComment
+        })
+      });
+      if (res.ok) {
+        setReviewModalUser(null);
+        setReviewComment('');
+        setReviewRating(5);
+        alert(`Feedback saved successfully for ${username}!`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleAddFriendClick = async (friendUsername: string) => {

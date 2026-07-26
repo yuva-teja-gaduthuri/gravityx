@@ -6,6 +6,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useSocket } from '../../../hooks/useSocket';
 import RamuduSeethaGame from '../../../components/RamuduSeethaGame';
 import LudoGame from '../../../components/LudoGame';
+import ChessGame from '../../../components/ChessGame';
 import VoiceChat from '../../../components/VoiceChat';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { Users, Send, Crown, CheckCircle, ShieldAlert, LogOut, MessageSquare, X } from 'lucide-react';
@@ -23,7 +24,7 @@ interface Player {
 interface RoomData {
   code: string;
   name: string;
-  gameType: 'RAMUDU_SEETHA' | 'LUDO';
+  gameType: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS';
   type: 'PUBLIC' | 'PRIVATE';
   maxPlayers: number;
   voiceChat: boolean;
@@ -126,6 +127,10 @@ export default function RoomPage() {
       setMatchEndedData({ gameType: 'LUDO', data });
     });
 
+    socket.on('chess_match_ended', (data: any) => {
+      setMatchEndedData({ gameType: 'CHESS', data });
+    });
+
     return () => {
       // Clean room signals
       socket.emit('leave_room', { roomCode, userId: user.id });
@@ -138,6 +143,7 @@ export default function RoomPage() {
       socket.off('error');
       socket.off('rs_match_ended');
       socket.off('ludo_match_ended');
+      socket.off('chess_match_ended');
     };
   }, [socket, user, roomCode, router]);
 
@@ -180,6 +186,8 @@ export default function RoomPage() {
     setMatchEndedData(null);
     if (room.gameType === 'LUDO') {
       socket.emit('ludo_start_game', room.code);
+    } else if (room.gameType === 'CHESS') {
+      socket.emit('chess_start_game', room.code);
     } else {
       socket.emit('rs_start_game', { roomCode: room.code, maxRounds: rounds });
     }
@@ -223,7 +231,7 @@ export default function RoomPage() {
 
   const isHost = room.hostId === user.id;
   const canStart =
-    room.players.length >= (room.gameType === 'LUDO' ? 2 : 3) &&
+    room.players.length >= (room.gameType === 'LUDO' ? 2 : room.gameType === 'CHESS' ? 2 : 3) &&
     room.players.every((p) => p.id === room.hostId || p.ready);
 
   return (
@@ -242,6 +250,20 @@ export default function RoomPage() {
               matchEndedData={matchEndedData?.gameType === 'RAMUDU_SEETHA' ? matchEndedData.data : null}
               onReturnToLobby={() => setMatchEndedData(null)}
             />
+          ) : room.gameType === 'CHESS' ? (
+            <ChessGame 
+              roomCode={roomCode} 
+              user={user} 
+              socket={socket} 
+              isHost={isHost}
+              matchEndedData={matchEndedData?.gameType === 'CHESS' ? matchEndedData.data : null}
+              onReturnToLobby={() => {
+                if (isHost) {
+                  socket.emit('chess_return_to_lobby', roomCode);
+                }
+                setMatchEndedData(null);
+              }}
+            />
           ) : (
             <LudoGame 
               roomCode={roomCode} 
@@ -249,7 +271,12 @@ export default function RoomPage() {
               socket={socket} 
               isHost={isHost}
               matchEndedData={matchEndedData?.gameType === 'LUDO' ? matchEndedData.data : null}
-              onReturnToLobby={() => setMatchEndedData(null)}
+              onReturnToLobby={() => {
+                if (isHost) {
+                  socket.emit('ludo_return_to_lobby', roomCode);
+                }
+                setMatchEndedData(null);
+              }}
             />
           )
         ) : (
@@ -262,7 +289,7 @@ export default function RoomPage() {
                 <span className="text-[10px] font-black uppercase text-cyberblue tracking-wider">Lobby terminal ready</span>
                 <h2 className="text-2xl font-black text-white mt-0.5">{room.name}</h2>
                 <div className="text-xs text-gray-400 mt-1 flex items-center gap-2 flex-wrap">
-                  <span>Game: <strong className="text-cyberpink">{room.gameType === 'LUDO' ? 'Cosmic Ludo' : 'Ramudu-Seetha'}</strong></span>
+                  <span>Game: <strong className="text-cyberpink">{room.gameType === 'LUDO' ? 'Cosmic Ludo' : room.gameType === 'CHESS' ? 'Chess Strategy' : 'Ramudu-Seetha'}</strong></span>
                   <span>&bull;</span>
                   <span>Code: <strong className="text-white tracking-widest">{room.code}</strong></span>
                   <button

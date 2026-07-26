@@ -65,20 +65,30 @@ export default function ProfilePage() {
     setEditAvatar(user.avatar || 'astronaut');
     setEditBio(user.bio || '');
 
-    // Load likes and reviews
-    const likes = localStorage.getItem(`gravityx_likes_${user.username}`);
-    setLikesCount(likes ? parseInt(likes) : 15); // default base count
-    
-    const revsStr = localStorage.getItem(`gravityx_reviews_${user.username}`);
-    let revs = revsStr ? JSON.parse(revsStr) : [];
-    if (revs.length === 0) {
-      revs = [
-        { username: 'StarGazer', rating: 5, comment: 'Phenomenal deduction skills in Ramudu Seetha! Guessed correctly in the first turn.', date: '2026-07-24' },
-        { username: 'LudoKing', rating: 4, comment: 'Very strategic Ludo player. Blocked my tokens perfectly.', date: '2026-07-23' }
-      ];
-      localStorage.setItem(`gravityx_reviews_${user.username}`, JSON.stringify(revs));
-    }
-    setReviewsList(revs);
+    // Fetch likes and reviews from real backend API
+    const fetchLikesAndReviews = async () => {
+      const token = localStorage.getItem('gravityx_token');
+      try {
+        const likesRes = await fetch(getApiUrl(`/api/social/likes/${user.username}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (likesRes.ok) {
+          const likesData = await likesRes.json();
+          setLikesCount(likesData.likesCount);
+        }
+
+        const revsRes = await fetch(getApiUrl(`/api/social/reviews/${user.username}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (revsRes.ok) {
+          const revsData = await revsRes.json();
+          setReviewsList(revsData);
+        }
+      } catch (err) {
+        console.error('Failed to fetch real likes/reviews:', err);
+      }
+    };
+    fetchLikesAndReviews();
 
     const fetchStats = async () => {
       const token = localStorage.getItem('gravityx_token');
@@ -529,7 +539,7 @@ export default function ProfilePage() {
                 reviewsList.map((rev, idx) => (
                   <div key={idx} className="p-3.5 rounded-2xl bg-white/5 border border-white/5 text-xs space-y-2">
                     <div className="flex justify-between items-center text-[10px] text-gray-400">
-                      <span className="font-extrabold text-cyberblue">{rev.username}</span>
+                      <span className="font-extrabold text-cyberblue">{rev.reviewerName || rev.username}</span>
                       <span>{rev.date}</span>
                     </div>
                     <div className="flex justify-between items-start gap-4">

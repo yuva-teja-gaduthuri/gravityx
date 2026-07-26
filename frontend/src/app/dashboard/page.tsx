@@ -41,7 +41,7 @@ export default function Dashboard() {
 
   // Form states
   const [roomName, setRoomName] = useState('');
-  const [selectedGame, setSelectedGame] = useState<'RAMUDU_SEETHA' | 'LUDO'>('RAMUDU_SEETHA');
+  const [selectedGame, setSelectedGame] = useState<'RAMUDU_SEETHA' | 'LUDO' | 'CHESS'>('RAMUDU_SEETHA');
   const [roomType, setRoomType] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [voiceChat, setVoiceChat] = useState(false);
@@ -57,7 +57,7 @@ export default function Dashboard() {
 
   // Leaderboard toggle & expanded games
   const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [expandedGame, setExpandedGame] = useState<'RAMUDU_SEETHA' | 'LUDO' | null>(null);
+  const [expandedGame, setExpandedGame] = useState<'RAMUDU_SEETHA' | 'LUDO' | 'CHESS' | null>(null);
   const [newRating, setNewRating] = useState(5);
   const [newComment, setNewComment] = useState('');
   const [reviews, setReviews] = useState<{
@@ -490,31 +490,30 @@ export default function Dashboard() {
 
               {/* Chess Card */}
               <div 
-                onClick={() => alert("Chess Game module is deploying soon! Stay tuned.")}
-                className="glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] opacity-60 hover:-translate-y-2 transition-all duration-300"
+                onClick={() => setExpandedGame(expandedGame === 'CHESS' ? null : 'CHESS')}
+                className={`glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] hover:-translate-y-2 transition-all duration-300 cursor-pointer group ${
+                  expandedGame === 'CHESS' ? 'border-cybergold ring-1 ring-cybergold/30' : ''
+                }`}
                 style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
               >
-                <div className="absolute inset-0 bg-[#050816]/75 flex flex-col items-center justify-center z-10">
-                  <Lock className="text-cyberpink mb-2 animate-pulse" size={24} />
-                  <span className="text-[9px] font-black uppercase text-cyberpink tracking-widest">Launching Soon</span>
-                </div>
+                <div className="absolute top-0 right-0 w-32 h-32 bg-cybergold/5 rounded-full blur-3xl group-hover:bg-cybergold/10 transition-all"></div>
 
                 {/* Artwork Top */}
                 <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                  <span className="text-4xl filter drop-shadow-neon-gold">♟️</span>
+                  <span className="text-4xl filter drop-shadow-neon-gold transform group-hover:scale-110 transition-all duration-300">♟️</span>
                   <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
                     tactical
                   </span>
                 </div>
 
                 <div>
-                  <h4 className="font-extrabold text-lg mt-3 text-white">Chess Strategy</h4>
-                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess.</p>
+                  <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cybergold transition-colors">Chess Strategy</h4>
+                  <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time chess.com styled board.</p>
                 </div>
 
                 <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                   <span>2 Players</span>
-                  <span className="text-gray-500 font-black">LOCKED</span>
+                  <span className="text-cybergold font-black">{expandedGame === 'CHESS' ? 'Close Panel' : 'Control Deck'}</span>
                 </div>
               </div>
 
@@ -528,7 +527,9 @@ export default function Dashboard() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/5 pb-4">
                   <div>
                     <span className="text-[10px] uppercase font-black tracking-widest text-cyberblue">game command console</span>
-                    <h3 className="text-2xl font-black text-white">{expandedGame === 'LUDO' ? 'Cosmic Ludo' : 'Ramudu-Seetha'}</h3>
+                    <h3 className="text-2xl font-black text-white">
+                      {expandedGame === 'LUDO' ? 'Cosmic Ludo' : expandedGame === 'CHESS' ? 'Chess Strategy' : 'Ramudu-Seetha'}
+                    </h3>
                   </div>
 
                   <div className="flex gap-3">
@@ -559,6 +560,14 @@ export default function Dashboard() {
                         <li>Move clockwise according to the dice roll. Safety stars protect your ship from elimination.</li>
                         <li>Landing on an opponent's ship destroys it, returning it to their home yard.</li>
                         <li>Navigate all 4 ships through the track and home stretch to the center home terminal to win!</li>
+                      </ul>
+                    ) : expandedGame === 'CHESS' ? (
+                      <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
+                        <li>Classic 8x8 chess.com style board with green-and-white grid UI.</li>
+                        <li>Plays with standard FIDE rules (White makes the first move).</li>
+                        <li>Click on your piece to highlight all valid movement targets.</li>
+                        <li>Checkmate the opponent's king to secure victory.</li>
+                        <li>Features real-time socket syncing, active clocks, and spectator features.</li>
                       </ul>
                     ) : (
                       <ul className="list-disc list-inside space-y-2 text-xs text-gray-300">
@@ -658,7 +667,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-black text-white">{room.name}</span>
                           <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-bold text-cyberblue uppercase">
-                            {room.gameType === 'LUDO' ? 'Ludo' : 'RS'}
+                            {room.gameType === 'LUDO' ? 'Ludo' : room.gameType === 'CHESS' ? 'Chess' : 'RS'}
                           </span>
                         </div>
                         <p className="text-[10px] text-gray-400">Host: <strong className="text-gray-300">{room.hostName}</strong></p>
@@ -722,11 +731,18 @@ export default function Dashboard() {
                   <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Select Game</label>
                   <select 
                     value={selectedGame}
-                    onChange={(e) => setSelectedGame(e.target.value as any)}
+                    onChange={(e) => {
+                      const game = e.target.value as any;
+                      setSelectedGame(game);
+                      if (game === 'CHESS') setMaxPlayers(2);
+                      else if (game === 'LUDO') setMaxPlayers(4);
+                      else setMaxPlayers(4);
+                    }}
                     className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
                   >
                     <option value="RAMUDU_SEETHA">Ramudu-Seetha</option>
                     <option value="LUDO">Cosmic Ludo</option>
+                    <option value="CHESS">Chess Strategy</option>
                   </select>
                 </div>
                 <div>
@@ -740,6 +756,14 @@ export default function Dashboard() {
                       <option value={2}>2 Players</option>
                       <option value={3}>3 Players</option>
                       <option value={4}>4 Players</option>
+                    </select>
+                  ) : selectedGame === 'CHESS' ? (
+                    <select 
+                      value={2}
+                      disabled
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue opacity-60"
+                    >
+                      <option value={2}>2 Players</option>
                     </select>
                   ) : (
                     <input 

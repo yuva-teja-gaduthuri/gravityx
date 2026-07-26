@@ -12,6 +12,7 @@ import { roomStore } from './models/roomStore';
 import { handleRoom } from './sockets/roomHandler';
 import { handleRamuduSeetha, clearRSRoundTimeout } from './sockets/ramuduSeethaHandler';
 import { handleLudo } from './sockets/ludoHandler';
+import { handleChess } from './sockets/chessHandler';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,6 +69,7 @@ io.on('connection', (socket: Socket) => {
   handleRoom(io, socket);
   handleRamuduSeetha(io, socket);
   handleLudo(io, socket);
+  handleChess(io, socket);
 
   // Handle disconnection
   socket.on('disconnect', () => {

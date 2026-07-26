@@ -65,6 +65,13 @@ class RoomStore {
     if (!exists && room.players.length < room.maxPlayers) {
       room.players.push(player);
     }
+
+    // Transfer host privilege to human player if current host is a bot
+    const hostPlayer = room.players.find((p) => p.id === room.hostId);
+    if (!player.isBot && (!hostPlayer || hostPlayer.isBot || room.hostId === 'BOT_HOST')) {
+      room.hostId = player.id;
+    }
+
     return room;
   }
 
