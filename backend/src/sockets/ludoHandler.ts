@@ -528,6 +528,7 @@ function startTurnTimer(io: Server, roomCode: string) {
                 const activePl = curState.players[curState.activePlayerIndex];
                 const token = activePl.tokens.find((t) => t.id === firstToken)!;
                 
+                const oldPosition = token.position;
                 let newPos = token.position;
                 if (token.position === -1 && roll === 6) newPos = activePl.startCell;
                 else if (token.position >= 0 && token.position <= 51) {
@@ -552,7 +553,7 @@ function startTurnTimer(io: Server, roomCode: string) {
                 io.to(roomCode).emit('ludo_token_moved', {
                   activePlayerIndex: curState.activePlayerIndex,
                   tokenId: firstToken,
-                  oldPosition: token.position,
+                  oldPosition,
                   newPosition: newPos,
                   captured: false,
                   players: curState.players,
@@ -776,6 +777,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
 
       // Apply bot token move
       const token = activePlayer.tokens.find(t => t.id === selectedTokenId)!;
+      const oldPosition = token.position;
       let finalPos = token.position;
       if (token.position === -1 && roll === 6) finalPos = activePlayer.startCell;
       else if (token.position >= 0 && token.position <= 51) {
@@ -832,6 +834,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
       io.to(roomCode).emit('ludo_token_moved', {
         activePlayerIndex: botIndex,
         tokenId: selectedTokenId,
+        oldPosition,
         newPosition: finalPos,
         captured,
         players: curState.players,

@@ -2088,6 +2088,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 const isSafeCell = t.position !== -1 && SAFE_CELLS.includes(t.position);
                 const isWinnerCelebration = t.position === 58;
 
+                const itemCol = visual?.col ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][0] : col);
+                const itemRow = visual?.row ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][1] : row);
+
                 return (
                   <button
                     key={`${p.color}-${t.id}`}
@@ -2097,8 +2100,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
-                      left: `calc((${visual?.col ?? col} * 100% / 15))`,
-                      top: `calc((${visual?.row ?? row} * 100% / 15))`,
+                      left: `calc((${itemCol} * 100% / 15))`,
+                      top: `calc((${itemRow} * 100% / 15))`,
                       width: 'calc(100% / 15)',
                       height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
