@@ -1100,22 +1100,29 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     else if (color === 'yellow') positionClass = 'absolute top-2 left-2';
 
     // Dice colors matching the team
-    let diceFaceBg = 'bg-cybererror';
-    let dotBg = 'bg-white';
-    if (color === 'green') { diceFaceBg = 'bg-cybersuccess'; }
-    else if (color === 'yellow') { diceFaceBg = 'bg-[#fbc02d]'; dotBg = 'bg-[#1a0802]'; }
-    else if (color === 'blue') { diceFaceBg = 'bg-cyberblue'; }
+    let diceFaceBg = 'bg-white border border-gray-200 shadow-md';
+    let dotBg = 'bg-[#E53935]';
+    if (color === 'green') { dotBg = 'bg-[#43A047]'; }
+    else if (color === 'yellow') { dotBg = 'bg-[#F57F17]'; }
+    else if (color === 'blue') { dotBg = 'bg-[#1E88E5]'; }
 
     const displayRollValue = isPlayerActive && isRolling ? rollingValue : (gameState.diceValue || 1);
 
     return (
-      <div className={`${positionClass} z-20`}>
+      <div className={`${positionClass} z-20 flex flex-col items-center gap-1`}>
+        {/* Active Roll Badge */}
+        {canIRoll && (
+          <div className="bg-amber-400 text-darkbg font-black text-[9px] px-2 py-0.5 rounded-full shadow-lg animate-bounce uppercase tracking-widest border border-white">
+            ROLL
+          </div>
+        )}
+
         {/* Glow backdrop for active dice */}
         {isPlayerActive && (
-          <div className={`absolute inset-[-12px] rounded-2xl animate-pulse blur-md -z-10 ${
-            color === 'red' ? 'bg-cybererror/40' :
-            color === 'green' ? 'bg-cybersuccess/40' :
-            color === 'yellow' ? 'bg-cybergold/40' : 'bg-cyberblue/40'
+          <div className={`absolute inset-[-8px] rounded-2xl animate-pulse blur-sm -z-10 ${
+            color === 'red' ? 'bg-red-500/50' :
+            color === 'green' ? 'bg-green-500/50' :
+            color === 'yellow' ? 'bg-yellow-400/50' : 'bg-blue-500/50'
           }`} />
         )}
         
@@ -1134,29 +1141,29 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             data-roll={displayRollValue}
           >
             {/* Face 1 */}
-            <div className={`dice-face ${diceFaceBg} text-white flex items-center justify-center shadow-inner`} style={{ transform: 'rotateY(0deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <span className={`w-2.5 h-2.5 rounded-full ${color === 'yellow' ? 'bg-[#1a0802]' : 'bg-white'} shadow-md`}></span>
+            <div className={`dice-face ${diceFaceBg} flex items-center justify-center`} style={{ transform: 'rotateY(0deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <span className={`w-3 h-3 rounded-full ${dotBg} shadow-sm`}></span>
             </div>
             {/* Face 6 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(180deg) translateZ(calc(var(--dice-size) / 2))' }}>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(180deg) translateZ(calc(var(--dice-size) / 2))' }}>
               <div className="grid grid-cols-2 gap-1.5 p-1 w-full h-full justify-items-center items-center">
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
               </div>
             </div>
             {/* Face 2 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="flex flex-col justify-between p-1 w-full h-full">
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1.5 w-full h-full">
+                <span className={`w-2 h-2 rounded-full ${dotBg} self-start`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg} self-end`}></span>
               </div>
             </div>
             {/* Face 5 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
               <div className="grid grid-cols-3 gap-1 p-1 w-full h-full items-center justify-items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-1 col-end-2`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-3 col-end-4`}></span>
@@ -1166,16 +1173,16 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               </div>
             </div>
             {/* Face 3 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="flex flex-col justify-between p-1 w-full h-full items-center">
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateX(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1.5 w-full h-full items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
               </div>
             </div>
             {/* Face 4 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="grid grid-cols-2 gap-2 p-1 w-full h-full justify-items-center items-center">
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateX(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="grid grid-cols-2 gap-2 p-1.5 w-full h-full justify-items-center items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
@@ -1199,31 +1206,31 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           --dice-size: clamp(34px, 7.5vmin, 46px);
         }
         
-        /* Premium Wood Frame */
+        /* Authentic Ludo King Mahogany Frame */
         .wood-board-frame {
-          background: linear-gradient(135deg, #402010 0%, #2c140a 50%, #1a0802 100%);
-          border: clamp(6px, 1.8vmin, 12px) solid #52301c;
+          background: linear-gradient(135deg, #4e260e 0%, #361908 50%, #210d03 100%);
+          border: clamp(8px, 2.2vmin, 16px) solid #673414;
           box-shadow: 
-            0 20px 40px rgba(0, 0, 0, 0.65),
-            inset 0 3px 6px rgba(255, 255, 255, 0.08),
-            inset 0 -3px 6px rgba(0, 0, 0, 0.5);
+            0 20px 45px rgba(0, 0, 0, 0.75),
+            inset 0 3px 6px rgba(255, 255, 255, 0.25),
+            inset 0 -3px 6px rgba(0, 0, 0, 0.6);
           border-radius: clamp(16px, 4vmin, 28px);
           overflow: hidden;
         }
 
-        /* Wood Board Grid Cells */
+        /* Ludo King Clean White Track Grid Cells */
         .wood-cell-default {
-          background: #eedcb3; /* birch wood color */
-          border: 1px solid #dcd0b3;
-          box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45), inset 0 -1px 2px rgba(0,0,0,0.06);
+          background: #ffffff; /* pure clean white */
+          border: 1px solid #d5d5d5;
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
         }
 
-        /* Wood base yard panels */
+        /* Base Yard inner white panel */
         .wood-base-yard {
-          background: #dfc8a5;
-          border: clamp(2px, 0.5vmin, 4px) solid #bfa57b;
-          border-radius: clamp(8px, 2.5vmin, 16px);
-          box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+          background: #ffffff;
+          border: clamp(2px, 0.5vmin, 4px) solid rgba(255, 255, 255, 0.9);
+          border-radius: clamp(12px, 3vmin, 20px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         }
 
         /* Spotlight & Reflection overlay */
@@ -1727,20 +1734,20 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         {/* Render 15x15 Ludo Grid Layout */}
         <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative bg-[#eedcb3]">
           
-          {/* Top-Left Red Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#c62828]/10 to-[#b71c1c]/20 border-4 border-[#5d1616] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Red Yard</span>
+          {/* Top-Left Red Base Yard */}
+          <div className="col-span-6 row-span-6 bg-[#E53935] border-4 border-[#B71C1C] rounded-2xl relative flex items-center justify-center p-3 shadow-xl">
+            <span className="text-white font-black text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow">RED</span>
             
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+            {/* Ludo King White Inner Base */}
+            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#E53935] bg-[#FFEBEE] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#E53935] bg-[#FFEBEE] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#E53935] bg-[#FFEBEE] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#E53935] bg-[#FFEBEE] shadow-inner"></div>
               </div>
               
-              {/* Integrated Dice */}
+              {/* Integrated 3D Rolling Dice */}
               {renderBaseDice('red')}
             </div>
           </div>
@@ -1751,31 +1758,35 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               const col = idx % 3;
               const row = Math.floor(idx / 3);
               let bg = 'wood-cell-default';
-              if (col === 1 && row > 0) bg = 'bg-[#00e676]/85 border border-[#00a152] shadow-inner'; // Home stretch
-              if (col === 2 && row === 1) bg = 'bg-[#00e676]/85 border border-white/20 shadow-inner'; // Green start
+              let content = '';
+              if (col === 1 && row > 0) bg = 'bg-[#43A047] border border-[#2E7D32] text-white shadow-inner'; // Home stretch
+              if (col === 2 && row === 1) {
+                bg = 'bg-[#43A047] border border-[#2E7D32] text-white font-black'; // Green start cell
+                content = '★';
+              }
               const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
               return (
-                <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
+                <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-xs font-black text-amber-500`}>
+                  {content || (isStar ? '★' : '')}
                 </div>
               );
             })}
           </div>
 
-          {/* Top-Right Green Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#2e7d32]/10 to-[#1b5e20]/20 border-4 border-[#124216] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybersuccess font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 right-2">Green Yard</span>
+          {/* Top-Right Green Base Yard */}
+          <div className="col-span-6 row-span-6 bg-[#43A047] border-4 border-[#1B5E20] rounded-2xl relative flex items-center justify-center p-3 shadow-xl">
+            <span className="text-white font-black text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow">GREEN</span>
             
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+            {/* Ludo King White Inner Base */}
+            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#43A047] bg-[#E8F5E9] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#43A047] bg-[#E8F5E9] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#43A047] bg-[#E8F5E9] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#43A047] bg-[#E8F5E9] shadow-inner"></div>
               </div>
               
-              {/* Integrated Dice */}
+              {/* Integrated 3D Rolling Dice */}
               {renderBaseDice('green')}
             </div>
           </div>
@@ -1786,29 +1797,32 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               const col = idx % 6;
               const row = Math.floor(idx / 6);
               let bg = 'wood-cell-default';
-              if (row === 1 && col > 0) bg = 'bg-[#ff5d5d]/85 border border-[#d33a3a] shadow-inner'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-[#ff5d5d]/85 border border-white/20 shadow-inner'; // Red start
+              let content = '';
+              if (row === 1 && col > 0) bg = 'bg-[#E53935] border border-[#B71C1C] text-white shadow-inner'; // Home stretch
+              if (row === 0 && col === 1) {
+                bg = 'bg-[#E53935] border border-[#B71C1C] text-white font-black'; // Red start cell
+                content = '★';
+              }
               const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
               return (
-                <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
+                <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-xs font-black text-amber-500`}>
+                  {content || (isStar ? '★' : '')}
                 </div>
               );
             })}
           </div>
 
           {/* Center Goal Terminal */}
-          <div className="col-span-3 row-span-3 bg-gradient-to-br from-[#805030] to-[#50301a] border border-[#a67c52] rounded-xl flex items-center justify-center flex-col relative overflow-hidden shadow-inner">
-            {/* Traditional Triangles */}
+          <div className="col-span-3 row-span-3 bg-white border-2 border-[#D5D5D5] rounded-xl flex items-center justify-center flex-col relative overflow-hidden shadow-inner">
+            {/* Ludo King Triangles */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polygon points="0,0 50,50 0,100" fill="rgba(239, 68, 68, 0.75)" stroke="#501010" strokeWidth="0.5" />
-              <polygon points="0,0 100,0 50,50" fill="rgba(34, 197, 94, 0.75)" stroke="#105010" strokeWidth="0.5" />
-              <polygon points="100,0 100,100 50,50" fill="rgba(234, 179, 8, 0.75)" stroke="#504005" strokeWidth="0.5" />
-              <polygon points="0,100 50,50 100,100" fill="rgba(59, 130, 246, 0.75)" stroke="#051050" strokeWidth="0.5" />
+              <polygon points="0,0 50,50 0,100" fill="#E53935" stroke="#B71C1C" strokeWidth="1" />
+              <polygon points="0,0 100,0 50,50" fill="#43A047" stroke="#1B5E20" strokeWidth="1" />
+              <polygon points="100,0 100,100 50,50" fill="#FDD835" stroke="#F57F17" strokeWidth="1" />
+              <polygon points="0,100 50,50 100,100" fill="#1E88E5" stroke="#0D47A1" strokeWidth="1" />
             </svg>
-            <div className="relative z-10 flex flex-col items-center justify-center">
-              <Trophy className="text-cybergold sm:w-7 sm:h-7 w-4 h-4 animate-float-slow" />
-              <span className="text-[7px] sm:text-[9px] uppercase font-black tracking-widest mt-0.5 text-white">Goal</span>
+            <div className="relative z-10 flex flex-col items-center justify-center bg-white/80 p-1.5 rounded-full border border-amber-400 shadow-md">
+              <Trophy className="text-amber-500 sm:w-6 sm:h-6 w-4 h-4 animate-bounce" />
             </div>
           </div>
 
@@ -1818,31 +1832,35 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               const col = idx % 6;
               const row = Math.floor(idx / 6);
               let bg = 'wood-cell-default';
-              if (row === 1 && col < 5) bg = 'bg-[#ffd740]/85 border border-[#ffb300] shadow-inner'; // Home stretch
-              if (row === 2 && col === 4) bg = 'bg-[#ffd740]/85 border border-white/20 shadow-inner'; // Yellow start
+              let content = '';
+              if (row === 1 && col < 5) bg = 'bg-[#FDD835] border border-[#F57F17] text-[#1A0802] shadow-inner'; // Home stretch
+              if (row === 2 && col === 4) {
+                bg = 'bg-[#FDD835] border border-[#F57F17] text-[#1A0802] font-black'; // Yellow start cell
+                content = '★';
+              }
               const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
               return (
-                <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
+                <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-xs font-black text-amber-500`}>
+                  {content || (isStar ? '★' : '')}
                 </div>
               );
             })}
           </div>
 
-          {/* Bottom-Left Blue Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#1565c0]/10 to-[#0d47a1]/20 border-4 border-[#092c68] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cyberblue font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 left-2">Blue Yard</span>
+          {/* Bottom-Left Blue Base Yard */}
+          <div className="col-span-6 row-span-6 bg-[#1E88E5] border-4 border-[#0D47A1] rounded-2xl relative flex items-center justify-center p-3 shadow-xl">
+            <span className="text-white font-black text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow">BLUE</span>
             
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+            {/* Ludo King White Inner Base */}
+            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#1E88E5] bg-[#E3F2FD] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#1E88E5] bg-[#E3F2FD] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#1E88E5] bg-[#E3F2FD] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#1E88E5] bg-[#E3F2FD] shadow-inner"></div>
               </div>
               
-              {/* Integrated Dice */}
+              {/* Integrated 3D Rolling Dice */}
               {renderBaseDice('blue')}
             </div>
           </div>
@@ -1853,31 +1871,35 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               const col = idx % 3;
               const row = Math.floor(idx / 3);
               let bg = 'wood-cell-default';
-              if (col === 1 && row < 5) bg = 'bg-[#2979ff]/85 border border-[#2962ff] shadow-inner'; // Home stretch
-              if (col === 0 && row === 4) bg = 'bg-[#2979ff]/85 border border-white/20 shadow-inner'; // Blue start
+              let content = '';
+              if (col === 1 && row < 5) bg = 'bg-[#1E88E5] border border-[#0D47A1] text-white shadow-inner'; // Home stretch
+              if (col === 0 && row === 4) {
+                bg = 'bg-[#1E88E5] border border-[#0D47A1] text-white font-black'; // Blue start cell
+                content = '★';
+              }
               const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
               return (
-                <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
+                <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-xs font-black text-amber-500`}>
+                  {content || (isStar ? '★' : '')}
                 </div>
               );
             })}
           </div>
 
-          {/* Bottom-Right Yellow Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#f57f17]/10 to-[#f57f17]/20 border-4 border-[#824400] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybergold font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 right-2">Yellow Yard</span>
+          {/* Bottom-Right Yellow Base Yard */}
+          <div className="col-span-6 row-span-6 bg-[#FDD835] border-4 border-[#F57F17] rounded-2xl relative flex items-center justify-center p-3 shadow-xl">
+            <span className="text-[#1A0802] font-black text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow">YELLOW</span>
             
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+            {/* Ludo King White Inner Base */}
+            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
+              <div className="grid grid-cols-2 gap-4 sm:gap-6">
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#FDD835] bg-[#FFFDE7] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#FDD835] bg-[#FFFDE7] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#FDD835] bg-[#FFFDE7] shadow-inner"></div>
+                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-full border-4 border-[#FDD835] bg-[#FFFDE7] shadow-inner"></div>
               </div>
               
-              {/* Integrated Dice */}
+              {/* Integrated 3D Rolling Dice */}
               {renderBaseDice('yellow')}
             </div>
           </div>
