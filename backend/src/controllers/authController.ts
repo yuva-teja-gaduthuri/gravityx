@@ -84,16 +84,18 @@ export const register = async (req: Request, res: Response) => {
       // Send verification email
       await sendVerificationEmail(email, verificationToken, username);
     } catch (emailError: any) {
-      if (process.env.NODE_ENV === 'production') {
+      const isSandbox = !process.env.EMAIL_FROM || process.env.EMAIL_FROM.includes('onboarding@resend.dev');
+      
+      if (process.env.NODE_ENV === 'production' && !isSandbox) {
         // Rollback user creation if email fails so registration can be retried in production
         await prisma.user.delete({
           where: { id: user.id },
         });
         throw emailError;
       } else {
-        // In development, log and auto-verify user
-        console.warn(`⚠️ [MAILER WARNING]: Failed to send verification email in development: ${emailError.message}`);
-        console.log(`🌌 [DEVELOPMENT AUTO-VERIFICATION]: Auto-verifying user ${username} (${email}) due to mailer failure.`);
+        // In sandbox or development, log warning and auto-verify user
+        console.warn(`⚠️ [MAILER WARNING]: Failed to send verification email: ${emailError.message}`);
+        console.log(`🌌 [AUTO-VERIFICATION]: Auto-verifying user ${username} (${email}) due to sandbox environment or mailer failure.`);
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -102,7 +104,7 @@ export const register = async (req: Request, res: Response) => {
           },
         });
         return res.status(201).json({
-          message: 'Registration successful! (Auto-verified in development mode).',
+          message: 'Registration successful! (Auto-verified due to sandbox/local mailer configuration).',
           autoVerified: true,
         });
       }
