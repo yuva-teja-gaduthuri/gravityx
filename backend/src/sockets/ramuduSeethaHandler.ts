@@ -29,6 +29,87 @@ const CHARACTER_SCORES: { [role: string]: number } = {
   'Angadudu': 200,
 };
 
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function assignRandomNonRepeatingRoles(
+  players: any[],
+  previousRoles?: { [userId: string]: string }
+): { [userId: string]: string } {
+  const playerCount = players.length;
+  const activeRoles = ROSTER.slice(0, playerCount);
+
+  // If no previous roles exist (Round 1), perform an unbiased Fisher-Yates shuffle
+  if (!previousRoles || Object.keys(previousRoles).length === 0) {
+    const shuffledRoles = fisherYatesShuffle(activeRoles);
+    const result: { [userId: string]: string } = {};
+    players.forEach((p, idx) => {
+      result[p.id] = shuffledRoles[idx];
+    });
+    return result;
+  }
+
+  let prevRamuduId = '';
+  let prevSeethaId = '';
+  Object.entries(previousRoles).forEach(([userId, role]) => {
+    if (role === 'Ramudu') prevRamuduId = userId;
+    if (role === 'Seetha') prevSeethaId = userId;
+  });
+
+  let bestRoles: { [userId: string]: string } = {};
+  let lowestPenalty = Infinity;
+
+  // Run up to 100 random Fisher-Yates shuffle trials to find the permutation with minimum repetition
+  for (let trial = 0; trial < 100; trial++) {
+    const shuffledRoles = fisherYatesShuffle(activeRoles);
+    const candidateRoles: { [userId: string]: string } = {};
+    players.forEach((p, idx) => {
+      candidateRoles[p.id] = shuffledRoles[idx];
+    });
+
+    let penalty = 0;
+
+    // 1. Penalty for any player getting the exact same role as the previous round
+    players.forEach((p) => {
+      if (candidateRoles[p.id] === previousRoles[p.id]) {
+        penalty += 15;
+      }
+    });
+
+    // 2. Heavy penalty if Ramudu stays as Ramudu in consecutive rounds
+    if (candidateRoles[prevRamuduId] === 'Ramudu') {
+      penalty += 30;
+    }
+
+    // 3. Heavy penalty if Seetha stays as Seetha in consecutive rounds
+    if (candidateRoles[prevSeethaId] === 'Seetha') {
+      penalty += 30;
+    }
+
+    // 4. Maximum penalty if Ramudu and Seetha swap roles vice-versa
+    if (candidateRoles[prevRamuduId] === 'Seetha' && candidateRoles[prevSeethaId] === 'Ramudu') {
+      penalty += 50;
+    }
+
+    if (penalty < lowestPenalty) {
+      lowestPenalty = penalty;
+      bestRoles = candidateRoles;
+      if (penalty === 0) {
+        break; // Found an optimal non-repeating permutation
+      }
+    }
+  }
+
+  return bestRoles;
+}
+
+
 export const roundEndTimeouts = new Map<string, NodeJS.Timeout>();
 export const gameplayTimeouts = new Map<string, NodeJS.Timeout>();
 
@@ -202,17 +283,15 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       return io.to(room.code).emit('error', 'Maximum 10 players are allowed for Ramudu Seetha');
     }
 
-    // Assign roles randomly from the fixed roster based on player count
-    const activeRoles = ROSTER.slice(0, playerCount);
-    const shuffledRoles = [...activeRoles].sort(() => Math.random() - 0.5);
+    // Assign roles randomly using unbiased Fisher-Yates and anti-repetition algorithm
+    const roles = assignRandomNonRepeatingRoles(room.players, room.previousRoles);
+    room.previousRoles = roles; // Store assigned roles for anti-repetition check in next round
 
-    const roles: { [userId: string]: string } = {};
     let ramuduPlayerId = '';
     let seethaPlayerId = '';
 
-    room.players.forEach((p: any, idx: number) => {
-      const assignedRole = shuffledRoles[idx];
-      roles[p.id] = assignedRole;
+    room.players.forEach((p: any) => {
+      const assignedRole = roles[p.id];
       p.role = assignedRole;
       if (assignedRole === 'Ramudu') {
         ramuduPlayerId = p.id;
@@ -419,6 +498,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       room.currentRound = 1;
       room.maxRounds = maxRounds;
       room.sessionScoreboard = {};
+      room.previousRoles = undefined; // Reset role history for new game session
       room.players.forEach((pl) => {
         room.sessionScoreboard![pl.id] = { username: pl.username, score: 0 };
       });

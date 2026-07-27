@@ -27,6 +27,7 @@ export interface Room {
   currentRound?: number;
   maxRounds?: number;
   sessionScoreboard?: { [userId: string]: { username: string; score: number } };
+  previousRoles?: { [userId: string]: string };
 }
 
 class RoomStore {
