@@ -1,8 +1,31 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
+  console.log('Seeding default Super Admin account...');
+  const passwordHash = await bcrypt.hash('AdminPassword123!', 10);
+  await prisma.user.upsert({
+    where: { username: 'admin' },
+    update: {
+      role: 'ADMIN',
+      emailVerified: true,
+    },
+    create: {
+      username: 'admin',
+      email: 'admin@gravityx.com',
+      passwordHash,
+      role: 'ADMIN',
+      coins: 99999,
+      level: 80,
+      xp: 0,
+      rank: 'Cosmic Conqueror',
+      isGuest: false,
+      emailVerified: true,
+    },
+  });
+
   console.log('Seeding store items...');
 
   const storeItems = [
