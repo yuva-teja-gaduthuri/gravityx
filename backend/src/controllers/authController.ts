@@ -327,23 +327,45 @@ export const guestLogin = async (req: Request, res: Response) => {
   try {
     let isUnique = false;
     let username = '';
-    while (!isUnique) {
-      username = `Guest_${Math.floor(100000 + Math.random() * 900000)}`;
-      const existing = await prisma.user.findUnique({ where: { username } });
-      if (!existing) isUnique = true;
-    }
+    let user: any = null;
 
-    const user = await prisma.user.create({
-      data: {
-        username,
+    try {
+      while (!isUnique) {
+        username = `Guest_${Math.floor(100000 + Math.random() * 900000)}`;
+        const existing = await prisma.user.findUnique({ where: { username } });
+        if (!existing) isUnique = true;
+      }
+
+      user = await prisma.user.create({
+        data: {
+          username,
+          isGuest: true,
+          coins: 1000,
+          xp: 0,
+          level: 1,
+        },
+      });
+    } catch (dbErr: any) {
+      console.warn('⚠️ [DATABASE UNREACHABLE]: Creating ephemeral offline guest session.');
+      const guestId = `guest_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+      const guestName = username || `Guest_${Math.floor(100000 + Math.random() * 900000)}`;
+      user = {
+        id: guestId,
+        username: guestName,
         isGuest: true,
+        role: 'USER',
         coins: 1000,
         xp: 0,
         level: 1,
-      },
-    });
+        rank: 'Cadet',
+        avatar: 'astronaut',
+        profileFrame: 'default_frame',
+        bio: 'Orbital Guest Explorer',
+        language: 'English',
+      };
+    }
 
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, {
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'USER' }, JWT_SECRET, {
       expiresIn: '24h',
     });
 
@@ -353,15 +375,15 @@ export const guestLogin = async (req: Request, res: Response) => {
         id: user.id,
         username: user.username,
         isGuest: true,
-        role: user.role,
+        role: user.role || 'USER',
         coins: user.coins,
         xp: user.xp,
         level: user.level,
-        rank: user.rank,
-        avatar: user.avatar,
-        profileFrame: user.profileFrame,
-        bio: user.bio,
-        language: user.language,
+        rank: user.rank || 'Cadet',
+        avatar: user.avatar || 'astronaut',
+        profileFrame: user.profileFrame || 'default_frame',
+        bio: user.bio || 'Orbital Guest Explorer',
+        language: user.language || 'English',
       },
     });
   } catch (error: any) {
@@ -427,27 +449,82 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        inventory: {
-          include: { item: true },
+    let user: any = null;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          inventory: {
+            include: { item: true },
+          },
+          achievements: {
+            include: { achievement: true },
+          },
+          matchPlayers: {
+            include: { match: true },
+          },
         },
-        achievements: {
-          include: { achievement: true },
-        },
-        matchPlayers: {
-          include: { match: true },
-        },
-      },
-    });
+      });
+    } catch (dbErr: any) {
+      if (req.user && userId.startsWith('guest_')) {
+        return res.json({
+          user: {
+            id: req.user.id,
+            username: req.user.username,
+            isGuest: true,
+            role: req.user.role || 'USER',
+            coins: 1000,
+            xp: 0,
+            level: 1,
+            rank: 'Cadet',
+            avatar: 'astronaut',
+            profileFrame: 'default_frame',
+            bio: 'Orbital Guest Explorer',
+            language: 'English',
+            createdAt: new Date(),
+          },
+          stats: {
+            matchesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            winRate: 0,
+          },
+        });
+      }
+      throw dbErr;
+    }
 
     if (!user) {
+      if (req.user && userId.startsWith('guest_')) {
+        return res.json({
+          user: {
+            id: req.user.id,
+            username: req.user.username,
+            isGuest: true,
+            role: req.user.role || 'USER',
+            coins: 1000,
+            xp: 0,
+            level: 1,
+            rank: 'Cadet',
+            avatar: 'astronaut',
+            profileFrame: 'default_frame',
+            bio: 'Orbital Guest Explorer',
+            language: 'English',
+            createdAt: new Date(),
+          },
+          stats: {
+            matchesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            winRate: 0,
+          },
+        });
+      }
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const matchesPlayed = user.matchPlayers.length;
-    const wins = user.matchPlayers.filter((mp) => mp.placement === 1).length;
+    const matchesPlayed = (user.matchPlayers || []).length;
+    const wins = (user.matchPlayers || []).filter((mp: any) => mp.placement === 1).length;
     const losses = matchesPlayed - wins;
     const winRate = matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0;
 
@@ -477,16 +554,16 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         losses,
         winRate,
       },
-      inventory: user.inventory.map((inv) => inv.item),
-      achievements: user.achievements.map((ach) => ach.achievement),
-      matchHistory: user.matchPlayers.map((mp) => ({
+      inventory: (user.inventory || []).map((inv: any) => inv.item),
+      achievements: (user.achievements || []).map((ach: any) => ach.achievement),
+      matchHistory: (user.matchPlayers || []).map((mp: any) => ({
         matchId: mp.matchId,
-        gameType: mp.match.gameType,
+        gameType: mp.match?.gameType,
         score: mp.score,
         coinsEarned: mp.coinsEarned,
         placement: mp.placement,
-        date: mp.match.createdAt,
-        status: mp.match.status,
+        date: mp.match?.createdAt,
+        status: mp.match?.status,
       })),
     });
   } catch (error: any) {
