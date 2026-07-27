@@ -557,6 +557,41 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     return path;
   };
 
+  // Calculate reverse Ludo track coordinates path for captured tokens returning home
+  const getReversePathPositions = (color: string, tokenId: number, capturePos: number): [number, number][] => {
+    const coordsList: [number, number][] = [];
+    const config = COLOR_CONFIGS[color];
+    const startCell = config ? config.startCell : 0;
+    const lastCell = config ? config.lastCell : 50;
+
+    let currentPos = capturePos;
+
+    // Add initial capture cell coordinate
+    coordsList.push(getTokenCoords(color, tokenId, currentPos));
+
+    // If in stretch (52..58)
+    if (currentPos >= 52) {
+      while (currentPos > 52) {
+        currentPos--;
+        coordsList.push(STRETCH_COORDINATES[color][currentPos]);
+      }
+      // Step out of stretch to lastCell
+      currentPos = lastCell;
+      coordsList.push(TRACK_COORDINATES[currentPos]);
+    }
+
+    // Step backwards along main track until startCell is reached
+    while (currentPos !== startCell) {
+      currentPos = (currentPos - 1 + 52) % 52;
+      coordsList.push(TRACK_COORDINATES[currentPos]);
+    }
+
+    // Final step: Home base yard coordinate slot
+    coordsList.push(BASE_COORDINATES[color][tokenId]);
+
+    return coordsList;
+  };
+
   // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
@@ -675,7 +710,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     takeStep();
   };
 
-  // Opponent captures walking loop
+  // Opponent captures walking loop (retracing path back to home base yard)
   const handleCaptureAnimation = (capturePos: number, finalPlayersState: any) => {
     if (!gameState) return;
     const activePlayer = gameState.players[gameState.activePlayerIndex];
@@ -683,6 +718,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let capturedKey = '';
     let targetBaseCoords: [number, number] = [0, 0];
     let opponentColor = '';
+    let capturedTokenId = 0;
 
     gameState.players.forEach((p) => {
       if (p.id === activePlayer.id) return;
@@ -692,6 +728,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         if (t.position === capturePos && finalT?.position === -1) {
           capturedKey = `${p.color}-${t.id}`;
           opponentColor = p.color;
+          capturedTokenId = t.id;
           targetBaseCoords = BASE_COORDINATES[p.color][t.id];
         }
       });
@@ -722,33 +759,19 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setComicText({ text: 'BOOM!', col, row });
       setTimeout(() => setComicText(null), 1200);
 
-      // Slide and spin captured token back to its yard base
-      setVisualTokens((prev) => ({
-        ...prev,
-        [capturedKey]: {
-          ...prev[capturedKey],
-          isCaptured: true,
-          rotation: 360
-        }
-      }));
+      // Compute step-by-step reverse path back to home base yard
+      const reverseCoords = getReversePathPositions(opponentColor, capturedTokenId, capturePos);
+      let stepIdx = 0;
+      const captureInterval = isSpeedUp ? 60 : 110;
 
-      let progress = 0;
-      const slideDuration = 900;
-      const slideInterval = 30;
-      const startCoords = [visualTokens[capturedKey]?.col || col, visualTokens[capturedKey]?.row || row];
-      const endCoords = targetBaseCoords;
-
-      const slideTimer = setInterval(() => {
-        progress += slideInterval;
-        const ratio = progress / slideDuration;
-
-        if (ratio >= 1) {
-          clearInterval(slideTimer);
+      const stepBack = () => {
+        if (stepIdx >= reverseCoords.length) {
+          // Reached home base yard slot
           setVisualTokens((prev) => ({
             ...prev,
             [capturedKey]: {
-              col: endCoords[0],
-              row: endCoords[1],
+              col: targetBaseCoords[0],
+              row: targetBaseCoords[1],
               scale: 1.0,
               rotation: 0,
               translateY: 0,
@@ -764,27 +787,33 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           setCamZoom(1.0);
           setCamX(0);
           setCamY(0);
-        } else {
-          // Linear interpolation for coordinate mapping
-          const interpCol = startCoords[0] + (endCoords[0] - startCoords[0]) * ratio;
-          const interpRow = startCoords[1] + (endCoords[1] - startCoords[1]) * ratio;
-
-          setVisualTokens((prev) => ({
-            ...prev,
-            [capturedKey]: {
-              ...prev[capturedKey],
-              col: interpCol,
-              row: interpRow,
-              rotation: prev[capturedKey].rotation + 35
-            }
-          }));
-
-          // Emit trail smoke while sliding
-          if (Math.random() > 0.6) {
-            spawnParticles(Math.floor(interpCol), Math.floor(interpRow), 'smoke', 2);
-          }
+          return;
         }
-      }, slideInterval);
+
+        const [stepCol, stepRow] = reverseCoords[stepIdx];
+
+        setVisualTokens((prev) => ({
+          ...prev,
+          [capturedKey]: {
+            ...prev[capturedKey],
+            col: stepCol,
+            row: stepRow,
+            scale: 1.15,
+            rotation: (prev[capturedKey]?.rotation || 0) - 90,
+            translateY: -10,
+            isMoving: false,
+            isCaptured: true
+          }
+        }));
+
+        audioRef.current?.playStep();
+        spawnParticles(Math.floor(stepCol), Math.floor(stepRow), 'smoke', 2);
+
+        stepIdx++;
+        setTimeout(stepBack, captureInterval);
+      };
+
+      stepBack();
     } else {
       setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
       setValidTokens([]);
@@ -856,10 +885,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     socket.on('ludo_token_moved', (data: any) => {
       const currentGS = gameStateRef.current;
       if (!currentGS) return;
-      const activePlayer = currentGS.players[currentGS.activePlayerIndex];
+      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
+      const activePlayer = currentGS.players[activePlayerIndex];
+      if (!activePlayer) return;
       
       const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
-      const startPos = currentToken ? currentToken.position : -1;
+      const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
 
       // Build path sequence
@@ -2139,27 +2170,80 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         })()}
       </div>
 
-      {/* Floating Eligible Movements Selector for touch-friendliness */}
-      {isMyTurn && validTokens.length > 0 && (
-        <div className="fixed bottom-6 inset-x-4 max-w-sm mx-auto z-30 glass-panel rounded-2xl p-4 border border-cyberblue/30 shadow-[0_10px_30px_rgba(0,245,255,0.25)] space-y-3">
-          <h5 className="text-[10px] uppercase font-bold text-cyberblue tracking-wider flex items-center gap-1.5 justify-center">
-            <Sparkles size={12} className="animate-spin-slow" /> Eligible Movements
-          </h5>
-          <div className="grid grid-cols-2 gap-3">
-            {validTokens.map((tokenId) => (
-              <button
-                key={tokenId}
-                onClick={() => handleMoveToken(tokenId)}
-                className={`py-3 rounded-xl border text-xs font-black text-white hover:scale-[1.02] active:scale-95 transition-all shadow-md ${
-                  activePlayer.color === 'red' ? 'border-cybererror/35 bg-cybererror/10 hover:bg-cybererror/20' :
-                  activePlayer.color === 'green' ? 'border-cybersuccess/35 bg-cybersuccess/10 hover:bg-cybersuccess/20' :
-                  activePlayer.color === 'yellow' ? 'border-cybergold/35 bg-cybergold/10 hover:bg-cybergold/20' :
-                  'border-cyberblue/35 bg-cyberblue/10 hover:bg-cyberblue/20'
-                }`}
-              >
-                Move Tiny Human {tokenId + 1}
-              </button>
-            ))}
+      {/* Tiny Humans Pop-Up Selector Modal */}
+      {isMyTurn && validTokens.length > 0 && gameState.hasRolled && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-md z-40 bg-slate-900/95 backdrop-blur-2xl border-2 border-cyberblue/50 rounded-3xl p-3.5 sm:p-4 shadow-[0_12px_40px_rgba(0,245,255,0.35)] animate-bounce-short">
+          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-cybergold animate-spin-slow" />
+              <h5 className="text-xs sm:text-sm font-black uppercase text-white tracking-wider">
+                CHOOSE YOUR TINY HUMAN
+              </h5>
+            </div>
+            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyberblue/20 text-cyberblue border border-cyberblue/40">
+              +{gameState.diceValue} Steps
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
+            {validTokens.map((tokenId) => {
+              const token = activePlayer.tokens.find((t) => t.id === tokenId);
+              const pos = token ? token.position : -1;
+              
+              let statusText = 'In Base Yard';
+              let statusColor = 'text-amber-400';
+
+              if (pos >= 52) {
+                statusText = `Near Goal (${pos - 51}/6)`;
+                statusColor = 'text-green-400 font-extrabold';
+              } else if (pos >= 0) {
+                statusText = `On Track (Cell ${pos})`;
+                statusColor = 'text-cyberblue font-bold';
+              }
+
+              return (
+                <button
+                  key={tokenId}
+                  onClick={() => handleMoveToken(tokenId)}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border text-left transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg group ${
+                    activePlayer.color === 'red' ? 'border-red-500/40 bg-red-950/40 hover:bg-red-900/60' :
+                    activePlayer.color === 'green' ? 'border-green-500/40 bg-green-950/40 hover:bg-green-900/60' :
+                    activePlayer.color === 'yellow' ? 'border-yellow-500/40 bg-yellow-950/40 hover:bg-yellow-900/60' :
+                    'border-blue-500/40 bg-blue-950/40 hover:bg-blue-900/60'
+                  }`}
+                >
+                  {/* Miniature 3D Character Preview Icon */}
+                  <div className="w-9 h-9 relative shrink-0 flex items-center justify-center bg-white/10 rounded-xl p-1 border border-white/20 group-hover:scale-110 transition-transform">
+                    <div className={`pawn-character team-${activePlayer.color} idle w-full h-full`}>
+                      <div className="pawn-body-wrapper scale-75">
+                        <div className="pawn-outfit">
+                          {activePlayer.color === 'red' && <div className="pawn-cape"></div>}
+                          {activePlayer.color === 'yellow' && <div className="pawn-medal"></div>}
+                        </div>
+                        <div className="pawn-head">
+                          {activePlayer.color === 'red' && <div className="pawn-hair warrior-hair"></div>}
+                          {activePlayer.color === 'blue' && <div className="pawn-hair adventurer-hat"></div>}
+                          {activePlayer.color === 'green' && <div className="pawn-hair explorer-hat"></div>}
+                          {activePlayer.color === 'yellow' && <div className="pawn-hair champion-crown"></div>}
+                          <div className="pawn-face">
+                            <div className="pawn-eyes"><div className="pawn-eye left-eye"><div className="pawn-pupil"></div></div></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col flex-grow min-w-0">
+                    <span className="text-xs font-black text-white truncate">Human #{tokenId + 1}</span>
+                    <span className={`text-[9px] truncate ${statusColor}`}>{statusText}</span>
+                  </div>
+
+                  <div className="w-5 h-5 rounded-full bg-white/10 group-hover:bg-cyberblue group-hover:text-darkbg flex items-center justify-center text-[10px] font-bold text-white transition-colors">
+                    ➔
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
