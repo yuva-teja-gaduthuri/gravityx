@@ -618,8 +618,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     const intervalTime = isSpeedUp ? 130 : 260;
 
     const startVisual = visualTokensRef.current[key];
-    let currentCol = startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0];
-    let currentRow = startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1];
+    const isBaseExit = path.length === 1 && path[0] === COLOR_CONFIGS[color].startCell;
+    let currentCol = isBaseExit ? BASE_COORDINATES[color][tokenId][0] : (startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0]);
+    let currentRow = isBaseExit ? BASE_COORDINATES[color][tokenId][1] : (startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1]);
 
     console.log(`🚀 [ANIMATE PAWN PATH]: Initiating walk for ${key} from (${currentCol}, ${currentRow}) along path [${path.join(', ')}]`);
 
@@ -889,9 +890,16 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           setGameState(prev => prev ? { ...prev, diceValue: data.diceValue, hasRolled: true } : null);
           
           const currentGS = gameStateRef.current;
-          const isMyTurnNow = currentGS?.players[currentGS.activePlayerIndex]?.id === user.id;
-          if (isMyTurnNow) {
+          const activePlayer = data.activePlayerIndex !== undefined && currentGS ? currentGS.players[data.activePlayerIndex] : currentGS?.players[currentGS.activePlayerIndex];
+          const isMyTurnNow = activePlayer ? activePlayer.id === user.id : false;
+          if (isMyTurnNow && data.validTokens) {
             setValidTokens(data.validTokens);
+            // If only 1 token is eligible to move, auto-trigger move after 400ms for smooth gameplay
+            if (data.validTokens.length === 1) {
+              setTimeout(() => {
+                handleMoveToken(data.validTokens[0]);
+              }, 400);
+            }
           }
         }
       }, 70);
@@ -918,8 +926,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const baseCoords = BASE_COORDINATES[activePlayer.color][data.tokenId];
       const existingVisual = visualTokensRef.current[key];
       const initialMoveState: VisualToken = {
-        col: existingVisual ? existingVisual.col : baseCoords[0],
-        row: existingVisual ? existingVisual.row : baseCoords[1],
+        col: isBaseExit ? baseCoords[0] : (existingVisual ? existingVisual.col : baseCoords[0]),
+        row: isBaseExit ? baseCoords[1] : (existingVisual ? existingVisual.row : baseCoords[1]),
         scale: 1.0,
         rotation: existingVisual ? existingVisual.rotation : 0,
         translateY: 0,
@@ -1123,6 +1131,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
     audioRef.current?.playSelect();
     socket.emit('ludo_move_token', { roomCode, tokenId });
+  };
+
+  const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
+    if (!gameState) return;
+    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    if (activePlayer.id !== user.id || activePlayer.color !== color) return;
+
+    const eligibleYardToken = activePlayer.tokens.find(t => t.position === -1 && validTokens.includes(t.id));
+    if (eligibleYardToken) {
+      handleMoveToken(eligibleYardToken.id);
+    }
   };
 
   if (!gameState) {
@@ -1881,7 +1900,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Left Red Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '1 / 7' }}
-            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-[16.66%]"
+            onClick={() => handleBaseYardClick('red')}
+            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-[16.66%] cursor-pointer"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow z-0">RED</span>
             <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
@@ -1897,7 +1917,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Right Green Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '1 / 7' }}
-            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-[16.66%]"
+            onClick={() => handleBaseYardClick('green')}
+            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-[16.66%] cursor-pointer"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow z-0">GREEN</span>
             <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
@@ -1913,7 +1934,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Left Blue Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '10 / 16' }}
-            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-[16.66%]"
+            onClick={() => handleBaseYardClick('blue')}
+            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-[16.66%] cursor-pointer"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow z-0">BLUE</span>
             <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
@@ -1929,7 +1951,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Right Yellow Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '10 / 16' }}
-            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-[16.66%]"
+            onClick={() => handleBaseYardClick('yellow')}
+            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-[16.66%] cursor-pointer"
           >
             <span className="text-[#1a0802] font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow z-0">YELLOW</span>
             <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
