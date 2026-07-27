@@ -73,10 +73,10 @@ const STRETCH_COORDINATES: { [color: string]: { [idx: number]: [number, number] 
 };
 
 const BASE_COORDINATES: { [color: string]: [number, number][] } = {
-  red: [[2, 2], [3, 2], [2, 3], [3, 3]],
-  green: [[11, 2], [12, 2], [11, 3], [12, 3]],
-  yellow: [[11, 11], [12, 11], [11, 12], [12, 12]],
-  blue: [[2, 11], [3, 11], [2, 12], [3, 12]]
+  red: [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]],
+  green: [[10.5, 1.5], [12.5, 1.5], [10.5, 3.5], [12.5, 3.5]],
+  yellow: [[10.5, 10.5], [12.5, 10.5], [10.5, 12.5], [12.5, 12.5]],
+  blue: [[1.5, 10.5], [3.5, 10.5], [1.5, 12.5], [3.5, 12.5]]
 };
 
 const COLOR_CONFIGS: { [color: string]: { startCell: number; lastCell: number; stretchStart: number } } = {
@@ -1340,14 +1340,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           display: flex;
           align-items: center;
           justify-content: center;
+          filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
         }
 
         .pawn-shadow {
           position: absolute;
           bottom: 2px;
-          width: 75%;
-          height: 4px;
-          background: rgba(0, 0, 0, 0.45);
+          width: 80%;
+          height: 5px;
+          background: rgba(0, 0, 0, 0.55);
           border-radius: 50%;
           filter: blur(1px);
           transform: translateZ(-1px);
@@ -1355,13 +1356,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         .pawn-body-wrapper {
           position: absolute;
-          bottom: 4px;
+          bottom: 2px;
           width: 100%;
-          height: 125%;
+          height: 115%;
           display: flex;
           flex-direction: column;
           align-items: center;
           transform-origin: bottom center;
+          z-index: 20;
         }
 
         /* Head */
@@ -1833,7 +1835,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         
         {/* Render 15x15 Ludo Grid Layout with CSS Grid */}
         <div 
-          className="w-full h-full relative bg-white overflow-hidden rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
+          className="w-full h-full relative bg-white rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
