@@ -4,7 +4,7 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import prisma from './utils/prisma';
+import prisma, { connectWithRetry } from './utils/prisma';
 
 dotenv.config();
 
@@ -174,9 +174,36 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(` Health Check: http://localhost:${PORT}/health`);
     console.log(`====================================================`);
     
-    // Run initial cleanup
-    await cleanupStaleGuestAccounts();
-    // Schedule hourly cleanup
-    setInterval(cleanupStaleGuestAccounts, 60 * 60 * 1000);
+    // Connect to Database with Retry Logic (Non-blocking for instant port availability)
+    const isDbConnected = await connectWithRetry();
+    if (isDbConnected) {
+      // Run initial cleanup
+      await cleanupStaleGuestAccounts();
+      // Schedule hourly cleanup
+      setInterval(cleanupStaleGuestAccounts, 60 * 60 * 1000);
+    }
   });
+
+  // Graceful Shutdown signal handler (SIGTERM / SIGINT)
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`\n🛑 [SYSTEM]: Received ${signal}. Starting graceful shutdown...`);
+    httpServer.close(async () => {
+      console.log('🔌 [SYSTEM]: HTTP & Socket.IO server closed.');
+      try {
+        await prisma.$disconnect();
+        console.log('📦 [DATABASE]: Prisma client disconnected cleanly.');
+      } catch (err: any) {
+        console.error('⚠️ [DATABASE]: Error disconnecting Prisma client:', err.message);
+      }
+      process.exit(0);
+    });
+
+    setTimeout(() => {
+      console.error('⚠️ [SYSTEM]: Forced shutdown due to timeout.');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }

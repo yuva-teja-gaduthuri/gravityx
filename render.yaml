@@ -5,6 +5,7 @@ services:
     env: docker
     dockerContext: backend
     dockerfilePath: Dockerfile
+    preDeployCommand: "npx prisma db push"
     envVars:
       - key: DATABASE_URL
         fromDatabase:

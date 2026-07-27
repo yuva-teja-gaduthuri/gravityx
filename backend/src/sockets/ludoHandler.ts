@@ -229,6 +229,7 @@ export function handleLudo(io: Server, socket: Socket) {
       const token = activePlayer.tokens.find((t) => t.id === tokenId)!;
       const dice = state.diceValue;
 
+      const oldPosition = token.position;
       let newPosition = token.position;
 
       if (token.position === -1) {
@@ -302,10 +303,13 @@ export function handleLudo(io: Server, socket: Socket) {
         }
       }
 
+      console.log(`🎲 [LUDO MOVE]: Player ${activePlayer.username} (${activePlayer.color}) moved token ${tokenId} from ${oldPosition} -> ${newPosition} (Dice: ${dice}, Captured: ${captured})`);
+
       // Broadcast move animation update
       io.to(roomCode).emit('ludo_token_moved', {
         activePlayerIndex: state.activePlayerIndex,
         tokenId,
+        oldPosition,
         newPosition,
         captured,
         players: state.players,

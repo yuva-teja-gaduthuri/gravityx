@@ -884,6 +884,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     });
 
     socket.on('ludo_token_moved', (data: any) => {
+      setValidTokens([]); // Prevent duplicate movement clicks during animation
+
       const currentGS = gameStateRef.current;
       if (!currentGS) return;
       const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
@@ -893,6 +895,19 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
       const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
+
+      const isBaseExit = startPos === -1;
+      console.log(`🎬 [LUDO ANIMATION START]: Player ${activePlayer.username} (${activePlayer.color}) Token #${data.tokenId} | ${isBaseExit ? '🚪 EXITING BASE -> Start Cell' : `Moving ${startPos} -> ${endPos}`}`);
+
+      // Lock visual token in moving state immediately
+      const key = `${activePlayer.color}-${data.tokenId}`;
+      setVisualTokens((prev) => ({
+        ...prev,
+        [key]: {
+          ...(prev[key] || { col: BASE_COORDINATES[activePlayer.color][data.tokenId][0], row: BASE_COORDINATES[activePlayer.color][data.tokenId][1], scale: 1.0, rotation: 0, translateY: 0, isCaptured: false }),
+          isMoving: true,
+        }
+      }));
 
       // Build path sequence
       const path = getPathPositions(activePlayer.color, startPos, endPos);
@@ -2058,7 +2073,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute select-none transition-all duration-75 ${
+                    className={`absolute select-none transition-all duration-200 ease-linear ${
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
