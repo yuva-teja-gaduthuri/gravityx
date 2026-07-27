@@ -141,6 +141,52 @@ async function main() {
     });
   }
 
+  console.log('Seeding initial game feedback...');
+  const initialFeedback = [
+    { game: 'RAMUDU_SEETHA', username: 'CosmicVoyager', rating: 5, comment: 'Phenomenal deduction mechanics! Really challenges your logical thinking.', createdAt: new Date('2026-07-24') },
+    { game: 'RAMUDU_SEETHA', username: 'LudoKing', rating: 4, comment: 'Very interesting game, although requires exactly 3+ players.', createdAt: new Date('2026-07-23') },
+    { game: 'LUDO', username: 'SpaceRacer', rating: 5, comment: 'Classic traditional Ludo in space! The board looks amazing.', createdAt: new Date('2026-07-24') },
+    { game: 'LUDO', username: 'StarGazer', rating: 4, comment: 'Really love the team mode and quick emojis in chat.', createdAt: new Date('2026-07-24') },
+    { game: 'CHESS', username: 'Grandmaster', rating: 5, comment: 'Sleek interface. The chess board layout feels premium.', createdAt: new Date('2026-07-25') }
+  ];
+
+  for (const fb of initialFeedback) {
+    const existing = await prisma.feedback.findFirst({
+      where: {
+        game: fb.game,
+        username: fb.username,
+        comment: fb.comment
+      }
+    });
+    if (!existing) {
+      await prisma.feedback.create({ data: fb });
+    }
+  }
+
+  console.log('Seeding division ranks up to Conqueror...');
+  const divisionRanks = [
+    { minLevel: 1, name: 'Bronze V', badgeIcon: 'bronze_badge' },
+    { minLevel: 3, name: 'Bronze I', badgeIcon: 'bronze_badge' },
+    { minLevel: 5, name: 'Silver V', badgeIcon: 'silver_badge' },
+    { minLevel: 8, name: 'Silver I', badgeIcon: 'silver_badge' },
+    { minLevel: 12, name: 'Gold V', badgeIcon: 'gold_badge' },
+    { minLevel: 16, name: 'Gold I', badgeIcon: 'gold_badge' },
+    { minLevel: 22, name: 'Platinum V', badgeIcon: 'platinum_badge' },
+    { minLevel: 30, name: 'Diamond', badgeIcon: 'diamond_badge' },
+    { minLevel: 40, name: 'Crown', badgeIcon: 'crown_badge' },
+    { minLevel: 50, name: 'Ace', badgeIcon: 'ace_badge' },
+    { minLevel: 65, name: 'Conqueror', badgeIcon: 'conqueror_badge' },
+    { minLevel: 80, name: 'Cosmic Conqueror', badgeIcon: 'cosmic_conqueror_badge' },
+  ];
+
+  for (const rank of divisionRanks) {
+    await prisma.divisionRank.upsert({
+      where: { minLevel: rank.minLevel },
+      update: { name: rank.name, badgeIcon: rank.badgeIcon },
+      create: rank,
+    });
+  }
+
   console.log('Seed completed successfully!');
 }
 

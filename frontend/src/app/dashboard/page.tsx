@@ -63,34 +63,84 @@ export default function Dashboard() {
   const [reviews, setReviews] = useState<{
     [game: string]: { username: string; rating: number; comment: string; date: string }[];
   }>({
-    RAMUDU_SEETHA: [
-      { username: 'CosmicVoyager', rating: 5, comment: 'Phenomenal deduction mechanics! Really challenges your logical thinking.', date: '2026-07-24' },
-      { username: 'LudoKing', rating: 4, comment: 'Very interesting game, although requires exactly 3+ players.', date: '2026-07-23' }
-    ],
-    LUDO: [
-      { username: 'SpaceRacer', rating: 5, comment: 'Classic traditional Ludo in space! The board looks amazing.', date: '2026-07-24' },
-      { username: 'StarGazer', rating: 4, comment: 'Really love the team mode and quick emojis in chat.', date: '2026-07-24' }
-    ],
-    CHESS: [
-      { username: 'Grandmaster', rating: 5, comment: 'Sleek interface. The chess board layout feels premium.', date: '2026-07-25' }
-    ]
+    RAMUDU_SEETHA: [],
+    LUDO: [],
+    CHESS: []
   });
 
-  const handleSubmitReview = (e: React.FormEvent, game: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS') => {
+  const fetchFeedback = async () => {
+    try {
+      const token = localStorage.getItem('gravityx_token');
+      if (!token) return;
+      const games = ['RAMUDU_SEETHA', 'LUDO', 'CHESS'] as const;
+      const fetchedReviews: any = {};
+      
+      for (const game of games) {
+        const res = await fetch(getApiUrl(`/api/feedback/${game}`), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          fetchedReviews[game] = data.map((fb: any) => ({
+            username: fb.username,
+            rating: fb.rating,
+            comment: fb.comment,
+            date: fb.createdAt ? fb.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]
+          }));
+        }
+      }
+      
+      if (Object.keys(fetchedReviews).length > 0) {
+        setReviews(prev => ({
+          ...prev,
+          ...fetchedReviews
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to load feedback from backend', e);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent, game: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS') => {
     e.preventDefault();
     if (!newComment.trim() || !user) return;
-    const newRev = {
-      username: user.username,
-      rating: newRating,
-      comment: newComment,
-      date: new Date().toISOString().split('T')[0]
-    };
-    setReviews(prev => ({
-      ...prev,
-      [game]: [newRev, ...prev[game]]
-    }));
-    setNewComment('');
-    setNewRating(5);
+    try {
+      const token = localStorage.getItem('gravityx_token');
+      const res = await fetch(getApiUrl('/api/feedback'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          game,
+          rating: newRating,
+          comment: newComment,
+        }),
+      });
+
+      if (res.ok) {
+        const savedFeedback = await res.json();
+        const newRev = {
+          username: savedFeedback.username,
+          rating: savedFeedback.rating,
+          comment: savedFeedback.comment,
+          date: savedFeedback.createdAt ? savedFeedback.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        };
+        setReviews(prev => ({
+          ...prev,
+          [game]: [newRev, ...prev[game]],
+        }));
+        setNewComment('');
+        setNewRating(5);
+      } else {
+        console.error('Failed to save feedback to DB');
+      }
+    } catch (err) {
+      console.error('Error submitting feedback:', err);
+    }
   };
 
   // Profile Edit states
@@ -209,6 +259,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) {
       fetchPublicRooms();
+      fetchFeedback();
       const interval = setInterval(fetchPublicRooms, 8000); // 8 seconds poll
       return () => clearInterval(interval);
     }

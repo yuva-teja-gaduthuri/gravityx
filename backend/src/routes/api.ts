@@ -15,7 +15,12 @@ import {
 } from '../controllers/socialController';
 import { getItems, buyItem, equipItem } from '../controllers/storeController';
 import { getLeaderboard } from '../controllers/leaderboardController';
-import { getUsers, banUser, unbanUser, getSystemStats } from '../controllers/adminController';
+import { 
+  getUsers, banUser, unbanUser, getSystemStats, updateUser, deleteUser,
+  getModerationReviews, deleteReview, getModerationFeedback, deleteFeedback,
+  getDivisionRanks, upsertDivisionRank, deleteDivisionRank
+} from '../controllers/adminController';
+import { submitFeedback, getGameFeedback } from '../controllers/feedbackController';
 import { authenticateJWT, requireAdmin } from '../middleware/auth';
 import { rateLimitMiddleware } from '../middleware/rateLimit';
 import { roomStore } from '../models/roomStore';
@@ -56,6 +61,10 @@ router.post('/store/equip', authenticateJWT, equipItem);
 // Leaderboard Route
 router.get('/leaderboard', authenticateJWT, getLeaderboard);
 
+// Feedback Routes
+router.post('/feedback', authenticateJWT, submitFeedback);
+router.get('/feedback/:game', authenticateJWT, getGameFeedback);
+
 // Public Lobby Rooms
 router.get('/rooms', authenticateJWT, (req, res) => {
   try {
@@ -78,8 +87,21 @@ router.get('/rooms', authenticateJWT, (req, res) => {
 
 // Admin Routes
 router.get('/admin/users', authenticateJWT, requireAdmin, getUsers);
+router.post('/admin/user/update', authenticateJWT, requireAdmin, updateUser);
+router.post('/admin/user/delete', authenticateJWT, requireAdmin, deleteUser);
 router.post('/admin/ban', authenticateJWT, requireAdmin, banUser);
 router.post('/admin/unban', authenticateJWT, requireAdmin, unbanUser);
 router.get('/admin/stats', authenticateJWT, requireAdmin, getSystemStats);
+
+// Super Admin Moderation Routes
+router.get('/admin/reviews', authenticateJWT, requireAdmin, getModerationReviews);
+router.delete('/admin/reviews/:id', authenticateJWT, requireAdmin, deleteReview);
+router.get('/admin/feedback', authenticateJWT, requireAdmin, getModerationFeedback);
+router.delete('/admin/feedback/:id', authenticateJWT, requireAdmin, deleteFeedback);
+
+// Super Admin Division Ranks Routes
+router.get('/admin/ranks', authenticateJWT, requireAdmin, getDivisionRanks);
+router.post('/admin/ranks', authenticateJWT, requireAdmin, upsertDivisionRank);
+router.delete('/admin/ranks/:id', authenticateJWT, requireAdmin, deleteDivisionRank);
 
 export default router;

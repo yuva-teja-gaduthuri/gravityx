@@ -31,9 +31,13 @@ export async function awardUserStats(userId: string, xpGained: number, coinsGain
       newLevel += 1;
     }
 
-    // Determine Rank
+    // Determine Rank dynamically from DivisionRank table
     let newRank = user.rank;
-    for (const rank of RANKS) {
+    const dbRanks = await prisma.divisionRank.findMany({
+      orderBy: { minLevel: 'asc' },
+    });
+
+    for (const rank of dbRanks) {
       if (newLevel >= rank.minLevel) {
         newRank = rank.name;
       }

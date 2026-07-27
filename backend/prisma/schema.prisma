@@ -156,3 +156,22 @@ model UserReview {
   createdAt      DateTime @default(now())
 }
 
+model Feedback {
+  id        String   @id @default(uuid())
+  game      String   // e.g. "RAMUDU_SEETHA", "LUDO", "CHESS"
+  username  String   // User who submitted the feedback
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model DivisionRank {
+  id          String   @id @default(uuid())
+  minLevel    Int      @unique
+  name        String   @unique
+  badgeIcon   String?  @default("bronze_badge")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+

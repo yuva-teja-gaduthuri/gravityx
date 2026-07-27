@@ -103,3 +103,130 @@ export const getSystemStats = async (req: AuthenticatedRequest, res: Response) =
     res.status(500).json({ error: error.message });
   }
 };
+
+export const updateUser = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, coins, xp, level, rank, role } = req.body;
+
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    const dataToUpdate: any = {};
+    if (coins !== undefined) dataToUpdate.coins = Number(coins);
+    if (xp !== undefined) dataToUpdate.xp = Number(xp);
+    if (level !== undefined) dataToUpdate.level = Number(level);
+    if (rank !== undefined) dataToUpdate.rank = rank;
+    if (role !== undefined) dataToUpdate.role = role;
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: dataToUpdate,
+    });
+
+    res.json({ message: 'User updated successfully', user: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteUser = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    const target = await prisma.user.findUnique({ where: { id: userId } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    if (target.role === 'ADMIN' && req.user?.id !== target.id) {
+      return res.status(400).json({ error: 'Cannot delete another admin' });
+    }
+
+    await prisma.user.delete({ where: { id: userId } });
+    res.json({ message: 'User deleted from database successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getModerationReviews = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const reviews = await prisma.userReview.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(reviews);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteReview = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.userReview.delete({ where: { id } });
+    res.json({ message: 'Review deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getModerationFeedback = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const feedbacks = await prisma.feedback.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(feedbacks);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteFeedback = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.feedback.delete({ where: { id } });
+    res.json({ message: 'Feedback deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getDivisionRanks = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const ranks = await prisma.divisionRank.findMany({
+      orderBy: { minLevel: 'asc' },
+    });
+    res.json(ranks);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const upsertDivisionRank = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { minLevel, name, badgeIcon } = req.body;
+
+    if (minLevel === undefined || !name) {
+      return res.status(400).json({ error: 'minLevel and name are required' });
+    }
+
+    const rank = await prisma.divisionRank.upsert({
+      where: { minLevel: Number(minLevel) },
+      update: { name, badgeIcon },
+      create: { minLevel: Number(minLevel), name, badgeIcon },
+    });
+
+    res.json({ message: 'Division rank saved successfully', rank });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteDivisionRank = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.divisionRank.delete({ where: { id } });
+    res.json({ message: 'Division rank deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

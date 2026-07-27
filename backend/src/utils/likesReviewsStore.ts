@@ -19,11 +19,10 @@ export async function getLikesCount(targetUsername: string): Promise<number> {
     const count = await prisma.userLike.count({
       where: { targetUsername },
     });
-    // Add base 15 seed to match initial UI/Mockups requirements
-    return count + 15;
+    return count;
   } catch (e: any) {
     console.error('Failed to get likes count from DB:', e.message);
-    return 15;
+    return 0;
   }
 }
 
@@ -43,14 +42,6 @@ export async function getReviews(targetUsername: string): Promise<any[]> {
       where: { targetUsername },
       orderBy: { createdAt: 'desc' },
     });
-    
-    if (list.length === 0) {
-      // Return standard initial reviews to populate the UI nicely on first load
-      return [
-        { targetUsername, reviewerName: 'StarGazer', rating: 5, comment: 'Phenomenal deduction skills in Ramudu Seetha! Guessed correctly in the first turn.', date: '2026-07-24' },
-        { targetUsername, reviewerName: 'LudoKing', rating: 4, comment: 'Very strategic Ludo player. Blocked my tokens perfectly.', date: '2026-07-23' }
-      ];
-    }
 
     return list.map(r => ({
       targetUsername: r.targetUsername,

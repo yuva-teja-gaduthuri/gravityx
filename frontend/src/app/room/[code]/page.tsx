@@ -158,12 +158,18 @@ export default function RoomPage() {
       setMatchEndedData({ gameType: 'CHESS', data });
     };
 
+    const handleConnectError = (err: any) => {
+      console.error('Socket connection error in room page:', err.message);
+      setErrorMsg(`WebSocket connection failed: ${err.message || 'Server unreachable'}`);
+    };
+
     socket.on('room_joined', handleRoomJoined);
     socket.on('room_state_updated', handleRoomStateUpdated);
     socket.on('room_kicked', handleRoomKicked);
     socket.on('chat_message', handleChatMessage);
     socket.on('room_deleted', handleRoomDeleted);
     socket.on('error', handleError);
+    socket.on('connect_error', handleConnectError);
     socket.on('rs_match_ended', handleRsMatchEnded);
     socket.on('ludo_match_ended', handleLudoMatchEnded);
     socket.on('chess_match_ended', handleChessMatchEnded);
@@ -175,6 +181,7 @@ export default function RoomPage() {
       socket.off('chat_message', handleChatMessage);
       socket.off('room_deleted', handleRoomDeleted);
       socket.off('error', handleError);
+      socket.off('connect_error', handleConnectError);
       socket.off('rs_match_ended', handleRsMatchEnded);
       socket.off('ludo_match_ended', handleLudoMatchEnded);
       socket.off('chess_match_ended', handleChessMatchEnded);
@@ -253,6 +260,22 @@ export default function RoomPage() {
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  if (errorMsg) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-2xl font-bold">⚠️</div>
+        <h2 className="text-lg font-bold text-white mb-2">Failed to Enter Room</h2>
+        <p className="text-sm text-gray-400 mb-6 max-w-sm">{errorMsg}</p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="px-6 py-3 bg-gradient-to-r from-primary to-cyberblue rounded-xl font-bold cursor-pointer text-white hover:opacity-90 transition-all"
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
 
   if (loading || !user || !room || !socket) {
     return (
