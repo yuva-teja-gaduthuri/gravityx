@@ -67,12 +67,13 @@ class RoomStore {
     // Check if player already in room
     const exists = room.players.some((p) => p.id === player.id);
     if (!exists && room.players.length < room.maxPlayers) {
-      if (room.gameType === 'LUDO' && !player.color) {
+      if (room.gameType === 'LUDO') {
         const availableColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
         const takenColors = room.players.map((p) => p.color).filter(Boolean);
-        const freeColor = availableColors.find((c) => !takenColors.includes(c));
-        if (freeColor) {
-          player.color = freeColor;
+        if (player.color && takenColors.includes(player.color)) {
+          player.color = availableColors.find((c) => !takenColors.includes(c));
+        } else if (!player.color) {
+          player.color = availableColors.find((c) => !takenColors.includes(c));
         }
       }
       room.players.push(player);
