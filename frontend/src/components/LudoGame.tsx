@@ -20,6 +20,7 @@ interface LudoPlayer {
   tokens: LudoToken[];
   isWinner: boolean;
   placement?: number;
+  unturnedMoves?: number;
 }
 
 interface LudoState {
@@ -557,6 +558,41 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     return path;
   };
 
+  // Calculate reverse Ludo track coordinates path for captured tokens returning home
+  const getReversePathPositions = (color: string, tokenId: number, capturePos: number): [number, number][] => {
+    const coordsList: [number, number][] = [];
+    const config = COLOR_CONFIGS[color];
+    const startCell = config ? config.startCell : 0;
+    const lastCell = config ? config.lastCell : 50;
+
+    let currentPos = capturePos;
+
+    // Add initial capture cell coordinate
+    coordsList.push(getTokenCoords(color, tokenId, currentPos));
+
+    // If in stretch (52..58)
+    if (currentPos >= 52) {
+      while (currentPos > 52) {
+        currentPos--;
+        coordsList.push(STRETCH_COORDINATES[color][currentPos]);
+      }
+      // Step out of stretch to lastCell
+      currentPos = lastCell;
+      coordsList.push(TRACK_COORDINATES[currentPos]);
+    }
+
+    // Step backwards along main track until startCell is reached
+    while (currentPos !== startCell) {
+      currentPos = (currentPos - 1 + 52) % 52;
+      coordsList.push(TRACK_COORDINATES[currentPos]);
+    }
+
+    // Final step: Home base yard coordinate slot
+    coordsList.push(BASE_COORDINATES[color][tokenId]);
+
+    return coordsList;
+  };
+
   // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
@@ -675,7 +711,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     takeStep();
   };
 
-  // Opponent captures walking loop
+  // Opponent captures walking loop (retracing path back to home base yard)
   const handleCaptureAnimation = (capturePos: number, finalPlayersState: any) => {
     if (!gameState) return;
     const activePlayer = gameState.players[gameState.activePlayerIndex];
@@ -683,6 +719,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let capturedKey = '';
     let targetBaseCoords: [number, number] = [0, 0];
     let opponentColor = '';
+    let capturedTokenId = 0;
 
     gameState.players.forEach((p) => {
       if (p.id === activePlayer.id) return;
@@ -692,6 +729,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         if (t.position === capturePos && finalT?.position === -1) {
           capturedKey = `${p.color}-${t.id}`;
           opponentColor = p.color;
+          capturedTokenId = t.id;
           targetBaseCoords = BASE_COORDINATES[p.color][t.id];
         }
       });
@@ -722,33 +760,19 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setComicText({ text: 'BOOM!', col, row });
       setTimeout(() => setComicText(null), 1200);
 
-      // Slide and spin captured token back to its yard base
-      setVisualTokens((prev) => ({
-        ...prev,
-        [capturedKey]: {
-          ...prev[capturedKey],
-          isCaptured: true,
-          rotation: 360
-        }
-      }));
+      // Compute step-by-step reverse path back to home base yard
+      const reverseCoords = getReversePathPositions(opponentColor, capturedTokenId, capturePos);
+      let stepIdx = 0;
+      const captureInterval = isSpeedUp ? 60 : 110;
 
-      let progress = 0;
-      const slideDuration = 900;
-      const slideInterval = 30;
-      const startCoords = [visualTokens[capturedKey]?.col || col, visualTokens[capturedKey]?.row || row];
-      const endCoords = targetBaseCoords;
-
-      const slideTimer = setInterval(() => {
-        progress += slideInterval;
-        const ratio = progress / slideDuration;
-
-        if (ratio >= 1) {
-          clearInterval(slideTimer);
+      const stepBack = () => {
+        if (stepIdx >= reverseCoords.length) {
+          // Reached home base yard slot
           setVisualTokens((prev) => ({
             ...prev,
             [capturedKey]: {
-              col: endCoords[0],
-              row: endCoords[1],
+              col: targetBaseCoords[0],
+              row: targetBaseCoords[1],
               scale: 1.0,
               rotation: 0,
               translateY: 0,
@@ -764,27 +788,33 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           setCamZoom(1.0);
           setCamX(0);
           setCamY(0);
-        } else {
-          // Linear interpolation for coordinate mapping
-          const interpCol = startCoords[0] + (endCoords[0] - startCoords[0]) * ratio;
-          const interpRow = startCoords[1] + (endCoords[1] - startCoords[1]) * ratio;
-
-          setVisualTokens((prev) => ({
-            ...prev,
-            [capturedKey]: {
-              ...prev[capturedKey],
-              col: interpCol,
-              row: interpRow,
-              rotation: prev[capturedKey].rotation + 35
-            }
-          }));
-
-          // Emit trail smoke while sliding
-          if (Math.random() > 0.6) {
-            spawnParticles(Math.floor(interpCol), Math.floor(interpRow), 'smoke', 2);
-          }
+          return;
         }
-      }, slideInterval);
+
+        const [stepCol, stepRow] = reverseCoords[stepIdx];
+
+        setVisualTokens((prev) => ({
+          ...prev,
+          [capturedKey]: {
+            ...prev[capturedKey],
+            col: stepCol,
+            row: stepRow,
+            scale: 1.15,
+            rotation: (prev[capturedKey]?.rotation || 0) - 90,
+            translateY: -10,
+            isMoving: false,
+            isCaptured: true
+          }
+        }));
+
+        audioRef.current?.playStep();
+        spawnParticles(Math.floor(stepCol), Math.floor(stepRow), 'smoke', 2);
+
+        stepIdx++;
+        setTimeout(stepBack, captureInterval);
+      };
+
+      stepBack();
     } else {
       setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
       setValidTokens([]);
@@ -856,10 +886,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     socket.on('ludo_token_moved', (data: any) => {
       const currentGS = gameStateRef.current;
       if (!currentGS) return;
-      const activePlayer = currentGS.players[currentGS.activePlayerIndex];
+      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
+      const activePlayer = currentGS.players[activePlayerIndex];
+      if (!activePlayer) return;
       
       const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
-      const startPos = currentToken ? currentToken.position : -1;
+      const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
 
       // Build path sequence
@@ -1080,7 +1112,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     return [7, 7];
   };
 
-  const renderBaseDice = (color: 'red' | 'green' | 'yellow' | 'blue') => {
+  const renderBaseDice = (color: 'red' | 'green' | 'yellow' | 'blue', customPosClass?: string) => {
     if (!gameState) return null;
     
     // Find if player exists in game
@@ -1093,29 +1125,38 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     const canIRoll = isPlayerActive && isMyDice && !gameState.hasRolled && !isRolling;
     
     // Position classes inside the base card
-    let positionClass = '';
-    if (color === 'red') positionClass = 'absolute bottom-2 right-2';
-    else if (color === 'green') positionClass = 'absolute bottom-2 left-2';
-    else if (color === 'blue') positionClass = 'absolute top-2 right-2';
-    else if (color === 'yellow') positionClass = 'absolute top-2 left-2';
+    let positionClass = customPosClass ?? '';
+    if (!customPosClass) {
+      if (color === 'red') positionClass = 'absolute bottom-2 right-2';
+      else if (color === 'green') positionClass = 'absolute bottom-2 left-2';
+      else if (color === 'blue') positionClass = 'absolute top-2 right-2';
+      else if (color === 'yellow') positionClass = 'absolute top-2 left-2';
+    }
 
     // Dice colors matching the team
-    let diceFaceBg = 'bg-cybererror';
-    let dotBg = 'bg-white';
-    if (color === 'green') { diceFaceBg = 'bg-cybersuccess'; }
-    else if (color === 'yellow') { diceFaceBg = 'bg-[#fbc02d]'; dotBg = 'bg-[#1a0802]'; }
-    else if (color === 'blue') { diceFaceBg = 'bg-cyberblue'; }
+    let diceFaceBg = 'bg-white border border-gray-200 shadow-md';
+    let dotBg = 'bg-[#E53935]';
+    if (color === 'green') { dotBg = 'bg-[#43A047]'; }
+    else if (color === 'yellow') { dotBg = 'bg-[#F57F17]'; }
+    else if (color === 'blue') { dotBg = 'bg-[#1E88E5]'; }
 
     const displayRollValue = isPlayerActive && isRolling ? rollingValue : (gameState.diceValue || 1);
 
     return (
-      <div className={`${positionClass} z-20`}>
+      <div className={`${positionClass} z-20 flex flex-col items-center gap-1`}>
+        {/* Active Roll Badge */}
+        {canIRoll && (
+          <div className="bg-amber-400 text-darkbg font-black text-[9px] px-2 py-0.5 rounded-full shadow-lg animate-bounce uppercase tracking-widest border border-white">
+            ROLL
+          </div>
+        )}
+
         {/* Glow backdrop for active dice */}
         {isPlayerActive && (
-          <div className={`absolute inset-[-12px] rounded-2xl animate-pulse blur-md -z-10 ${
-            color === 'red' ? 'bg-cybererror/40' :
-            color === 'green' ? 'bg-cybersuccess/40' :
-            color === 'yellow' ? 'bg-cybergold/40' : 'bg-cyberblue/40'
+          <div className={`absolute inset-[-8px] rounded-2xl animate-pulse blur-sm -z-10 ${
+            color === 'red' ? 'bg-red-500/50' :
+            color === 'green' ? 'bg-green-500/50' :
+            color === 'yellow' ? 'bg-yellow-400/50' : 'bg-blue-500/50'
           }`} />
         )}
         
@@ -1134,29 +1175,29 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             data-roll={displayRollValue}
           >
             {/* Face 1 */}
-            <div className={`dice-face ${diceFaceBg} text-white flex items-center justify-center shadow-inner`} style={{ transform: 'rotateY(0deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <span className={`w-2.5 h-2.5 rounded-full ${color === 'yellow' ? 'bg-[#1a0802]' : 'bg-white'} shadow-md`}></span>
+            <div className={`dice-face ${diceFaceBg} flex items-center justify-center`} style={{ transform: 'rotateY(0deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <span className={`w-3 h-3 rounded-full ${dotBg} shadow-sm`}></span>
             </div>
             {/* Face 6 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(180deg) translateZ(calc(var(--dice-size) / 2))' }}>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(180deg) translateZ(calc(var(--dice-size) / 2))' }}>
               <div className="grid grid-cols-2 gap-1.5 p-1 w-full h-full justify-items-center items-center">
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg}`}></span>
               </div>
             </div>
             {/* Face 2 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="flex flex-col justify-between p-1 w-full h-full">
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
-                <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1.5 w-full h-full">
+                <span className={`w-2 h-2 rounded-full ${dotBg} self-start`}></span>
+                <span className={`w-2 h-2 rounded-full ${dotBg} self-end`}></span>
               </div>
             </div>
             {/* Face 5 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateY(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateY(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
               <div className="grid grid-cols-3 gap-1 p-1 w-full h-full items-center justify-items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-1 col-end-2`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} col-start-3 col-end-4`}></span>
@@ -1166,16 +1207,16 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               </div>
             </div>
             {/* Face 3 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="flex flex-col justify-between p-1 w-full h-full items-center">
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateX(90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="flex flex-col justify-between p-1.5 w-full h-full items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-start`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg} self-end`}></span>
               </div>
             </div>
             {/* Face 4 */}
-            <div className={`dice-face ${diceFaceBg} text-white shadow-inner`} style={{ transform: 'rotateX(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
-              <div className="grid grid-cols-2 gap-2 p-1 w-full h-full justify-items-center items-center">
+            <div className={`dice-face ${diceFaceBg}`} style={{ transform: 'rotateX(-90deg) translateZ(calc(var(--dice-size) / 2))' }}>
+              <div className="grid grid-cols-2 gap-2 p-1.5 w-full h-full justify-items-center items-center">
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
                 <span className={`w-1.5 h-1.5 rounded-full ${dotBg}`}></span>
@@ -1184,6 +1225,26 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             </div>
           </div>
         </button>
+      </div>
+    );
+  };
+
+  const renderMissDots = (unturnedCount: number = 0) => {
+    return (
+      <div className="flex items-center gap-1 mt-1" title={`${unturnedCount}/5 Missed Turns`}>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const isMissed = i < unturnedCount;
+          return (
+            <div
+              key={`miss-dot-${i}`}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                isMissed
+                  ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] scale-110'
+                  : 'bg-emerald-400/90 shadow-[0_0_4px_rgba(52,211,153,0.6)]'
+              }`}
+            />
+          );
+        })}
       </div>
     );
   };
@@ -1199,31 +1260,31 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           --dice-size: clamp(34px, 7.5vmin, 46px);
         }
         
-        /* Premium Wood Frame */
+        /* Authentic Ludo King Mahogany Frame */
         .wood-board-frame {
-          background: linear-gradient(135deg, #402010 0%, #2c140a 50%, #1a0802 100%);
-          border: clamp(6px, 1.8vmin, 12px) solid #52301c;
+          background: linear-gradient(135deg, #4e260e 0%, #361908 50%, #210d03 100%);
+          border: clamp(8px, 2.2vmin, 16px) solid #673414;
           box-shadow: 
-            0 20px 40px rgba(0, 0, 0, 0.65),
-            inset 0 3px 6px rgba(255, 255, 255, 0.08),
-            inset 0 -3px 6px rgba(0, 0, 0, 0.5);
+            0 20px 45px rgba(0, 0, 0, 0.75),
+            inset 0 3px 6px rgba(255, 255, 255, 0.25),
+            inset 0 -3px 6px rgba(0, 0, 0, 0.6);
           border-radius: clamp(16px, 4vmin, 28px);
           overflow: hidden;
         }
 
-        /* Wood Board Grid Cells */
+        /* Ludo King Clean White Track Grid Cells */
         .wood-cell-default {
-          background: #eedcb3; /* birch wood color */
-          border: 1px solid #dcd0b3;
-          box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.45), inset 0 -1px 2px rgba(0,0,0,0.06);
+          background: #ffffff; /* pure clean white */
+          border: 1px solid #d5d5d5;
+          box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.04);
         }
 
-        /* Wood base yard panels */
+        /* Base Yard inner white panel */
         .wood-base-yard {
-          background: #dfc8a5;
-          border: clamp(2px, 0.5vmin, 4px) solid #bfa57b;
-          border-radius: clamp(8px, 2.5vmin, 16px);
-          box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+          background: #ffffff;
+          border: clamp(2px, 0.5vmin, 4px) solid rgba(255, 255, 255, 0.9);
+          border-radius: clamp(12px, 3vmin, 20px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         }
 
         /* Spotlight & Reflection overlay */
@@ -1714,173 +1775,236 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         </div>
       </div>
 
-      {/* Ludo Board Panel with Dynamic Camera Zoom/Pan */}
+      {/* 4 Player Consoles - Top Row (Red & Green) */}
+      <div className="w-full max-w-[620px] flex items-center justify-between gap-2 mb-2 px-1 z-20">
+        {/* Red Player Console (Top-Left) */}
+        {(() => {
+          const pIdx = gameState?.players.findIndex(p => p.color === 'red') ?? -1;
+          const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
+          const isPlayerActive = gameState?.activePlayerIndex === pIdx;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          return (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
+              isPlayerActive ? 'border-red-400 bg-red-950/70 ring-2 ring-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
+            }`}>
+              <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Red'}</span>
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+              </div>
+              {renderBaseDice('red', 'relative inset-0 ml-1')}
+            </div>
+          );
+        })()}
+
+        {/* Green Player Console (Top-Right) */}
+        {(() => {
+          const pIdx = gameState?.players.findIndex(p => p.color === 'green') ?? -1;
+          const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
+          const isPlayerActive = gameState?.activePlayerIndex === pIdx;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          return (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
+              isPlayerActive ? 'border-green-400 bg-green-950/70 ring-2 ring-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
+            }`}>
+              {renderBaseDice('green', 'relative inset-0 mr-1')}
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Green'}</span>
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+              </div>
+              <div className="w-4 h-4 rounded-full bg-[#43a047] flex items-center justify-center text-[10px] shadow-sm">📍</div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Main Ludo Board Container (Fits all screen sizes: min(90vw, 70vh, 620px)) */}
       <div 
         className="wood-board-frame relative shrink-0 transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)]"
         style={{
-          width: 'min(92vw, 92vh, 680px)',
-          height: 'min(92vw, 92vh, 680px)',
+          width: 'min(90vw, 70vh, 620px)',
+          height: 'min(90vw, 70vh, 620px)',
+          aspectRatio: '1 / 1',
           transform: `scale(${camZoom}) translate(${camX}px, ${camY}px)`,
         }}
       >
         
-        {/* Render 15x15 Ludo Grid Layout */}
-        <div className="grid grid-cols-15 grid-rows-15 w-full h-full gap-0.5 relative bg-[#eedcb3]">
+        {/* Render 15x15 Ludo Grid Layout with CSS Grid */}
+        <div 
+          className="w-full h-full relative bg-white overflow-hidden rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
+            gridTemplateRows: 'repeat(15, minmax(0, 1fr))'
+          }}
+        >
           
-          {/* Top-Left Red Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#c62828]/10 to-[#b71c1c]/20 border-4 border-[#5d1616] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybererror font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 left-2">Red Yard</span>
-            
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#b71c1c] bg-[#ff8a80]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+          {/* Top-Left Red Base Yard */}
+          <div 
+            style={{ gridColumn: '1 / 7', gridRow: '1 / 7' }}
+            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-[16.66%]"
+          >
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow z-0">RED</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
               </div>
-              
-              {/* Integrated Dice */}
-              {renderBaseDice('red')}
             </div>
           </div>
 
-          {/* Top-Middle Green Column Track */}
-          <div className="col-span-3 row-span-6 grid grid-cols-3 grid-rows-6 gap-0.5">
-            {Array.from({ length: 18 }).map((_, idx) => {
-              const col = idx % 3;
-              const row = Math.floor(idx / 3);
-              let bg = 'wood-cell-default';
-              if (col === 1 && row > 0) bg = 'bg-[#00e676]/85 border border-[#00a152] shadow-inner'; // Home stretch
-              if (col === 2 && row === 1) bg = 'bg-[#00e676]/85 border border-white/20 shadow-inner'; // Green start
-              const isStar = (col === 2 && row === 1) || (col === 0 && row === 2);
-              return (
-                <div key={`g-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Top-Right Green Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#2e7d32]/10 to-[#1b5e20]/20 border-4 border-[#124216] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybersuccess font-black text-xs sm:text-sm uppercase tracking-widest absolute top-2 right-2">Green Yard</span>
-            
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#2e7d32] bg-[#b9f6ca]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
+          {/* Top-Right Green Base Yard */}
+          <div 
+            style={{ gridColumn: '10 / 16', gridRow: '1 / 7' }}
+            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-[16.66%]"
+          >
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow z-0">GREEN</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
               </div>
-              
-              {/* Integrated Dice */}
-              {renderBaseDice('green')}
             </div>
           </div>
 
-          {/* Left-Middle Red Column Track */}
-          <div className="col-span-6 row-span-3 grid grid-cols-6 grid-rows-3 gap-0.5">
-            {Array.from({ length: 18 }).map((_, idx) => {
-              const col = idx % 6;
-              const row = Math.floor(idx / 6);
-              let bg = 'wood-cell-default';
-              if (row === 1 && col > 0) bg = 'bg-[#ff5d5d]/85 border border-[#d33a3a] shadow-inner'; // Home stretch
-              if (row === 0 && col === 1) bg = 'bg-[#ff5d5d]/85 border border-white/20 shadow-inner'; // Red start
-              const isStar = (row === 0 && col === 1) || (row === 2 && col === 2);
-              return (
-                <div key={`r-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
-                </div>
-              );
-            })}
+          {/* Bottom-Left Blue Base Yard */}
+          <div 
+            style={{ gridColumn: '1 / 7', gridRow: '10 / 16' }}
+            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-[16.66%]"
+          >
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow z-0">BLUE</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom-Right Yellow Base Yard */}
+          <div 
+            style={{ gridColumn: '10 / 16', gridRow: '10 / 16' }}
+            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-[16.66%]"
+          >
+            <span className="text-[#1a0802] font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow z-0">YELLOW</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+              </div>
+            </div>
           </div>
 
           {/* Center Goal Terminal */}
-          <div className="col-span-3 row-span-3 bg-gradient-to-br from-[#805030] to-[#50301a] border border-[#a67c52] rounded-xl flex items-center justify-center flex-col relative overflow-hidden shadow-inner">
-            {/* Traditional Triangles */}
+          <div 
+            style={{ gridColumn: '7 / 10', gridRow: '7 / 10' }}
+            className="bg-white border border-[#d5d5d5] flex items-center justify-center relative overflow-hidden shadow-inner"
+          >
             <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <polygon points="0,0 50,50 0,100" fill="rgba(239, 68, 68, 0.75)" stroke="#501010" strokeWidth="0.5" />
-              <polygon points="0,0 100,0 50,50" fill="rgba(34, 197, 94, 0.75)" stroke="#105010" strokeWidth="0.5" />
-              <polygon points="100,0 100,100 50,50" fill="rgba(234, 179, 8, 0.75)" stroke="#504005" strokeWidth="0.5" />
-              <polygon points="0,100 50,50 100,100" fill="rgba(59, 130, 246, 0.75)" stroke="#051050" strokeWidth="0.5" />
+              <polygon points="0,0 50,50 0,100" fill="#e53935" stroke="#b71c1c" strokeWidth="0.8" />
+              <polygon points="0,0 100,0 50,50" fill="#43a047" stroke="#1b5e20" strokeWidth="0.8" />
+              <polygon points="100,0 100,100 50,50" fill="#fdd835" stroke="#f57f17" strokeWidth="0.8" />
+              <polygon points="0,100 50,50 100,100" fill="#1e88e5" stroke="#0d47a1" strokeWidth="0.8" />
             </svg>
-            <div className="relative z-10 flex flex-col items-center justify-center">
-              <Trophy className="text-cybergold sm:w-7 sm:h-7 w-4 h-4 animate-float-slow" />
-              <span className="text-[7px] sm:text-[9px] uppercase font-black tracking-widest mt-0.5 text-white">Goal</span>
+            <div className="relative z-10 flex items-center justify-center bg-white/90 p-1 sm:p-2 rounded-full border border-amber-400 shadow-md">
+              <Trophy className="text-amber-500 sm:w-6 sm:h-6 w-4 h-4 animate-bounce" />
             </div>
           </div>
 
-          {/* Right-Middle Yellow Column Track */}
-          <div className="col-span-6 row-span-3 grid grid-cols-6 grid-rows-3 gap-0.5">
-            {Array.from({ length: 18 }).map((_, idx) => {
-              const col = idx % 6;
-              const row = Math.floor(idx / 6);
-              let bg = 'wood-cell-default';
-              if (row === 1 && col < 5) bg = 'bg-[#ffd740]/85 border border-[#ffb300] shadow-inner'; // Home stretch
-              if (row === 2 && col === 4) bg = 'bg-[#ffd740]/85 border border-white/20 shadow-inner'; // Yellow start
-              const isStar = (row === 2 && col === 4) || (row === 0 && col === 3);
+          {/* 72 Pathway Track Cells */}
+          {(() => {
+            const trackCells: { col: number; row: number }[] = [];
+            // Top arm: cols 6,7,8; rows 0..5
+            for (let r = 0; r <= 5; r++) {
+              for (let c = 6; c <= 8; c++) trackCells.push({ col: c, row: r });
+            }
+            // Right arm: cols 9..14; rows 6,7,8
+            for (let r = 6; r <= 8; r++) {
+              for (let c = 9; c <= 14; c++) trackCells.push({ col: c, row: r });
+            }
+            // Bottom arm: cols 6,7,8; rows 9..14
+            for (let r = 9; r <= 14; r++) {
+              for (let c = 6; c <= 8; c++) trackCells.push({ col: c, row: r });
+            }
+            // Left arm: cols 0..5; rows 6,7,8
+            for (let r = 6; r <= 8; r++) {
+              for (let c = 0; c <= 5; c++) trackCells.push({ col: c, row: r });
+            }
+
+            return trackCells.map(({ col, row }) => {
+              let bgStyle = 'bg-white border border-[#e2e8f0]';
+              let textStyle = 'text-gray-400';
+              let content = '';
+
+              if (row === 7 && col >= 1 && col <= 6) {
+                bgStyle = 'bg-[#e53935] border border-[#b71c1c] shadow-inner';
+                textStyle = 'text-white font-black';
+              } else if (col === 7 && row >= 1 && row <= 6) {
+                bgStyle = 'bg-[#43a047] border border-[#1b5e20] shadow-inner';
+                textStyle = 'text-white font-black';
+              } else if (row === 7 && col >= 8 && col <= 13) {
+                bgStyle = 'bg-[#fdd835] border border-[#f57f17] shadow-inner';
+                textStyle = 'text-[#1a0802] font-black';
+              } else if (col === 7 && row >= 8 && row <= 13) {
+                bgStyle = 'bg-[#1e88e5] border border-[#0d47a1] shadow-inner';
+                textStyle = 'text-white font-black';
+              } else if (col === 1 && row === 6) {
+                bgStyle = 'bg-[#e53935] border border-[#b71c1c]';
+                textStyle = 'text-white font-black';
+                content = '★';
+              } else if (col === 8 && row === 1) {
+                bgStyle = 'bg-[#43a047] border border-[#1b5e20]';
+                textStyle = 'text-white font-black';
+                content = '★';
+              } else if (col === 13 && row === 8) {
+                bgStyle = 'bg-[#fdd835] border border-[#f57f17]';
+                textStyle = 'text-[#1a0802] font-black';
+                content = '★';
+              } else if (col === 6 && row === 13) {
+                bgStyle = 'bg-[#1e88e5] border border-[#0d47a1]';
+                textStyle = 'text-white font-black';
+                content = '★';
+              } else if (col === 0 && row === 7) {
+                textStyle = 'text-[#e53935] font-black';
+                content = '→';
+              } else if (col === 7 && row === 0) {
+                textStyle = 'text-[#43a047] font-black';
+                content = '↓';
+              } else if (col === 14 && row === 7) {
+                textStyle = 'text-[#f57f17] font-black';
+                content = '←';
+              } else if (col === 7 && row === 14) {
+                textStyle = 'text-[#1e88e5] font-black';
+                content = '↑';
+              } else if ((col === 6 && row === 2) || (col === 12 && row === 6) || (col === 8 && row === 12) || (col === 2 && row === 8)) {
+                textStyle = 'text-amber-500 font-black';
+                content = '★';
+              }
+
               return (
-                <div key={`y-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
+                <div 
+                  key={`cell-${col}-${row}`}
+                  style={{
+                    gridColumn: col + 1,
+                    gridRow: row + 1,
+                  }}
+                  className={`${bgStyle} flex items-center justify-center text-[10px] sm:text-xs select-none`}
+                >
+                  <span className={textStyle}>{content}</span>
                 </div>
               );
-            })}
-          </div>
-
-          {/* Bottom-Left Blue Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#1565c0]/10 to-[#0d47a1]/20 border-4 border-[#092c68] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cyberblue font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 left-2">Blue Yard</span>
-            
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#1565c0] bg-[#82b1ff]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-              </div>
-              
-              {/* Integrated Dice */}
-              {renderBaseDice('blue')}
-            </div>
-          </div>
-
-          {/* Bottom-Middle Blue Column Track */}
-          <div className="col-span-3 row-span-6 grid grid-cols-3 grid-rows-6 gap-0.5">
-            {Array.from({ length: 18 }).map((_, idx) => {
-              const col = idx % 3;
-              const row = Math.floor(idx / 3);
-              let bg = 'wood-cell-default';
-              if (col === 1 && row < 5) bg = 'bg-[#2979ff]/85 border border-[#2962ff] shadow-inner'; // Home stretch
-              if (col === 0 && row === 4) bg = 'bg-[#2979ff]/85 border border-white/20 shadow-inner'; // Blue start
-              const isStar = (col === 0 && row === 4) || (col === 2 && row === 3);
-              return (
-                <div key={`b-${idx}`} className={`rounded ${bg} flex items-center justify-center text-[10px] text-white/30 font-bold`}>
-                  {isStar ? '★' : ''}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Bottom-Right Yellow Base */}
-          <div className="col-span-6 row-span-6 bg-gradient-to-br from-[#f57f17]/10 to-[#f57f17]/20 border-4 border-[#824400] rounded-3xl relative flex items-center justify-center shadow-2xl">
-            <span className="text-cybergold font-black text-xs sm:text-sm uppercase tracking-widest absolute bottom-2 right-2">Yellow Yard</span>
-            
-            {/* Wooden Base Panel */}
-            <div className="wood-base-yard w-[85%] h-[85%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full border-2 border-[#f57f17] bg-[#ffe57f]/20 shadow-[inset_0_4px_8px_rgba(0,0,0,0.5)]"></div>
-              </div>
-              
-              {/* Integrated Dice */}
-              {renderBaseDice('yellow')}
-            </div>
-          </div>
+            });
+          })()}
 
           {/* Absolute Tokens Overlay Layer with Stacking Displacement */}
           {(() => {
@@ -1919,7 +2043,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
                 if (count > 1 && !visual?.isMoving) {
                   const angle = (idx * 2 * Math.PI) / count;
-                  const radius = count === 2 ? 5 : 7;
+                  const radius = count === 2 ? 4 : 6;
                   dx = Math.cos(angle) * radius;
                   dy = Math.sin(angle) * radius;
                 }
@@ -1932,8 +2056,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute z-20 select-none transition-all duration-75 ${
-                      isTokenEligible ? 'cursor-pointer scale-110 z-30' : 'cursor-default'
+                    className={`absolute select-none transition-all duration-75 ${
+                      isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
                       left: `calc((${visual?.col ?? col} * 100% / 15))`,
@@ -1944,7 +2068,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     }}
                   >
                     {/* Tiny Pixar-Style Human Model */}
-                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
+                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${isTokenEligible ? 'pawn-selectable-bounce' : ''} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
                       {/* Character shadow on ground */}
                       <div className="pawn-shadow"></div>
                       
@@ -1989,9 +2113,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                         </span>
                       )}
 
-                      {/* Selection Glow for eligible moves */}
+                      {/* Golden Halo Selection Ring for eligible moves */}
                       {isTokenEligible && (
-                        <div className="absolute inset-[-4px] rounded-full border-2 border-cyberblue animate-ping opacity-75 pointer-events-none"></div>
+                        <div className="absolute inset-[-4px] rounded-full border-2 border-cybergold shadow-[0_0_12px_rgba(255,215,0,0.85)] animate-pulse pointer-events-none z-30"></div>
                       )}
                     </div>
                   </button>
@@ -2026,27 +2150,125 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         </div>
       </div>
 
-      {/* Floating Eligible Movements Selector for touch-friendliness */}
-      {isMyTurn && validTokens.length > 0 && (
-        <div className="fixed bottom-6 inset-x-4 max-w-sm mx-auto z-30 glass-panel rounded-2xl p-4 border border-cyberblue/30 shadow-[0_10px_30px_rgba(0,245,255,0.25)] space-y-3">
-          <h5 className="text-[10px] uppercase font-bold text-cyberblue tracking-wider flex items-center gap-1.5 justify-center">
-            <Sparkles size={12} className="animate-spin-slow" /> Eligible Movements
-          </h5>
-          <div className="grid grid-cols-2 gap-3">
-            {validTokens.map((tokenId) => (
-              <button
-                key={tokenId}
-                onClick={() => handleMoveToken(tokenId)}
-                className={`py-3 rounded-xl border text-xs font-black text-white hover:scale-[1.02] active:scale-95 transition-all shadow-md ${
-                  activePlayer.color === 'red' ? 'border-cybererror/35 bg-cybererror/10 hover:bg-cybererror/20' :
-                  activePlayer.color === 'green' ? 'border-cybersuccess/35 bg-cybersuccess/10 hover:bg-cybersuccess/20' :
-                  activePlayer.color === 'yellow' ? 'border-cybergold/35 bg-cybergold/10 hover:bg-cybergold/20' :
-                  'border-cyberblue/35 bg-cyberblue/10 hover:bg-cyberblue/20'
-                }`}
-              >
-                Move Tiny Human {tokenId + 1}
-              </button>
-            ))}
+      {/* 4 Player Consoles - Bottom Row (Blue & Yellow) */}
+      <div className="w-full max-w-[620px] flex items-center justify-between gap-2 mt-2 px-1 z-20">
+        {/* Blue Player Console (Bottom-Left) */}
+        {(() => {
+          const pIdx = gameState?.players.findIndex(p => p.color === 'blue') ?? -1;
+          const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
+          const isPlayerActive = gameState?.activePlayerIndex === pIdx;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          return (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
+              isPlayerActive ? 'border-blue-400 bg-blue-950/70 ring-2 ring-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
+            }`}>
+              <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Blue'}</span>
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+              </div>
+              {renderBaseDice('blue', 'relative inset-0 ml-1')}
+            </div>
+          );
+        })()}
+
+        {/* Yellow Player Console (Bottom-Right) */}
+        {(() => {
+          const pIdx = gameState?.players.findIndex(p => p.color === 'yellow') ?? -1;
+          const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
+          const isPlayerActive = gameState?.activePlayerIndex === pIdx;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          return (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
+              isPlayerActive ? 'border-yellow-400 bg-yellow-950/70 ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
+            }`}>
+              {renderBaseDice('yellow', 'relative inset-0 mr-1')}
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Yellow'}</span>
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+              </div>
+              <div className="w-4 h-4 rounded-full bg-[#fdd835] flex items-center justify-center text-[10px] shadow-sm">📍</div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Tiny Humans Pop-Up Selector Modal */}
+      {isMyTurn && validTokens.length > 0 && gameState.hasRolled && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-md z-40 bg-slate-900/95 backdrop-blur-2xl border-2 border-cyberblue/50 rounded-3xl p-3.5 sm:p-4 shadow-[0_12px_40px_rgba(0,245,255,0.35)] animate-bounce-short">
+          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-cybergold animate-spin-slow" />
+              <h5 className="text-xs sm:text-sm font-black uppercase text-white tracking-wider">
+                CHOOSE YOUR TINY HUMAN
+              </h5>
+            </div>
+            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyberblue/20 text-cyberblue border border-cyberblue/40">
+              +{gameState.diceValue} Steps
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
+            {validTokens.map((tokenId) => {
+              const token = activePlayer.tokens.find((t) => t.id === tokenId);
+              const pos = token ? token.position : -1;
+              
+              let statusText = 'In Base Yard';
+              let statusColor = 'text-amber-400';
+
+              if (pos >= 52) {
+                statusText = `Near Goal (${pos - 51}/6)`;
+                statusColor = 'text-green-400 font-extrabold';
+              } else if (pos >= 0) {
+                statusText = `On Track (Cell ${pos})`;
+                statusColor = 'text-cyberblue font-bold';
+              }
+
+              return (
+                <button
+                  key={tokenId}
+                  onClick={() => handleMoveToken(tokenId)}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border text-left transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg group ${
+                    activePlayer.color === 'red' ? 'border-red-500/40 bg-red-950/40 hover:bg-red-900/60' :
+                    activePlayer.color === 'green' ? 'border-green-500/40 bg-green-950/40 hover:bg-green-900/60' :
+                    activePlayer.color === 'yellow' ? 'border-yellow-500/40 bg-yellow-950/40 hover:bg-yellow-900/60' :
+                    'border-blue-500/40 bg-blue-950/40 hover:bg-blue-900/60'
+                  }`}
+                >
+                  {/* Miniature 3D Character Preview Icon */}
+                  <div className="w-9 h-9 relative shrink-0 flex items-center justify-center bg-white/10 rounded-xl p-1 border border-white/20 group-hover:scale-110 transition-transform">
+                    <div className={`pawn-character team-${activePlayer.color} idle w-full h-full`}>
+                      <div className="pawn-body-wrapper scale-75">
+                        <div className="pawn-outfit">
+                          {activePlayer.color === 'red' && <div className="pawn-cape"></div>}
+                          {activePlayer.color === 'yellow' && <div className="pawn-medal"></div>}
+                        </div>
+                        <div className="pawn-head">
+                          {activePlayer.color === 'red' && <div className="pawn-hair warrior-hair"></div>}
+                          {activePlayer.color === 'blue' && <div className="pawn-hair adventurer-hat"></div>}
+                          {activePlayer.color === 'green' && <div className="pawn-hair explorer-hat"></div>}
+                          {activePlayer.color === 'yellow' && <div className="pawn-hair champion-crown"></div>}
+                          <div className="pawn-face">
+                            <div className="pawn-eyes"><div className="pawn-eye left-eye"><div className="pawn-pupil"></div></div></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col flex-grow min-w-0">
+                    <span className="text-xs font-black text-white truncate">Human #{tokenId + 1}</span>
+                    <span className={`text-[9px] truncate ${statusColor}`}>{statusText}</span>
+                  </div>
+
+                  <div className="w-5 h-5 rounded-full bg-white/10 group-hover:bg-cyberblue group-hover:text-darkbg flex items-center justify-center text-[10px] font-bold text-white transition-colors">
+                    ➔
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

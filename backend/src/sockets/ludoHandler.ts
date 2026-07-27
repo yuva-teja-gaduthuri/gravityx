@@ -161,6 +161,7 @@ export function handleLudo(io: Server, socket: Socket) {
       const roll = Math.floor(Math.random() * 6) + 1;
       state.diceValue = roll;
       state.hasRolled = true;
+      activePlayer.unturnedMoves = 0;
 
       // Rule: Three consecutive sixes loses turn
       if (roll === 6) {
@@ -224,6 +225,7 @@ export function handleLudo(io: Server, socket: Socket) {
       }
 
       // Apply movement
+      activePlayer.unturnedMoves = 0;
       const token = activePlayer.tokens.find((t) => t.id === tokenId)!;
       const dice = state.diceValue;
 
@@ -457,39 +459,42 @@ function startTurnTimer(io: Server, roomCode: string) {
 
     if (state.turnTimeLeft <= 0) {
       const activePlayer = state.players[state.activePlayerIndex];
-      // Increment unturned moves counter
-      activePlayer.unturnedMoves = (activePlayer.unturnedMoves || 0) + 1;
 
-      io.to(roomCode).emit('chat_message', {
-        id: Math.random().toString(),
-        senderName: 'SYSTEM',
-        content: `⚠️ ${activePlayer.username} missed turn (${activePlayer.unturnedMoves}/5).`,
-        createdAt: new Date(),
-      });
+      // Only increment missed turn counter once per player turn cycle (when turn times out before rolling)
+      if (!state.hasRolled) {
+        activePlayer.unturnedMoves = (activePlayer.unturnedMoves || 0) + 1;
 
-      // If 5 consecutive unturned moves, kick/forfeit player for inactivity
-      if (activePlayer.unturnedMoves >= 5) {
-        activePlayer.isWinner = true; // Mark as done to skip turn loop
-        activePlayer.placement = state.players.filter((p) => p.isWinner).length;
-        
+        // Broadcast state sync so all clients receive updated unturnedMoves count
+        io.to(roomCode).emit('ludo_state_sync', state);
+
         io.to(roomCode).emit('chat_message', {
           id: Math.random().toString(),
           senderName: 'SYSTEM',
-          content: `🚨 ${activePlayer.username} left the game due to 5 consecutive unturned moves.`,
+          content: `⚠️ ${activePlayer.username} missed turn (${activePlayer.unturnedMoves}/5).`,
           createdAt: new Date(),
         });
 
-        io.to(activePlayer.socketId).emit('room_kicked', { 
-          message: 'You have been removed from the game due to 5 consecutive unturned moves.' 
-        });
+        // If 5 consecutive unturned moves, kick/forfeit player for inactivity
+        if (activePlayer.unturnedMoves >= 5) {
+          activePlayer.isWinner = true; // Mark as done to skip turn loop
+          activePlayer.placement = state.players.filter((p) => p.isWinner).length;
+          
+          io.to(roomCode).emit('chat_message', {
+            id: Math.random().toString(),
+            senderName: 'SYSTEM',
+            content: `🚨 ${activePlayer.username} left the game due to 5 consecutive unturned moves.`,
+            createdAt: new Date(),
+          });
 
-        nextTurn(io, roomCode);
-        return;
-      }
+          io.to(activePlayer.socketId).emit('room_kicked', { 
+            message: 'You have been removed from the game due to 5 consecutive unturned moves.' 
+          });
 
-      // Auto Roll / Auto Move if timeout
-      if (!state.hasRolled) {
-        // Roll dice automatically
+          nextTurn(io, roomCode);
+          return;
+        }
+
+        // Auto Roll / Auto Move if timeout
         const roll = Math.floor(Math.random() * 6) + 1;
         state.diceValue = roll;
         state.hasRolled = true;
@@ -543,18 +548,21 @@ function startTurnTimer(io: Server, roomCode: string) {
                 io.to(roomCode).emit('ludo_token_moved', {
                   activePlayerIndex: curState.activePlayerIndex,
                   tokenId: firstToken,
+                  oldPosition: token.position,
                   newPosition: newPos,
                   captured: false,
                   players: curState.players,
                 });
 
-                nextTurn(io, roomCode);
+                setTimeout(() => {
+                  nextTurn(io, roomCode);
+                }, 1000);
               }
             }
           }, 2000);
         }
       } else {
-        // Already rolled, failed to move -> Pass turn
+        // If movement phase timer expired, move turn to next player without duplicate increment
         nextTurn(io, roomCode);
       }
     }

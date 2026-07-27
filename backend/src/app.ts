@@ -137,6 +137,13 @@ io.on('connection', (socket: Socket) => {
 
 // Database cleanup function for stale guest accounts
 async function cleanupStaleGuestAccounts() {
+  // Always clean up stale in-memory rooms older than 12 hours
+  try {
+    roomStore.cleanStaleRooms();
+  } catch (roomErr: any) {
+    console.error('⚠️ [ROOM CLEANUP WARNING]:', roomErr.message);
+  }
+
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
     const deleted = await prisma.user.deleteMany({
@@ -148,11 +155,13 @@ async function cleanupStaleGuestAccounts() {
     if (deleted.count > 0) {
       console.log(`🧹 [DATABASE CLEANUP]: Removed ${deleted.count} stale guest accounts older than 24 hours.`);
     }
-
-    // Clean up stale in-memory rooms older than 12 hours
-    roomStore.cleanStaleRooms();
   } catch (err: any) {
-    console.error('❌ [DATABASE CLEANUP ERROR]: Failed to clean up stale data:', err.message);
+    const isConnErr = err.message?.includes("Can't reach database server") || err.message?.includes('P1001');
+    if (isConnErr) {
+      console.warn('⚠️ [DATABASE]: Cloud database server unreachable. Skipping DB stale guest account cleanup.');
+    } else {
+      console.warn('⚠️ [DATABASE CLEANUP WARNING]:', err.message?.split('\n')[0] || err.message);
+    }
   }
 }
 
