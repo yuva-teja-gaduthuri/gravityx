@@ -20,6 +20,7 @@ interface LudoPlayer {
   tokens: LudoToken[];
   isWinner: boolean;
   placement?: number;
+  unturnedMoves?: number;
 }
 
 interface LudoState {
@@ -1228,6 +1229,26 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     );
   };
 
+  const renderMissDots = (unturnedCount: number = 0) => {
+    return (
+      <div className="flex items-center gap-1 mt-1" title={`${unturnedCount}/5 Missed Turns`}>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const isMissed = i < unturnedCount;
+          return (
+            <div
+              key={`miss-dot-${i}`}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                isMissed
+                  ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] scale-110'
+                  : 'bg-emerald-400/90 shadow-[0_0_4px_rgba(52,211,153,0.6)]'
+              }`}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col items-center justify-center min-h-[92vh] w-full p-2 md:p-4 transition-all duration-100 select-none overflow-hidden ${
       isScreenShaking ? 'animate-shake' : ''
@@ -1769,7 +1790,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Red'}</span>
-                {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               {renderBaseDice('red', 'relative inset-0 ml-1')}
             </div>
@@ -1789,7 +1811,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('green', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Green'}</span>
-                {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#43a047] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>
@@ -1821,15 +1844,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Left Red Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '1 / 7' }}
-            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-2 sm:p-3"
+            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-[16.66%]"
           >
-            <span className="text-white font-black text-[10px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow">RED</span>
-            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow z-0">RED</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
               </div>
             </div>
           </div>
@@ -1837,15 +1860,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Right Green Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '1 / 7' }}
-            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-2 sm:p-3"
+            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-[16.66%]"
           >
-            <span className="text-white font-black text-[10px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow">GREEN</span>
-            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow z-0">GREEN</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
               </div>
             </div>
           </div>
@@ -1853,15 +1876,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Left Blue Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '10 / 16' }}
-            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-2 sm:p-3"
+            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-[16.66%]"
           >
-            <span className="text-white font-black text-[10px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow">BLUE</span>
-            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+            <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow z-0">BLUE</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
               </div>
             </div>
           </div>
@@ -1869,15 +1892,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Right Yellow Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '10 / 16' }}
-            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-2 sm:p-3"
+            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-[16.66%]"
           >
-            <span className="text-[#1a0802] font-black text-[10px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow">YELLOW</span>
-            <div className="wood-base-yard w-[82%] h-[82%] relative flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-7 h-7 sm:w-11 sm:h-11 rounded-full border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+            <span className="text-[#1a0802] font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow z-0">YELLOW</span>
+            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
+              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
               </div>
             </div>
           </div>
@@ -2033,8 +2056,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute z-20 select-none transition-all duration-75 ${
-                      isTokenEligible ? 'cursor-pointer scale-110 z-30' : 'cursor-default'
+                    className={`absolute select-none transition-all duration-75 ${
+                      isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
                       left: `calc((${visual?.col ?? col} * 100% / 15))`,
@@ -2045,7 +2068,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     }}
                   >
                     {/* Tiny Pixar-Style Human Model */}
-                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
+                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${isTokenEligible ? 'pawn-selectable-bounce' : ''} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
                       {/* Character shadow on ground */}
                       <div className="pawn-shadow"></div>
                       
@@ -2090,9 +2113,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                         </span>
                       )}
 
-                      {/* Selection Glow for eligible moves */}
+                      {/* Golden Halo Selection Ring for eligible moves */}
                       {isTokenEligible && (
-                        <div className="absolute inset-[-4px] rounded-full border-2 border-cyberblue animate-ping opacity-75 pointer-events-none"></div>
+                        <div className="absolute inset-[-4px] rounded-full border-2 border-cybergold shadow-[0_0_12px_rgba(255,215,0,0.85)] animate-pulse pointer-events-none z-30"></div>
                       )}
                     </div>
                   </button>
@@ -2142,7 +2165,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Blue'}</span>
-                {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               {renderBaseDice('blue', 'relative inset-0 ml-1')}
             </div>
@@ -2162,7 +2186,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('yellow', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Yellow'}</span>
-                {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#fdd835] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>

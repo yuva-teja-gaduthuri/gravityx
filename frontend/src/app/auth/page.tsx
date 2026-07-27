@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Lock, Mail, User, ShieldAlert, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, User, ShieldAlert, ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import Turnstile from 'react-turnstile';
 import { getApiUrl } from '../../utils/api';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -18,6 +18,7 @@ function AuthContent() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -349,13 +350,20 @@ function AuthContent() {
               <div className="relative">
                 <Lock size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl glass-input text-sm"
+                  className="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-3.5 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -451,13 +459,20 @@ function AuthContent() {
               <div className="relative">
                 <Lock size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl glass-input text-sm"
+                  className="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-3.5 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -572,13 +587,20 @@ function AuthContent() {
               <div className="relative">
                 <Lock size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl glass-input text-sm"
+                  className="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-3.5 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
@@ -587,13 +609,20 @@ function AuthContent() {
               <div className="relative">
                 <Lock size={18} className="absolute left-4 top-3.5 text-gray-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 rounded-xl glass-input text-sm"
+                  className="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-sm"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-3.5 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 

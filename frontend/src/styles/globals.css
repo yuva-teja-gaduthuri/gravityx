@@ -482,3 +482,17 @@ select, select option {
 .light .text-gray-300 {
   color: #1e293b !important;
 }
+
+/* Ludo Selectable Token Pop-up Lift Bounce */
+@keyframes pawn-bounce-lift {
+  0%, 100% {
+    transform: translateY(-4px) scale(1.12);
+  }
+  50% {
+    transform: translateY(-14px) scale(1.18);
+  }
+}
+
+.pawn-selectable-bounce {
+  animation: pawn-bounce-lift 1.1s infinite ease-in-out !important;
+}
