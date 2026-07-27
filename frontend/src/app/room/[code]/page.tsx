@@ -574,62 +574,69 @@ export default function RoomPage() {
         )}
       </div>
 
-      {/* Side Chat Drawer */}
-      <div className={`
-        ${isChatOpen ? 'fixed inset-x-0 bottom-0 h-[45vh] z-50 rounded-t-3xl border-t border-white/10' : 'hidden'} 
-        lg:flex lg:relative lg:inset-auto lg:h-screen lg:w-80 lg:rounded-none lg:border-t-0 lg:border-l lg:border-white/5
-        bg-darkbg/98 backdrop-blur-xl flex flex-col shrink-0 shadow-2xl transition-all duration-300
-      `}>
-        <div className="p-3 border-b border-white/5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={16} className="text-cyberblue" />
-            <span className="text-xs uppercase font-extrabold tracking-widest text-gray-400">{t('chatConsole', 'Chat Console')}</span>
-          </div>
-          {/* Close button visible only on mobile/tablet */}
-          <button 
-            onClick={() => setIsChatOpen(false)}
-            className="lg:hidden p-1 text-gray-400 hover:text-white"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Chat List */}
-        <div className="flex-1 p-3 overflow-y-auto space-y-2">
-          {chatList.map((chat) => (
-            <div key={chat.id} className="text-xs">
-              <span className={`font-black ${chat.senderName === 'SYSTEM' ? 'text-cyberpink' : 'text-cyberblue'}`}>
-                {chat.senderName}:
-              </span>
-              <span className="text-gray-300 ml-1.5 leading-relaxed">{chat.content}</span>
-            </div>
-          ))}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Chat Input */}
-        <form onSubmit={handleSendChat} className="p-3 border-t border-white/5 flex gap-2">
-          <input
-            type="text"
-            required
-            placeholder={t('chatPlaceholder', 'Comms chat...')}
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            className="flex-grow glass-input rounded-xl px-4 py-2 text-xs focus:border-cyberblue"
-          />
-          <button type="submit" className="px-3 rounded-xl bg-primary hover:opacity-90 text-white flex items-center justify-center">
-            <Send size={14} />
-          </button>
-        </form>
+      {/* Top Bar Chat Button */}
+      <div className="absolute top-4 right-6 z-40 flex items-center gap-2">
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg border ${
+            isChatOpen ? 'bg-cyberpink text-white border-cyberpink shadow-neon-pink' : 'bg-darkbg/90 border-white/20 text-gray-300 hover:text-white hover:border-cyberblue'
+          }`}
+        >
+          <MessageSquare size={16} />
+          <span>{isChatOpen ? 'Close Chat' : 'Chat'}</span>
+          {chatList.length > 0 && !isChatOpen && (
+            <span className="w-2 h-2 rounded-full bg-cyberblue animate-ping" />
+          )}
+        </button>
       </div>
 
-      {/* Floating Chat FAB for Mobile/Tablet */}
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-6 right-6 z-40 lg:hidden p-4 rounded-full bg-primary hover:bg-primary/95 text-white shadow-neon-blue transition-all duration-300"
-      >
-        <MessageSquare size={20} />
-      </button>
+      {/* Side Chat Drawer Overlay (closed by default) */}
+      {isChatOpen && (
+        <div className="fixed inset-y-0 right-0 w-full sm:w-80 z-50 bg-darkbg/98 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl animate-fade-in">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={18} className="text-cyberblue" />
+              <span className="text-xs uppercase font-extrabold tracking-widest text-white">{t('chatConsole', 'Chat Console')}</span>
+            </div>
+            <button 
+              onClick={() => setIsChatOpen(false)}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Chat List */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-2">
+            {chatList.map((chat) => (
+              <div key={chat.id} className="text-xs p-2 rounded-lg bg-white/5 border border-white/5 space-y-0.5">
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className={`font-black ${chat.senderName === 'SYSTEM' ? 'text-cyberpink' : 'text-cyberblue'}`}>
+                    {chat.senderName}
+                  </span>
+                </div>
+                <p className="text-gray-200 leading-relaxed">{chat.content}</p>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Chat Input */}
+          <form onSubmit={handleSendChat} className="p-4 border-t border-white/10 flex gap-2">
+            <input
+              type="text"
+              required
+              placeholder={t('chatPlaceholder', 'Comms chat...')}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              className="flex-grow glass-input rounded-xl px-4 py-2.5 text-xs focus:border-cyberblue"
+            />
+            <button type="submit" className="px-4 rounded-xl bg-primary hover:opacity-90 text-white flex items-center justify-center shadow-neon-blue active:scale-95 transition-all">
+              <Send size={16} />
+            </button>
+          </form>
+        </div>
+      )}
 
       {room.voiceChat && socket && (
         <VoiceChat 

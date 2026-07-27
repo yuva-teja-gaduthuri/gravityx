@@ -13,6 +13,7 @@ const ROSTER = [
   'Jambavanthudu',
   'Sugrivudu',
   'Vibhishana',
+  'Angadudu',
 ];
 
 const CHARACTER_SCORES: { [role: string]: number } = {
@@ -25,6 +26,7 @@ const CHARACTER_SCORES: { [role: string]: number } = {
   'Jambavanthudu': 500,
   'Sugrivudu': 400,
   'Vibhishana': 300,
+  'Angadudu': 200,
 };
 
 export const roundEndTimeouts = new Map<string, NodeJS.Timeout>();
@@ -196,8 +198,8 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
     if (playerCount < 3) {
       return io.to(room.code).emit('error', 'Minimum 3 players are required to start');
     }
-    if (playerCount > 9) {
-      return io.to(room.code).emit('error', 'Maximum 9 players are allowed for Ramudu Seetha');
+    if (playerCount > 10) {
+      return io.to(room.code).emit('error', 'Maximum 10 players are allowed for Ramudu Seetha');
     }
 
     // Assign roles randomly from the fixed roster based on player count

@@ -137,6 +137,16 @@ const CHARACTER_STYLES: { [role: string]: CharacterStyle } = {
     glowClass: 'shadow-[0_0_15px_rgba(244,63,94,0.4)]',
     desc: 'Righteous seeker who walked the path of dharma.',
   },
+  'Angadudu': {
+    name: 'Angadudu',
+    title: 'Angadudu (Mighty Prince)',
+    badge: '⚔️',
+    colorClass: 'text-cyan-400',
+    borderClass: 'border-cyan-500',
+    bgClass: 'from-cyan-500/15 to-cyan-500/5',
+    glowClass: 'shadow-[0_0_15px_rgba(6,182,212,0.4)]',
+    desc: 'Valiant prince of Kishkindha. Courageous emissary.',
+  },
 };
 
 export default function RamuduSeethaGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: RSGameProps) {
