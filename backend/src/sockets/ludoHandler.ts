@@ -19,6 +19,7 @@ interface LudoPlayer {
   tokens: LudoToken[];
   isWinner: boolean;
   placement?: number;
+  unturnedMoves?: number;
 }
 
 interface LudoState {
@@ -27,6 +28,7 @@ interface LudoState {
   diceValue: number | null;
   hasRolled: boolean;
   turnTimeLeft: number;
+  turnTimerDuration?: number;
   startTime: number;
   consecutiveSixes: number;
 }
@@ -454,6 +456,37 @@ function startTurnTimer(io: Server, roomCode: string) {
     io.to(roomCode).emit('ludo_timer_tick', state.turnTimeLeft);
 
     if (state.turnTimeLeft <= 0) {
+      const activePlayer = state.players[state.activePlayerIndex];
+      // Increment unturned moves counter
+      activePlayer.unturnedMoves = (activePlayer.unturnedMoves || 0) + 1;
+
+      io.to(roomCode).emit('chat_message', {
+        id: Math.random().toString(),
+        senderName: 'SYSTEM',
+        content: `⚠️ ${activePlayer.username} missed turn (${activePlayer.unturnedMoves}/5).`,
+        createdAt: new Date(),
+      });
+
+      // If 5 consecutive unturned moves, kick/forfeit player for inactivity
+      if (activePlayer.unturnedMoves >= 5) {
+        activePlayer.isWinner = true; // Mark as done to skip turn loop
+        activePlayer.placement = state.players.filter((p) => p.isWinner).length;
+        
+        io.to(roomCode).emit('chat_message', {
+          id: Math.random().toString(),
+          senderName: 'SYSTEM',
+          content: `🚨 ${activePlayer.username} left the game due to 5 consecutive unturned moves.`,
+          createdAt: new Date(),
+        });
+
+        io.to(activePlayer.socketId).emit('room_kicked', { 
+          message: 'You have been removed from the game due to 5 consecutive unturned moves.' 
+        });
+
+        nextTurn(io, roomCode);
+        return;
+      }
+
       // Auto Roll / Auto Move if timeout
       if (!state.hasRolled) {
         // Roll dice automatically
@@ -462,7 +495,6 @@ function startTurnTimer(io: Server, roomCode: string) {
         state.hasRolled = true;
         state.consecutiveSixes = 0;
 
-        const activePlayer = state.players[state.activePlayerIndex];
         const validMoves = getValidTokensToMove(activePlayer, roll);
 
         io.to(roomCode).emit('ludo_dice_rolled', {
@@ -483,14 +515,10 @@ function startTurnTimer(io: Server, roomCode: string) {
             if (currentRoom && currentRoom.status === 'PLAYING') {
               const curState = currentRoom.gameState as LudoState;
               if (curState && curState.activePlayerIndex === state.activePlayerIndex && curState.hasRolled) {
-                // Auto move token
-                io.in(roomCode).emit('error', 'Turn timeout, auto-moving token');
-                // Trigger token movement manually by making it emit
                 const firstToken = validMoves[0];
                 const activePl = curState.players[curState.activePlayerIndex];
                 const token = activePl.tokens.find((t) => t.id === firstToken)!;
                 
-                // Move token logic (simplified inline duplicate for background auto-trigger)
                 let newPos = token.position;
                 if (token.position === -1 && roll === 6) newPos = activePl.startCell;
                 else if (token.position >= 0 && token.position <= 51) {
@@ -506,7 +534,6 @@ function startTurnTimer(io: Server, roomCode: string) {
 
                 token.position = newPos;
 
-                // Handle captures in auto-move
                 if (newPos >= 0 && newPos <= 51 && !SAFE_CELLS.includes(newPos)) {
                   curState.players.forEach(p => {
                     if (p.id !== activePl.id) p.tokens.forEach(t => { if (t.position === newPos) t.position = -1; });
@@ -537,7 +564,8 @@ function startTurnTimer(io: Server, roomCode: string) {
 function resetTurnTimer(io: Server, roomCode: string) {
   const room = roomStore.getRoom(roomCode);
   if (room && room.gameState) {
-    (room.gameState as LudoState).turnTimeLeft = TURN_TIMEOUT;
+    const defaultTimer = (room as any).turnTimer || TURN_TIMEOUT;
+    (room.gameState as LudoState).turnTimeLeft = defaultTimer;
   }
 }
 

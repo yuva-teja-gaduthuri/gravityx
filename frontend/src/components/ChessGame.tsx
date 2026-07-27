@@ -362,6 +362,51 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
     }
   }
 
+  // Calculate captured/killed pieces
+  const getCapturedPieces = () => {
+    if (!chessInstance) return { capturedWhite: [], capturedBlack: [] };
+    const board = chessInstance.board();
+
+    const currentCounts: { [colorPiece: string]: number } = {
+      'w_p': 0, 'w_r': 0, 'w_n': 0, 'w_b': 0, 'w_q': 0, 'w_k': 0,
+      'b_p': 0, 'b_r': 0, 'b_n': 0, 'b_b': 0, 'b_q': 0, 'b_k': 0,
+    };
+
+    board.forEach(row => {
+      row.forEach(square => {
+        if (square) {
+          const key = `${square.color}_${square.type}`;
+          currentCounts[key] = (currentCounts[key] || 0) + 1;
+        }
+      });
+    });
+
+    const initialCounts: { [colorPiece: string]: number } = {
+      'w_p': 8, 'w_r': 2, 'w_n': 2, 'w_b': 2, 'w_q': 1,
+      'b_p': 8, 'b_r': 2, 'b_n': 2, 'b_b': 2, 'b_q': 1,
+    };
+
+    const capturedWhite: string[] = [];
+    const capturedBlack: string[] = [];
+
+    (['q', 'r', 'b', 'n', 'p'] as const).forEach(type => {
+      const missingWhite = Math.max(0, initialCounts[`w_${type}`] - (currentCounts[`w_${type}`] || 0));
+      for (let i = 0; i < missingWhite; i++) {
+        capturedWhite.push(getPieceSymbol(type, 'w'));
+      }
+      const missingBlack = Math.max(0, initialCounts[`b_${type}`] - (currentCounts[`b_${type}`] || 0));
+      for (let i = 0; i < missingBlack; i++) {
+        capturedBlack.push(getPieceSymbol(type, 'b'));
+      }
+    });
+
+    return { capturedWhite, capturedBlack };
+  };
+
+  const { capturedWhite, capturedBlack } = getCapturedPieces();
+  const opponentCaptured = isFlipped ? capturedBlack : capturedWhite;
+  const userCaptured = isFlipped ? capturedWhite : capturedBlack;
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4">
       {/* Settings Row */}
@@ -385,27 +430,41 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
         <div className="lg:col-span-2 flex flex-col gap-4">
           
           {/* Opponent Info card */}
-          <div className="glass-card rounded-2xl p-4 border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-cyberpink/20 border border-cyberpink/30 flex items-center justify-center text-sm font-bold uppercase text-cyberpink">
-                {isFlipped ? gameState.whiteUsername[0] : gameState.blackUsername[0]}
+          <div className="glass-card rounded-2xl p-4 border-white/5 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-cyberpink/20 border border-cyberpink/30 flex items-center justify-center text-sm font-bold uppercase text-cyberpink">
+                  {isFlipped ? gameState.whiteUsername[0] : gameState.blackUsername[0]}
+                </div>
+                <div>
+                  <span className="font-extrabold text-xs text-gray-200">
+                    {isFlipped ? gameState.whiteUsername : gameState.blackUsername}
+                  </span>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
+                    {isFlipped ? t('chessWhite', 'WHITE (1st)') : t('chessBlack', 'BLACK (2nd)')}
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="font-extrabold text-xs text-gray-200">
-                  {isFlipped ? gameState.whiteUsername : gameState.blackUsername}
-                </span>
-                <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
-                  {isFlipped ? t('chessWhite', 'WHITE (1st)') : t('chessBlack', 'BLACK (2nd)')}
-                </p>
-              </div>
+              {/* Clock Timer */}
+              {gameState.turn === (isFlipped ? 'w' : 'b') && (
+                <div className="flex items-center gap-1.5 bg-cybererror/10 border border-cybererror/20 px-2.5 py-1 rounded-xl text-cybererror text-xs font-black animate-pulse">
+                  <Timer size={12} />
+                  <span>{t('activeTurn', 'ACTIVE TURN')}</span>
+                </div>
+              )}
             </div>
-            {/* Clock Timer */}
-            {gameState.turn === (isFlipped ? 'w' : 'b') && (
-              <div className="flex items-center gap-1.5 bg-cybererror/10 border border-cybererror/20 px-2.5 py-1 rounded-xl text-cybererror text-xs font-black animate-pulse">
-                <Timer size={12} />
-                <span>{t('activeTurn', 'ACTIVE TURN')}</span>
-              </div>
-            )}
+
+            {/* Captured Pieces Display */}
+            <div className="flex items-center gap-1 text-sm bg-black/20 px-2.5 py-1 rounded-lg border border-white/5 min-h-[28px]">
+              <span className="text-[9px] uppercase font-bold text-gray-500 mr-1.5">Killed Pieces:</span>
+              {opponentCaptured.length > 0 ? (
+                opponentCaptured.map((p, idx) => (
+                  <span key={idx} className="text-gray-300 drop-shadow">{p}</span>
+                ))
+              ) : (
+                <span className="text-[10px] text-gray-600 italic">None</span>
+              )}
+            </div>
           </div>
 
           {/* Chess Board wrapper */}
@@ -416,27 +475,41 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           </div>
 
           {/* User Info card */}
-          <div className="glass-card rounded-2xl p-4 border-white/5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-cyberblue/20 border border-cyberblue/30 flex items-center justify-center text-sm font-bold uppercase text-cyberblue">
-                {isFlipped ? gameState.blackUsername[0] : gameState.whiteUsername[0]}
+          <div className="glass-card rounded-2xl p-4 border-white/5 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-cyberblue/20 border border-cyberblue/30 flex items-center justify-center text-sm font-bold uppercase text-cyberblue">
+                  {isFlipped ? gameState.blackUsername[0] : gameState.whiteUsername[0]}
+                </div>
+                <div>
+                  <span className="font-extrabold text-xs text-gray-200">
+                    {isFlipped ? gameState.blackUsername : gameState.whiteUsername}
+                  </span>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
+                    {isFlipped ? t('chessBlack', 'BLACK (2nd)') : t('chessWhite', 'WHITE (1st)')}
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="font-extrabold text-xs text-gray-200">
-                  {isFlipped ? gameState.blackUsername : gameState.whiteUsername}
-                </span>
-                <p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">
-                  {isFlipped ? t('chessBlack', 'BLACK (2nd)') : t('chessWhite', 'WHITE (1st)')}
-                </p>
-              </div>
+              {/* Clock Timer */}
+              {gameState.turn === (isFlipped ? 'b' : 'w') && (
+                <div className="flex items-center gap-1.5 bg-cybersuccess/10 border border-cybersuccess/20 px-2.5 py-1 rounded-xl text-cybersuccess text-xs font-black animate-pulse">
+                  <Timer size={12} />
+                  <span>{t('chessYourTurn', 'YOUR TURN')}</span>
+                </div>
+              )}
             </div>
-            {/* Clock Timer */}
-            {gameState.turn === (isFlipped ? 'b' : 'w') && (
-              <div className="flex items-center gap-1.5 bg-cybersuccess/10 border border-cybersuccess/20 px-2.5 py-1 rounded-xl text-cybersuccess text-xs font-black animate-pulse">
-                <Timer size={12} />
-                <span>{t('chessYourTurn', 'YOUR TURN')}</span>
-              </div>
-            )}
+
+            {/* Captured Pieces Display */}
+            <div className="flex items-center gap-1 text-sm bg-black/20 px-2.5 py-1 rounded-lg border border-white/5 min-h-[28px]">
+              <span className="text-[9px] uppercase font-bold text-gray-500 mr-1.5">Killed Pieces:</span>
+              {userCaptured.length > 0 ? (
+                userCaptured.map((p, idx) => (
+                  <span key={idx} className="text-gray-300 drop-shadow">{p}</span>
+                ))
+              ) : (
+                <span className="text-[10px] text-gray-600 italic">None</span>
+              )}
+            </div>
           </div>
         </div>
 

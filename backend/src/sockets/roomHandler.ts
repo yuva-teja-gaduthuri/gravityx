@@ -4,6 +4,19 @@ import prisma from '../utils/prisma';
 import { clearRSRoundTimeout } from './ramuduSeethaHandler';
 
 export function handleRoom(io: Server, socket: Socket) {
+  // Check active room for reconnection
+  socket.on('check_active_room', ({ userId }: { userId: string }) => {
+    try {
+      const allRooms = roomStore.getAllRooms();
+      const activeRoom = allRooms.find((r) => r.players.some((p) => p.id === userId));
+      if (activeRoom) {
+        socket.emit('active_room_found', { roomCode: activeRoom.code });
+      }
+    } catch (err: any) {
+      console.error('Error checking active room:', err);
+    }
+  });
+
   // Create Room
   socket.on('create_room', async ({
     userId,

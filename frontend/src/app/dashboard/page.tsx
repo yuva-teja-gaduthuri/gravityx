@@ -214,9 +214,18 @@ export default function Dashboard() {
     }
   }, [user]);
 
-  // Socket listeners for room redirection
+  // Socket listeners for room redirection & active game check
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !user) return;
+
+    // Request active room check for user
+    socket.emit('check_active_room', { userId: user.id });
+
+    const handleActiveRoom = ({ roomCode }: { roomCode: string }) => {
+      router.push(`/room/${roomCode}`);
+    };
+
+    socket.on('active_room_found', handleActiveRoom);
 
     socket.on('room_created', (room: any) => {
       setShowCreateModal(false);
@@ -234,16 +243,22 @@ export default function Dashboard() {
     });
 
     return () => {
+      socket.off('active_room_found', handleActiveRoom);
       socket.off('room_created');
       socket.off('room_joined');
       socket.off('error');
     };
-  }, [socket, router]);
+  }, [socket, user, router]);
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
     if (!user || !socket) return;
+
+    if (selectedGame === 'CHESS') {
+      setCreateError('Chess Strategy module is locked and deploying soon!');
+      return;
+    }
 
     const finalMaxPlayers = selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
 
@@ -781,7 +796,7 @@ export default function Dashboard() {
                   >
                     <option value="RAMUDU_SEETHA">Ramudu-Seetha</option>
                     <option value="LUDO">Cosmic Ludo</option>
-                    <option value="CHESS">Chess Strategy</option>
+                    <option value="CHESS" disabled>Chess Strategy (Locked 🔒)</option>
                   </select>
                 </div>
                 <div>
