@@ -339,6 +339,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
   // Animation states
   const [visualTokens, setVisualTokens] = useState<{ [key: string]: VisualToken }>({});
+  const visualTokensRef = useRef<{ [key: string]: VisualToken }>({});
   const [comicText, setComicText] = useState<{ text: string; col: number; row: number } | null>(null);
   const [luckySix, setLuckySix] = useState(false);
   const [yourTurnAlert, setYourTurnAlert] = useState(false);
@@ -363,30 +364,40 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     audioRef.current?.setMute(isAudioMuted);
   }, [isAudioMuted]);
 
-  // Sync initial visual tokens when game state is loaded/loaded
+  // Sync initial visual tokens when game state is loaded
   useEffect(() => {
     if (!gameState) return;
-    const initialVisuals: { [key: string]: VisualToken } = {};
+    const currentRefVisuals = visualTokensRef.current;
+    const initialVisuals: { [key: string]: VisualToken } = { ...currentRefVisuals };
+    let hasChanged = false;
+
     gameState.players.forEach((p) => {
       p.tokens.forEach((t) => {
         const key = `${p.color}-${t.id}`;
-        // Snap visual token to state coordinate if not currently in move animation
-        if (!visualTokens[key]?.isMoving && !visualTokens[key]?.isCaptured) {
+        const existing = currentRefVisuals[key];
+        // Only update position if token is not actively performing walk or capture animation
+        if (!existing || (!existing.isMoving && !existing.isCaptured)) {
           const [col, row] = getTokenCoords(p.color, t.id, t.position);
-          initialVisuals[key] = {
-            col,
-            row,
-            scale: 1.0,
-            rotation: 0,
-            translateY: 0,
-            isMoving: false,
-            isCaptured: false
-          };
+          if (!existing || existing.col !== col || existing.row !== row) {
+            initialVisuals[key] = {
+              col,
+              row,
+              scale: 1.0,
+              rotation: existing ? existing.rotation : 0,
+              translateY: 0,
+              isMoving: false,
+              isCaptured: false
+            };
+            hasChanged = true;
+          }
         }
       });
     });
 
-    setVisualTokens((prev) => ({ ...prev, ...initialVisuals }));
+    if (hasChanged) {
+      visualTokensRef.current = initialVisuals;
+      setVisualTokens(initialVisuals);
+    }
   }, [gameState]);
 
   // Canvas particle loop
@@ -594,6 +605,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   };
 
   // Handlers for step-by-step walking animations
+  // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
     tokenId: number,
@@ -605,35 +617,40 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let stepIndex = 0;
     const intervalTime = isSpeedUp ? 130 : 260;
 
+    const startVisual = visualTokensRef.current[key];
+    let currentCol = startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0];
+    let currentRow = startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1];
+
+    console.log(`🚀 [ANIMATE PAWN PATH]: Initiating walk for ${key} from (${currentCol}, ${currentRow}) along path [${path.join(', ')}]`);
+
     const takeStep = () => {
       if (stepIndex >= path.length) {
+        console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
+        
         // Landing rebound
-        setVisualTokens(prev => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            scale: 1.25,
-            translateY: 0,
-            isMoving: false
-          }
-        }));
+        const existing = visualTokensRef.current[key] || { col: currentCol, row: currentRow, rotation: 0 };
+        const landingState = {
+          ...existing,
+          scale: 1.25,
+          translateY: 0,
+          isMoving: false
+        };
+        visualTokensRef.current[key] = landingState;
+        setVisualTokens({ ...visualTokensRef.current });
 
         setTimeout(() => {
-          setVisualTokens(prev => ({
-            ...prev,
-            [key]: {
-              ...prev[key],
-              scale: 1.0
-            }
-          }));
+          const current = visualTokensRef.current[key] || landingState;
+          const finishedState = { ...current, scale: 1.0, isMoving: false };
+          visualTokensRef.current[key] = finishedState;
+          setVisualTokens({ ...visualTokensRef.current });
         }, 120);
 
         audioRef.current?.playImpact();
 
-        const finalPos = path[path.length - 1];
+        const finalPos = path.length > 0 ? path[path.length - 1] : -1;
         
         // Spawn sparkles on land
-        spawnParticles(visualTokens[key]?.col || 7, visualTokens[key]?.row || 7, 'sparkle', 6);
+        spawnParticles(currentCol, currentRow, 'sparkle', 6);
 
         // Home entry visual celebration
         if (finalPos === 58) {
@@ -656,52 +673,52 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       }
 
       const nextPos = path[stepIndex];
-      const [col, row] = getTokenCoords(color, tokenId, nextPos);
+      const [nextCol, nextRow] = getTokenCoords(color, tokenId, nextPos);
 
       // Track walking pawn with dynamic camera
-      const camTargetX = (7 - col) * 12;
-      const camTargetY = (7 - row) * 12;
+      const camTargetX = (7 - nextCol) * 12;
+      const camTargetY = (7 - nextRow) * 12;
       setCamZoom(1.18);
       setCamX(camTargetX);
       setCamY(camTargetY);
 
       // Orientation turn rotation
-      const currentVisual = visualTokens[key];
-      const startX = currentVisual ? currentVisual.col : BASE_COORDINATES[color][tokenId][0];
-      const startY = currentVisual ? currentVisual.row : BASE_COORDINATES[color][tokenId][1];
-      const dx = col - startX;
-      const dy = row - startY;
-      let rotation = 0;
-      if (dx > 0) rotation = 0;
-      else if (dx < 0) rotation = 180;
-      else if (dy > 0) rotation = 90;
-      else if (dy < 0) rotation = 270;
+      const dx = nextCol - currentCol;
+      const dy = nextRow - currentRow;
+      let rotation = visualTokensRef.current[key]?.rotation || 0;
+      if (dx > 0) rotation = 0;        // Facing Right
+      else if (dx < 0) rotation = 180; // Facing Left
+      else if (dy > 0) rotation = 90;  // Facing Down
+      else if (dy < 0) rotation = 270; // Facing Up
 
-      setVisualTokens(prev => ({
-        ...prev,
-        [key]: {
-          col,
-          row,
-          scale: 1.15,
-          rotation,
-          translateY: -16, // lift up
-          isMoving: true,
-          isCaptured: false
-        }
-      }));
+      console.log(`📍 [STEP ${stepIndex + 1}/${path.length}]: Token ${key} walking from (${currentCol}, ${currentRow}) -> (${nextCol}, ${nextRow}) | Facing: ${rotation}°`);
+
+      currentCol = nextCol;
+      currentRow = nextRow;
+
+      const stepVisualState: VisualToken = {
+        col: nextCol,
+        row: nextRow,
+        scale: 1.15,
+        rotation,
+        translateY: -16, // Hop lift
+        isMoving: true,
+        isCaptured: false
+      };
+
+      visualTokensRef.current[key] = stepVisualState;
+      setVisualTokens({ ...visualTokensRef.current });
 
       audioRef.current?.playStep();
-      spawnParticles(col, row, 'dust', 3);
+      spawnParticles(nextCol, nextRow, 'dust', 3);
 
       setTimeout(() => {
-        setVisualTokens(prev => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            translateY: 0,
-            scale: 1.0
-          }
-        }));
+        const cur = visualTokensRef.current[key];
+        if (cur) {
+          const grounded = { ...cur, translateY: 0, scale: 1.0 };
+          visualTokensRef.current[key] = grounded;
+          setVisualTokens({ ...visualTokensRef.current });
+        }
       }, intervalTime / 2);
 
       stepIndex++;
@@ -768,18 +785,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const stepBack = () => {
         if (stepIdx >= reverseCoords.length) {
           // Reached home base yard slot
-          setVisualTokens((prev) => ({
-            ...prev,
-            [capturedKey]: {
-              col: targetBaseCoords[0],
-              row: targetBaseCoords[1],
-              scale: 1.0,
-              rotation: 0,
-              translateY: 0,
-              isMoving: false,
-              isCaptured: false
-            }
-          }));
+          const finalCapturedState: VisualToken = {
+            col: targetBaseCoords[0],
+            row: targetBaseCoords[1],
+            scale: 1.0,
+            rotation: 0,
+            translateY: 0,
+            isMoving: false,
+            isCaptured: false
+          };
+          visualTokensRef.current[capturedKey] = finalCapturedState;
+          setVisualTokens({ ...visualTokensRef.current });
 
           setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
           setValidTokens([]);
@@ -793,19 +809,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         const [stepCol, stepRow] = reverseCoords[stepIdx];
 
-        setVisualTokens((prev) => ({
-          ...prev,
-          [capturedKey]: {
-            ...prev[capturedKey],
-            col: stepCol,
-            row: stepRow,
-            scale: 1.15,
-            rotation: (prev[capturedKey]?.rotation || 0) - 90,
-            translateY: -10,
-            isMoving: false,
-            isCaptured: true
-          }
-        }));
+        const stepCapState: VisualToken = {
+          col: stepCol,
+          row: stepRow,
+          scale: 1.15,
+          rotation: (visualTokensRef.current[capturedKey]?.rotation || 0) - 90,
+          translateY: -10,
+          isMoving: false,
+          isCaptured: true
+        };
+        visualTokensRef.current[capturedKey] = stepCapState;
+        setVisualTokens({ ...visualTokensRef.current });
 
         audioRef.current?.playStep();
         spawnParticles(Math.floor(stepCol), Math.floor(stepRow), 'smoke', 2);
@@ -899,15 +913,21 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const isBaseExit = startPos === -1;
       console.log(`🎬 [LUDO ANIMATION START]: Player ${activePlayer.username} (${activePlayer.color}) Token #${data.tokenId} | ${isBaseExit ? '🚪 EXITING BASE -> Start Cell' : `Moving ${startPos} -> ${endPos}`}`);
 
-      // Lock visual token in moving state immediately
+      // Lock visual token in moving state immediately in both ref and state
       const key = `${activePlayer.color}-${data.tokenId}`;
-      setVisualTokens((prev) => ({
-        ...prev,
-        [key]: {
-          ...(prev[key] || { col: BASE_COORDINATES[activePlayer.color][data.tokenId][0], row: BASE_COORDINATES[activePlayer.color][data.tokenId][1], scale: 1.0, rotation: 0, translateY: 0, isCaptured: false }),
-          isMoving: true,
-        }
-      }));
+      const baseCoords = BASE_COORDINATES[activePlayer.color][data.tokenId];
+      const existingVisual = visualTokensRef.current[key];
+      const initialMoveState: VisualToken = {
+        col: existingVisual ? existingVisual.col : baseCoords[0],
+        row: existingVisual ? existingVisual.row : baseCoords[1],
+        scale: 1.0,
+        rotation: existingVisual ? existingVisual.rotation : 0,
+        translateY: 0,
+        isMoving: true,
+        isCaptured: false
+      };
+      visualTokensRef.current[key] = initialMoveState;
+      setVisualTokens({ ...visualTokensRef.current });
 
       // Build path sequence
       const path = getPathPositions(activePlayer.color, startPos, endPos);
