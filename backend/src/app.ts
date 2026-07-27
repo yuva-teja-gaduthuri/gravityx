@@ -93,7 +93,7 @@ io.on('connection', (socket: Socket) => {
         });
 
         // Set grace period timeout based on room status
-        const graceDuration = room.status === 'PLAYING' ? 15000 : 5000; // 15s if playing, 5s if lobby
+        const graceDuration = room.status === 'PLAYING' ? 15000 : 10000; // 15s if playing, 10s if lobby
         const timeoutKey = `${room.code}_${player.id}`;
 
         // Clear any existing timeout for this player

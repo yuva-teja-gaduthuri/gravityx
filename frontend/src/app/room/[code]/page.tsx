@@ -279,9 +279,6 @@ export default function RoomPage() {
     socket.on('connect', handleConnect);
 
     return () => {
-      if (!isUnloadingRef.current) {
-        socket.emit('leave_room', { roomCode, userId: user.id });
-      }
       socket.off('connect', handleConnect);
     };
   }, [socket, roomCode, user]);
@@ -444,7 +441,7 @@ export default function RoomPage() {
     }
   };
 
-  if (errorMsg) {
+  if (errorMsg && !room) {
     return (
       <div className="flex-grow flex flex-col items-center justify-center p-6 text-center">
         <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-4 text-2xl font-bold">⚠️</div>
