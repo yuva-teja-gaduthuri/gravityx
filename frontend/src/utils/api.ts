@@ -1,15 +1,28 @@
 export const getApiUrl = (path: string = '') => {
-  // If the production environment variable is set (e.g., on Vercel), prioritize it
+  // If the production environment variable is set (e.g., on Render or Vercel), prioritize it
   if (process.env.NEXT_PUBLIC_API_URL) {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
     return `${baseUrl}${path}`;
   }
 
-  // Fallback to dynamic resolution for local/LAN Wi-Fi testing
+  // Dynamic resolution for client-side rendering across local, LAN, and PaaS deployments
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
+    
+    // Auto-detect Render deployment domain
+    if (hostname.includes('onrender.com')) {
+      return `https://gravityx-api.onrender.com${path}`;
+    }
+
+    // Auto-detect production HTTPS protocol
+    if (window.location.protocol === 'https:') {
+      return `https://${hostname}${path}`;
+    }
+
+    // Local / LAN IP testing
     return `http://${hostname}:3001${path}`;
   }
+
   return `http://localhost:3001${path}`;
 };
 
