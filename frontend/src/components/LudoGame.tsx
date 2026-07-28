@@ -341,6 +341,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   // Animation states
   const [visualTokens, setVisualTokens] = useState<{ [key: string]: VisualToken }>({});
   const visualTokensRef = useRef<{ [key: string]: VisualToken }>({});
+  const animatingTokensRef = useRef<{ [key: string]: boolean }>({});
   const [comicText, setComicText] = useState<{ text: string; col: number; row: number } | null>(null);
   const [luckySix, setLuckySix] = useState(false);
   const [yourTurnAlert, setYourTurnAlert] = useState(false);
@@ -365,6 +366,13 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     audioRef.current?.setMute(isAudioMuted);
   }, [isAudioMuted]);
 
+  // Clean up animation locks on component unmount
+  useEffect(() => {
+    return () => {
+      animatingTokensRef.current = {};
+    };
+  }, []);
+
   // Sync initial visual tokens when game state is loaded
   useEffect(() => {
     if (!gameState) return;
@@ -376,8 +384,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       p.tokens.forEach((t) => {
         const key = `${p.color}-${t.id}`;
         const existing = currentRefVisuals[key];
+        const isAnimating = animatingTokensRef.current[key];
         // Only update position if token is not actively performing walk or capture animation
-        if (!existing || (!existing.isMoving && !existing.isCaptured)) {
+        if (!isAnimating && (!existing || (!existing.isMoving && !existing.isCaptured))) {
           const [col, row] = getTokenCoords(p.color, t.id, t.position);
           if (!existing || existing.col !== col || existing.row !== row) {
             initialVisuals[key] = {
@@ -637,7 +646,19 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let stepIndex = 0;
     const intervalTime = isSpeedUp ? 130 : 260;
 
+    // Lock pawn in animatingTokensRef
+    animatingTokensRef.current[key] = true;
+
+    // Safety timeout to prevent permanent animation lock
+    const maxDuration = ((path ? path.length : 1) + 20) * intervalTime + 3000;
+    const safetyTimer = setTimeout(() => {
+      console.warn(`⚠️ [ANIMATION SAFETY TIMEOUT]: Releasing lock for ${key}`);
+      delete animatingTokensRef.current[key];
+    }, maxDuration);
+
     if (!path || path.length === 0) {
+      clearTimeout(safetyTimer);
+      delete animatingTokensRef.current[key];
       const [finalCol, finalRow] = getTokenCoords(color, tokenId, targetEndPos);
       if (!isNaN(finalCol) && !isNaN(finalRow)) {
         setVisualTokens((prev) => ({
@@ -666,6 +687,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     const takeStep = () => {
       if (stepIndex >= path.length) {
         console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
+        clearTimeout(safetyTimer);
         
         // Landing rebound
         setVisualTokens((prev) => ({
@@ -722,8 +744,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         if (captured) {
           setWinnerKey(key);
-          handleCaptureAnimation(finalPos, finalPlayersState);
+          handleCaptureAnimation(key, finalPos, finalPlayersState);
         } else {
+          delete animatingTokensRef.current[key];
           setGameState((prev) => (prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null));
           setValidTokens([]);
           setCamZoom(1.0);
@@ -793,8 +816,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   };
 
   // Opponent captures walking loop (retracing path back to home base yard)
-  const handleCaptureAnimation = (capturePos: number, finalPlayersState: any) => {
-    if (!gameState) return;
+  const handleCaptureAnimation = (mainKey: string, capturePos: number, finalPlayersState: any) => {
+    if (!gameState) {
+      delete animatingTokensRef.current[mainKey];
+      return;
+    }
     const activePlayer = gameState.players[gameState.activePlayerIndex];
 
     let capturedKey = '';
@@ -817,6 +843,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     });
 
     if (capturedKey) {
+      animatingTokensRef.current[capturedKey] = true;
       setEliminatedKey(capturedKey);
       if (!isCameraShakeMuted) {
         setIsScreenShaking(true);
@@ -849,6 +876,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const stepBack = () => {
         if (stepIdx >= reverseCoords.length) {
           // Reached home base yard slot
+          delete animatingTokensRef.current[mainKey];
+          delete animatingTokensRef.current[capturedKey];
+
           const finalCapturedState: VisualToken = {
             col: targetBaseCoords[0],
             row: targetBaseCoords[1],
@@ -894,6 +924,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
       stepBack();
     } else {
+      delete animatingTokensRef.current[mainKey];
       setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
       setValidTokens([]);
       setEliminatedKey(null);
@@ -2216,8 +2247,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 const key = `${p.color}-${t.id}`;
                 const visual = visualTokens[key];
 
-                const colVal = visual ? visual.col : BASE_COORDINATES[p.color][t.id][0];
-                const rowVal = visual ? visual.row : BASE_COORDINATES[p.color][t.id][1];
+                const [logicalCol, logicalRow] = getTokenCoords(p.color, t.id, t.position);
+                const colVal = visual ? visual.col : logicalCol;
+                const rowVal = visual ? visual.row : logicalRow;
                 const safeCol = (colVal !== undefined && !isNaN(colVal)) ? colVal : 7;
                 const safeRow = (rowVal !== undefined && !isNaN(rowVal)) ? rowVal : 7;
                 const isHome = t.position === -1;
@@ -2243,7 +2275,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute select-none transition-all duration-200 ease-linear ${
+                    className={`absolute select-none ${
+                      visual?.isMoving ? 'transition-none' : 'transition-all duration-150 ease-out'
+                    } ${
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
