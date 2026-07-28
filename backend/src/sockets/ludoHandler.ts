@@ -67,21 +67,33 @@ export function handleLudo(io: Server, socket: Socket) {
       }
 
       // Assign colors and initialize tokens
-      const colors: ('red' | 'green' | 'yellow' | 'blue')[] = [];
-      if (playerCount === 2) {
-        colors.push('red', 'yellow');
-      } else if (playerCount === 3) {
-        colors.push('red', 'green', 'yellow');
-      } else {
-        colors.push('red', 'green', 'yellow', 'blue');
-      }
+      const availableColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+      const assignedColors = new Map<string, 'red' | 'green' | 'yellow' | 'blue'>();
+      const usedColors = new Set<'red' | 'green' | 'yellow' | 'blue'>();
 
-      const ludoPlayers: LudoPlayer[] = room.players.map((p, idx) => {
-        const color = colors[idx];
+      room.players.forEach((p) => {
+        if (p.color && !usedColors.has(p.color)) {
+          assignedColors.set(p.id, p.color);
+          usedColors.add(p.color);
+        }
+      });
+
+      room.players.forEach((p) => {
+        if (!assignedColors.has(p.id)) {
+          const freeColor = availableColors.find((c) => !usedColors.has(c));
+          if (freeColor) {
+            assignedColors.set(p.id, freeColor);
+            usedColors.add(freeColor);
+          }
+        }
+      });
+
+      const ludoPlayers: LudoPlayer[] = room.players.map((p) => {
+        const color = assignedColors.get(p.id) || 'red';
         const config = COLOR_CONFIGS[color];
         return {
           id: p.id,
-          username: p.username,
+          username: p.displayName || p.username,
           socketId: p.socketId,
           color,
           startCell: config.startCell,
@@ -227,6 +239,7 @@ export function handleLudo(io: Server, socket: Socket) {
       // Apply movement
       activePlayer.unturnedMoves = 0;
       const token = activePlayer.tokens.find((t) => t.id === tokenId)!;
+      const oldPosition = token.position;
       const dice = state.diceValue;
 
       let newPosition = token.position;
@@ -306,6 +319,7 @@ export function handleLudo(io: Server, socket: Socket) {
       io.to(roomCode).emit('ludo_token_moved', {
         activePlayerIndex: state.activePlayerIndex,
         tokenId,
+        oldPosition,
         newPosition,
         captured,
         players: state.players,
@@ -523,6 +537,7 @@ function startTurnTimer(io: Server, roomCode: string) {
                 const firstToken = validMoves[0];
                 const activePl = curState.players[curState.activePlayerIndex];
                 const token = activePl.tokens.find((t) => t.id === firstToken)!;
+                const oldPos = token.position;
                 
                 let newPos = token.position;
                 if (token.position === -1 && roll === 6) newPos = activePl.startCell;
@@ -548,7 +563,7 @@ function startTurnTimer(io: Server, roomCode: string) {
                 io.to(roomCode).emit('ludo_token_moved', {
                   activePlayerIndex: curState.activePlayerIndex,
                   tokenId: firstToken,
-                  oldPosition: token.position,
+                  oldPosition: oldPos,
                   newPosition: newPos,
                   captured: false,
                   players: curState.players,
