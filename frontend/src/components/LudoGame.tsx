@@ -73,10 +73,10 @@ const STRETCH_COORDINATES: { [color: string]: { [idx: number]: [number, number] 
 };
 
 const BASE_COORDINATES: { [color: string]: [number, number][] } = {
-  red: [[2, 2], [3, 2], [2, 3], [3, 3]],
-  green: [[11, 2], [12, 2], [11, 3], [12, 3]],
-  yellow: [[11, 11], [12, 11], [11, 12], [12, 12]],
-  blue: [[2, 11], [3, 11], [2, 12], [3, 12]]
+  red: [[1.5, 1.5], [3.5, 1.5], [1.5, 3.5], [3.5, 3.5]],
+  green: [[10.5, 1.5], [12.5, 1.5], [10.5, 3.5], [12.5, 3.5]],
+  yellow: [[10.5, 10.5], [12.5, 10.5], [10.5, 12.5], [12.5, 12.5]],
+  blue: [[1.5, 10.5], [3.5, 10.5], [1.5, 12.5], [3.5, 12.5]]
 };
 
 const COLOR_CONFIGS: { [color: string]: { startCell: number; lastCell: number; stretchStart: number } } = {
@@ -339,6 +339,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
   // Animation states
   const [visualTokens, setVisualTokens] = useState<{ [key: string]: VisualToken }>({});
+  const visualTokensRef = useRef<{ [key: string]: VisualToken }>({});
   const [comicText, setComicText] = useState<{ text: string; col: number; row: number } | null>(null);
   const [luckySix, setLuckySix] = useState(false);
   const [yourTurnAlert, setYourTurnAlert] = useState(false);
@@ -363,30 +364,40 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     audioRef.current?.setMute(isAudioMuted);
   }, [isAudioMuted]);
 
-  // Sync initial visual tokens when game state is loaded/loaded
+  // Sync initial visual tokens when game state is loaded
   useEffect(() => {
     if (!gameState) return;
-    const initialVisuals: { [key: string]: VisualToken } = {};
+    const currentRefVisuals = visualTokensRef.current;
+    const initialVisuals: { [key: string]: VisualToken } = { ...currentRefVisuals };
+    let hasChanged = false;
+
     gameState.players.forEach((p) => {
       p.tokens.forEach((t) => {
         const key = `${p.color}-${t.id}`;
-        // Snap visual token to state coordinate if not currently in move animation
-        if (!visualTokens[key]?.isMoving && !visualTokens[key]?.isCaptured) {
+        const existing = currentRefVisuals[key];
+        // Only update position if token is not actively performing walk or capture animation
+        if (!existing || (!existing.isMoving && !existing.isCaptured)) {
           const [col, row] = getTokenCoords(p.color, t.id, t.position);
-          initialVisuals[key] = {
-            col,
-            row,
-            scale: 1.0,
-            rotation: 0,
-            translateY: 0,
-            isMoving: false,
-            isCaptured: false
-          };
+          if (!existing || existing.col !== col || existing.row !== row) {
+            initialVisuals[key] = {
+              col,
+              row,
+              scale: 1.0,
+              rotation: existing ? existing.rotation : 0,
+              translateY: 0,
+              isMoving: false,
+              isCaptured: false
+            };
+            hasChanged = true;
+          }
         }
       });
     });
 
-    setVisualTokens((prev) => ({ ...prev, ...initialVisuals }));
+    if (hasChanged) {
+      visualTokensRef.current = initialVisuals;
+      setVisualTokens(initialVisuals);
+    }
   }, [gameState]);
 
   // Canvas particle loop
@@ -612,6 +623,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   };
 
   // Handlers for step-by-step walking animations
+  // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
     tokenId: number,
@@ -647,6 +659,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
     const takeStep = () => {
       if (stepIndex >= path.length) {
+        console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
+        
         // Landing rebound
         setVisualTokens((prev) => ({
           ...prev,
@@ -720,49 +734,49 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       }
 
       // Track walking pawn with dynamic camera
-      const camTargetX = (7 - col) * 12;
-      const camTargetY = (7 - row) * 12;
+      const camTargetX = (7 - nextCol) * 12;
+      const camTargetY = (7 - nextRow) * 12;
       setCamZoom(1.18);
       setCamX(camTargetX);
       setCamY(camTargetY);
 
       // Orientation turn rotation
-      const currentVisual = visualTokens[key];
-      const startX = currentVisual ? currentVisual.col : BASE_COORDINATES[color][tokenId][0];
-      const startY = currentVisual ? currentVisual.row : BASE_COORDINATES[color][tokenId][1];
-      const dx = col - startX;
-      const dy = row - startY;
-      let rotation = 0;
-      if (dx > 0) rotation = 0;
-      else if (dx < 0) rotation = 180;
-      else if (dy > 0) rotation = 90;
-      else if (dy < 0) rotation = 270;
+      const dx = nextCol - currentCol;
+      const dy = nextRow - currentRow;
+      let rotation = visualTokensRef.current[key]?.rotation || 0;
+      if (dx > 0) rotation = 0;        // Facing Right
+      else if (dx < 0) rotation = 180; // Facing Left
+      else if (dy > 0) rotation = 90;  // Facing Down
+      else if (dy < 0) rotation = 270; // Facing Up
 
-      setVisualTokens(prev => ({
-        ...prev,
-        [key]: {
-          col,
-          row,
-          scale: 1.15,
-          rotation,
-          translateY: -16, // lift up
-          isMoving: true,
-          isCaptured: false
-        }
-      }));
+      console.log(`📍 [STEP ${stepIndex + 1}/${path.length}]: Token ${key} walking from (${currentCol}, ${currentRow}) -> (${nextCol}, ${nextRow}) | Facing: ${rotation}°`);
+
+      currentCol = nextCol;
+      currentRow = nextRow;
+
+      const stepVisualState: VisualToken = {
+        col: nextCol,
+        row: nextRow,
+        scale: 1.15,
+        rotation,
+        translateY: -16, // Hop lift
+        isMoving: true,
+        isCaptured: false
+      };
+
+      visualTokensRef.current[key] = stepVisualState;
+      setVisualTokens({ ...visualTokensRef.current });
 
       audioRef.current?.playStep();
-      spawnParticles(col, row, 'dust', 3);
+      spawnParticles(nextCol, nextRow, 'dust', 3);
 
       setTimeout(() => {
-        setVisualTokens(prev => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            translateY: 0,
-            scale: 1.0
-          }
-        }));
+        const cur = visualTokensRef.current[key];
+        if (cur) {
+          const grounded = { ...cur, translateY: 0, scale: 1.0 };
+          visualTokensRef.current[key] = grounded;
+          setVisualTokens({ ...visualTokensRef.current });
+        }
       }, intervalTime / 2);
 
       stepIndex++;
@@ -829,18 +843,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const stepBack = () => {
         if (stepIdx >= reverseCoords.length) {
           // Reached home base yard slot
-          setVisualTokens((prev) => ({
-            ...prev,
-            [capturedKey]: {
-              col: targetBaseCoords[0],
-              row: targetBaseCoords[1],
-              scale: 1.0,
-              rotation: 0,
-              translateY: 0,
-              isMoving: false,
-              isCaptured: false
-            }
-          }));
+          const finalCapturedState: VisualToken = {
+            col: targetBaseCoords[0],
+            row: targetBaseCoords[1],
+            scale: 1.0,
+            rotation: 0,
+            translateY: 0,
+            isMoving: false,
+            isCaptured: false
+          };
+          visualTokensRef.current[capturedKey] = finalCapturedState;
+          setVisualTokens({ ...visualTokensRef.current });
 
           setGameState((prev) => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
           setValidTokens([]);
@@ -854,19 +867,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         const [stepCol, stepRow] = reverseCoords[stepIdx];
 
-        setVisualTokens((prev) => ({
-          ...prev,
-          [capturedKey]: {
-            ...prev[capturedKey],
-            col: stepCol,
-            row: stepRow,
-            scale: 1.15,
-            rotation: (prev[capturedKey]?.rotation || 0) - 90,
-            translateY: -10,
-            isMoving: false,
-            isCaptured: true
-          }
-        }));
+        const stepCapState: VisualToken = {
+          col: stepCol,
+          row: stepRow,
+          scale: 1.15,
+          rotation: (visualTokensRef.current[capturedKey]?.rotation || 0) - 90,
+          translateY: -10,
+          isMoving: false,
+          isCaptured: true
+        };
+        visualTokensRef.current[capturedKey] = stepCapState;
+        setVisualTokens({ ...visualTokensRef.current });
 
         audioRef.current?.playStep();
         spawnParticles(Math.floor(stepCol), Math.floor(stepRow), 'smoke', 2);
@@ -936,15 +947,24 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           setGameState(prev => prev ? { ...prev, diceValue: data.diceValue, hasRolled: true } : null);
           
           const currentGS = gameStateRef.current;
-          const isMyTurnNow = currentGS?.players[currentGS.activePlayerIndex]?.id === user.id;
-          if (isMyTurnNow) {
+          const activePlayer = data.activePlayerIndex !== undefined && currentGS ? currentGS.players[data.activePlayerIndex] : currentGS?.players[currentGS.activePlayerIndex];
+          const isMyTurnNow = activePlayer ? activePlayer.id === user.id : false;
+          if (isMyTurnNow && data.validTokens) {
             setValidTokens(data.validTokens);
+            // If only 1 token is eligible to move, auto-trigger move after 400ms for smooth gameplay
+            if (data.validTokens.length === 1) {
+              setTimeout(() => {
+                handleMoveToken(data.validTokens[0]);
+              }, 400);
+            }
           }
         }
       }, 70);
     });
 
     socket.on('ludo_token_moved', (data: any) => {
+      setValidTokens([]); // Prevent duplicate movement clicks during animation
+
       const currentGS = gameStateRef.current;
       if (!currentGS) return;
       const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
@@ -1151,6 +1171,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
     audioRef.current?.playSelect();
     socket.emit('ludo_move_token', { roomCode, tokenId });
+  };
+
+  const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
+    if (!gameState) return;
+    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    if (activePlayer.id !== user.id || activePlayer.color !== color) return;
+
+    const eligibleYardToken = activePlayer.tokens.find(t => t.position === -1 && validTokens.includes(t.id));
+    if (eligibleYardToken) {
+      handleMoveToken(eligibleYardToken.id);
+    }
   };
 
   if (!gameState) {
@@ -1403,6 +1434,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           display: flex;
           align-items: center;
           justify-content: center;
+          filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
         }
 
         .pawn-character.pawn-in-home .pawn-body-wrapper {
@@ -1450,9 +1482,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         .pawn-shadow {
           position: absolute;
           bottom: 2px;
-          width: 75%;
-          height: 4px;
-          background: rgba(0, 0, 0, 0.45);
+          width: 80%;
+          height: 5px;
+          background: rgba(0, 0, 0, 0.55);
           border-radius: 50%;
           filter: blur(1px);
           transform: translateZ(-1px);
@@ -1460,13 +1492,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         .pawn-body-wrapper {
           position: absolute;
-          bottom: 4px;
+          bottom: 2px;
           width: 100%;
-          height: 125%;
+          height: 115%;
           display: flex;
           flex-direction: column;
           align-items: center;
           transform-origin: bottom center;
+          z-index: 20;
         }
 
         /* Head */
@@ -1938,7 +1971,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         
         {/* Render 15x15 Ludo Grid Layout with CSS Grid */}
         <div 
-          className="w-full h-full relative bg-white overflow-hidden rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
+          className="w-full h-full relative bg-white rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
@@ -2194,12 +2227,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 const isSafeCell = t.position !== -1 && SAFE_CELLS.includes(t.position);
                 const isWinnerCelebration = t.position === 58;
 
+                const itemCol = visual?.col ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][0] : col);
+                const itemRow = visual?.row ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][1] : row);
+
                 return (
                   <button
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
-                    className={`absolute select-none transition-all duration-75 ${
+                    className={`absolute select-none transition-all duration-200 ease-linear ${
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{

@@ -242,6 +242,7 @@ export function handleLudo(io: Server, socket: Socket) {
       const oldPosition = token.position;
       const dice = state.diceValue;
 
+      const oldPosition = token.position;
       let newPosition = token.position;
 
       if (token.position === -1) {
@@ -314,6 +315,8 @@ export function handleLudo(io: Server, socket: Socket) {
           }
         }
       }
+
+      console.log(`🎲 [LUDO MOVE]: Player ${activePlayer.username} (${activePlayer.color}) moved token ${tokenId} from ${oldPosition} -> ${newPosition} (Dice: ${dice}, Captured: ${captured})`);
 
       // Broadcast move animation update
       io.to(roomCode).emit('ludo_token_moved', {
@@ -539,6 +542,7 @@ function startTurnTimer(io: Server, roomCode: string) {
                 const token = activePl.tokens.find((t) => t.id === firstToken)!;
                 const oldPos = token.position;
                 
+                const oldPosition = token.position;
                 let newPos = token.position;
                 if (token.position === -1 && roll === 6) newPos = activePl.startCell;
                 else if (token.position >= 0 && token.position <= 51) {
@@ -787,6 +791,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
 
       // Apply bot token move
       const token = activePlayer.tokens.find(t => t.id === selectedTokenId)!;
+      const oldPosition = token.position;
       let finalPos = token.position;
       if (token.position === -1 && roll === 6) finalPos = activePlayer.startCell;
       else if (token.position >= 0 && token.position <= 51) {
@@ -843,6 +848,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
       io.to(roomCode).emit('ludo_token_moved', {
         activePlayerIndex: botIndex,
         tokenId: selectedTokenId,
+        oldPosition,
         newPosition: finalPos,
         captured,
         players: curState.players,
