@@ -19,6 +19,8 @@ interface Player {
   profileFrame: string;
   ready: boolean;
   isBot?: boolean;
+  color?: 'red' | 'green' | 'yellow' | 'blue';
+  displayName?: string;
 }
 
 interface RoomData {
@@ -395,14 +397,26 @@ export default function RoomPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {room.players.map((player) => {
                   const isPlayerHost = room.hostId === player.id;
                   const isSpeaking = speakingPlayers.has(player.socketId);
+                  const isSelf = player.id === user.id;
+                  const isLudo = room.gameType === 'LUDO';
+                  const displayName = player.displayName || player.username;
+
+                  const colors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+                  const colorLabels: Record<'red' | 'green' | 'yellow' | 'blue', string> = {
+                    red: '🔴 Red',
+                    green: '🟢 Green',
+                    blue: '🔵 Blue',
+                    yellow: '🟡 Yellow',
+                  };
+
                   return (
                     <div 
                       key={player.id} 
-                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-center relative group transition-all ${
+                      className={`glass-card rounded-2xl p-5 border text-center flex flex-col items-center justify-between relative group transition-all ${
                         isSpeaking ? 'border-cybersuccess shadow-[0_0_15px_rgba(0,230,118,0.55)] ring-2 ring-cybersuccess/50' :
                         player.ready ? 'border-cybersuccess shadow-neon-success' : 'border-white/5'
                       }`}
@@ -417,40 +431,116 @@ export default function RoomPage() {
                         </button>
                       )}
 
-                      <div className="relative mb-3">
-                        <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border transition-all ${
-                          isSpeaking ? 'border-cybersuccess shadow-[0_0_12px_rgba(0,230,118,0.6)] ring-2 ring-cybersuccess' : 'border-white/10'
-                        }`}>
-                          {player.username[0]}
+                      <div className="flex flex-col items-center w-full">
+                        <div className="relative mb-3">
+                          <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center font-bold text-lg uppercase border transition-all ${
+                            isSpeaking ? 'border-cybersuccess shadow-[0_0_12px_rgba(0,230,118,0.6)] ring-2 ring-cybersuccess' : 'border-white/10'
+                          }`}>
+                            {displayName[0]}
+                          </div>
+                          {isPlayerHost && (
+                            <span className="absolute -top-1.5 -right-1.5 p-1 bg-cybergold rounded-full text-darkbg shadow-md">
+                              <Crown size={12} />
+                            </span>
+                          )}
+                          {!isPlayerHost && player.ready && (
+                            <span className="absolute -bottom-1.5 -right-1.5 p-1 bg-cybersuccess rounded-full text-white shadow-md">
+                              <CheckCircle size={12} />
+                            </span>
+                          )}
                         </div>
-                        {isPlayerHost && (
-                          <span className="absolute -top-1.5 -right-1.5 p-1 bg-cybergold rounded-full text-darkbg shadow-md">
-                            <Crown size={12} />
-                          </span>
+
+                        {/* Player Display Name / Editing */}
+                        {isLudo && isSelf && !player.ready ? (
+                          <div className="w-full max-w-[180px] mb-1">
+                            <label className="text-[9px] font-bold uppercase text-gray-400 block mb-0.5">Display Name ✏️</label>
+                            <input
+                              type="text"
+                              maxLength={20}
+                              defaultValue={player.displayName || player.username}
+                              onBlur={(e) => {
+                                const val = e.target.value.trim();
+                                if (val && val !== (player.displayName || player.username)) {
+                                  socket.emit('ludo_update_display_name', { roomCode, displayName: val });
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              className="w-full px-2 py-1 text-xs font-bold text-center text-white bg-white/10 border border-cyberblue/40 rounded-lg focus:outline-none focus:border-cyberblue"
+                              placeholder="Your display name"
+                            />
+                          </div>
+                        ) : (
+                          <h4 className="font-extrabold text-sm text-gray-200 truncate w-full flex items-center justify-center gap-1">
+                            {displayName}
+                            {isSpeaking && (
+                              <span className="text-cybersuccess animate-pulse" title="Speaking">
+                                🎙️
+                              </span>
+                            )}
+                            {player.isBot && (
+                              <span className="px-1 py-0.5 rounded bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black text-cyberpink uppercase">
+                                AI
+                              </span>
+                            )}
+                          </h4>
                         )}
-                        {!isPlayerHost && player.ready && (
-                          <span className="absolute -bottom-1.5 -right-1.5 p-1 bg-cybersuccess rounded-full text-white shadow-md">
-                            <CheckCircle size={12} />
-                          </span>
+
+                        <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
+                          {isPlayerHost ? 'Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
+                        </p>
+
+                        {/* Ludo Color Selection */}
+                        {isLudo && (
+                          <div className="mt-3 w-full border-t border-white/10 pt-2 flex flex-col items-center gap-1.5">
+                            <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
+                              Color: {player.color ? player.color.toUpperCase() : 'Not Set'}
+                            </span>
+
+                            {isSelf ? (
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                {colors.map((c) => {
+                                  const isSelected = player.color === c;
+                                  const isTaken = room.players.some((p) => p.id !== player.id && p.color === c);
+                                  const isLocked = player.ready;
+
+                                  return (
+                                    <button
+                                      key={c}
+                                      disabled={isTaken || isLocked}
+                                      onClick={() => socket.emit('ludo_select_color', { roomCode, color: c })}
+                                      className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                                        isSelected
+                                          ? 'border-white bg-white/20 shadow-md ring-1 ring-white scale-105'
+                                          : isTaken
+                                          ? 'opacity-30 border-transparent cursor-not-allowed bg-black/40 text-gray-500 line-through'
+                                          : isLocked
+                                          ? 'opacity-50 border-white/10 cursor-not-allowed'
+                                          : 'border-white/10 hover:border-cyberblue hover:scale-105 bg-white/5 text-gray-300'
+                                      }`}
+                                    >
+                                      {colorLabels[c]}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                                player.color === 'red' ? 'text-red-400 border-red-400/40 bg-red-950/40' :
+                                player.color === 'green' ? 'text-green-400 border-green-400/40 bg-green-950/40' :
+                                player.color === 'yellow' ? 'text-yellow-400 border-yellow-400/40 bg-yellow-950/40' :
+                                player.color === 'blue' ? 'text-blue-400 border-blue-400/40 bg-blue-950/40' :
+                                'text-gray-400 border-gray-400/30'
+                              }`}>
+                                {player.color ? colorLabels[player.color] : 'Assigning'}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
-
-                      <h4 className="font-extrabold text-sm text-gray-200 truncate w-full flex items-center justify-center gap-1">
-                        {player.username}
-                        {isSpeaking && (
-                          <span className="text-cybersuccess animate-pulse" title="Speaking">
-                            🎙️
-                          </span>
-                        )}
-                        {player.isBot && (
-                          <span className="px-1 py-0.5 rounded bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black text-cyberpink uppercase">
-                            AI
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                        {isPlayerHost ? 'Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
-                      </p>
                     </div>
                   );
                 })}

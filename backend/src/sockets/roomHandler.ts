@@ -258,6 +258,54 @@ export function handleRoom(io: Server, socket: Socket) {
     }
   });
 
+  // Select Ludo Color in Lobby
+  socket.on('ludo_select_color', ({ roomCode, color }: { roomCode: string; color: 'red' | 'green' | 'yellow' | 'blue' }) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+      if (room.status !== 'LOBBY') return socket.emit('error', 'Cannot change color after game starts');
+
+      const player = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!player) return socket.emit('error', 'Player not in room');
+      if (player.ready) return socket.emit('error', 'Unready first to change color');
+
+      const validColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+      if (!validColors.includes(color)) return socket.emit('error', 'Invalid color');
+
+      const isTaken = room.players.some((p) => p.id !== player.id && p.color === color);
+      if (isTaken) return socket.emit('error', 'Color is already selected by another player');
+
+      player.color = color;
+      io.to(upperCode).emit('room_state_updated', room);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  // Update Ludo Display Name in Lobby
+  socket.on('ludo_update_display_name', ({ roomCode, displayName }: { roomCode: string; displayName: string }) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room) return socket.emit('error', 'Room not found');
+      if (room.status !== 'LOBBY') return socket.emit('error', 'Cannot change display name after game starts');
+
+      const player = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
+      if (!player) return socket.emit('error', 'Player not in room');
+      if (player.ready) return socket.emit('error', 'Unready first to edit display name');
+
+      const trimmed = (displayName || '').trim();
+      if (!trimmed) return socket.emit('error', 'Display name cannot be empty');
+      const cleanName = trimmed.slice(0, 20);
+
+      player.displayName = cleanName;
+      io.to(upperCode).emit('room_state_updated', room);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
   // Chat message in Room
   socket.on('send_room_message', ({ roomCode, senderName, content }: { roomCode: string; senderName: string; content: string }) => {
     const upperCode = roomCode.trim().toUpperCase();

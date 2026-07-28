@@ -8,6 +8,8 @@ export interface Player {
   role?: string; // used for Ramudu-Seetha role names
   isBot?: boolean;
   disconnected?: boolean;
+  color?: 'red' | 'green' | 'yellow' | 'blue';
+  displayName?: string;
 }
 
 export interface Room {
@@ -65,6 +67,14 @@ class RoomStore {
     // Check if player already in room
     const exists = room.players.some((p) => p.id === player.id);
     if (!exists && room.players.length < room.maxPlayers) {
+      if (room.gameType === 'LUDO' && !player.color) {
+        const availableColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+        const takenColors = room.players.map((p) => p.color).filter(Boolean);
+        const freeColor = availableColors.find((c) => !takenColors.includes(c));
+        if (freeColor) {
+          player.color = freeColor;
+        }
+      }
       room.players.push(player);
     }
 

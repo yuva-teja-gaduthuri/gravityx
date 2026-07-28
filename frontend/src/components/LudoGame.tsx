@@ -545,7 +545,25 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   const getPathPositions = (color: string, startPos: number, endPos: number): number[] => {
     if (startPos === -1) {
       const startCell = COLOR_CONFIGS[color].startCell;
-      return [startCell];
+      if (endPos === startCell) return [startCell];
+      
+      const path: number[] = [startCell];
+      let temp = startCell;
+      const config = COLOR_CONFIGS[color];
+      let enteredStretch = false;
+      for (let i = 0; i < 58; i++) {
+        if (temp === endPos) break;
+        if (temp === config.lastCell) {
+          temp = config.stretchStart;
+          enteredStretch = true;
+        } else if (enteredStretch) {
+          temp += 1;
+        } else {
+          temp = (temp + 1) % 52;
+        }
+        path.push(temp);
+      }
+      return path;
     }
     
     const path: number[] = [];
@@ -553,7 +571,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let temp = startPos;
     let enteredStretch = startPos >= 52;
     
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 58; i++) {
       if (temp === endPos) break;
       
       if (temp === config.lastCell) {
@@ -611,47 +629,88 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     tokenId: number,
     path: number[],
     captured: boolean,
-    finalPlayersState: any
+    finalPlayersState: any,
+    targetEndPos: number
   ) => {
     const key = `${color}-${tokenId}`;
     let stepIndex = 0;
     const intervalTime = isSpeedUp ? 130 : 260;
 
-    const startVisual = visualTokensRef.current[key];
+    if (!path || path.length === 0) {
+      const [finalCol, finalRow] = getTokenCoords(color, tokenId, targetEndPos);
+      if (!isNaN(finalCol) && !isNaN(finalRow)) {
+        setVisualTokens((prev) => ({
+          ...prev,
+          [key]: {
+            col: finalCol,
+            row: finalRow,
+            scale: 1.0,
+            rotation: 0,
+            translateY: 0,
+            isMoving: false,
+            isCaptured: false,
+          },
+        }));
+      }
+      setGameState((prev) => (prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null));
+      setValidTokens([]);
+      return;
+    }
+
+    const startVisual = visualTokensRef.current ? visualTokensRef.current[key] : null;
     const isBaseExit = path.length === 1 && path[0] === COLOR_CONFIGS[color].startCell;
     let currentCol = isBaseExit ? BASE_COORDINATES[color][tokenId][0] : (startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0]);
     let currentRow = isBaseExit ? BASE_COORDINATES[color][tokenId][1] : (startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1]);
-
-    console.log(`🚀 [ANIMATE PAWN PATH]: Initiating walk for ${key} from (${currentCol}, ${currentRow}) along path [${path.join(', ')}]`);
 
     const takeStep = () => {
       if (stepIndex >= path.length) {
         console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
         
         // Landing rebound
-        const existing = visualTokensRef.current[key] || { col: currentCol, row: currentRow, rotation: 0 };
-        const landingState = {
-          ...existing,
-          scale: 1.25,
-          translateY: 0,
-          isMoving: false
-        };
-        visualTokensRef.current[key] = landingState;
-        setVisualTokens({ ...visualTokensRef.current });
+        setVisualTokens((prev) => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            scale: 1.25,
+            translateY: 0,
+            isMoving: false,
+          },
+        }));
 
         setTimeout(() => {
-          const current = visualTokensRef.current[key] || landingState;
-          const finishedState = { ...current, scale: 1.0, isMoving: false };
-          visualTokensRef.current[key] = finishedState;
-          setVisualTokens({ ...visualTokensRef.current });
+          setVisualTokens((prev) => ({
+            ...prev,
+            [key]: {
+              ...prev[key],
+              scale: 1.0,
+            },
+          }));
         }, 120);
 
         audioRef.current?.playImpact();
 
-        const finalPos = path.length > 0 ? path[path.length - 1] : -1;
+        const finalPos = path.length > 0 ? path[path.length - 1] : targetEndPos;
+        let [finalCol, finalRow] = getTokenCoords(color, tokenId, finalPos);
+        if (isNaN(finalCol) || isNaN(finalRow)) {
+          [finalCol, finalRow] = getTokenCoords(color, tokenId, targetEndPos);
+        }
+
+        // Reconcile visual token with authoritative final position
+        setVisualTokens((prev) => ({
+          ...prev,
+          [key]: {
+            col: finalCol,
+            row: finalRow,
+            scale: 1.0,
+            rotation: 0,
+            translateY: 0,
+            isMoving: false,
+            isCaptured: false,
+          },
+        }));
         
         // Spawn sparkles on land
-        spawnParticles(currentCol, currentRow, 'sparkle', 6);
+        spawnParticles(finalCol, finalRow, 'sparkle', 6);
 
         // Home entry visual celebration
         if (finalPos === 58) {
@@ -664,7 +723,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           setWinnerKey(key);
           handleCaptureAnimation(finalPos, finalPlayersState);
         } else {
-          setGameState(prev => prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null);
+          setGameState((prev) => (prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null));
           setValidTokens([]);
           setCamZoom(1.0);
           setCamX(0);
@@ -674,7 +733,10 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       }
 
       const nextPos = path[stepIndex];
-      const [nextCol, nextRow] = getTokenCoords(color, tokenId, nextPos);
+      let [nextCol, nextRow] = getTokenCoords(color, tokenId, nextPos);
+      if (isNaN(nextCol) || isNaN(nextRow) || nextCol === undefined || nextRow === undefined) {
+        [nextCol, nextRow] = getTokenCoords(color, tokenId, targetEndPos);
+      }
 
       // Track walking pawn with dynamic camera
       const camTargetX = (7 - nextCol) * 12;
@@ -918,30 +980,13 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
 
-      const isBaseExit = startPos === -1;
-      console.log(`🎬 [LUDO ANIMATION START]: Player ${activePlayer.username} (${activePlayer.color}) Token #${data.tokenId} | ${isBaseExit ? '🚪 EXITING BASE -> Start Cell' : `Moving ${startPos} -> ${endPos}`}`);
+      if (endPos === undefined || endPos === null || isNaN(endPos)) return;
 
-      // Lock visual token in moving state immediately in both ref and state
-      const key = `${activePlayer.color}-${data.tokenId}`;
-      const baseCoords = BASE_COORDINATES[activePlayer.color][data.tokenId];
-      const existingVisual = visualTokensRef.current[key];
-      const initialMoveState: VisualToken = {
-        col: isBaseExit ? baseCoords[0] : (existingVisual ? existingVisual.col : baseCoords[0]),
-        row: isBaseExit ? baseCoords[1] : (existingVisual ? existingVisual.row : baseCoords[1]),
-        scale: 1.0,
-        rotation: existingVisual ? existingVisual.rotation : 0,
-        translateY: 0,
-        isMoving: true,
-        isCaptured: false
-      };
-      visualTokensRef.current[key] = initialMoveState;
-      setVisualTokens({ ...visualTokensRef.current });
-
-      // Build path sequence
+      // Build path sequence using authoritative startPos and endPos
       const path = getPathPositions(activePlayer.color, startPos, endPos);
       
       // Animate movement walk
-      animatePawnPath(activePlayer.color, data.tokenId, path, data.captured, data.players);
+      animatePawnPath(activePlayer.color, data.tokenId, path, data.captured, data.players, endPos);
     });
 
     socket.on('ludo_new_turn', (data: any) => {
@@ -1397,6 +1442,48 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.5));
         }
 
+        .pawn-character.pawn-in-home .pawn-body-wrapper {
+          position: absolute;
+          bottom: 12%;
+          width: 70%;
+          height: 75%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          transform-origin: bottom center;
+        }
+
+        .pawn-character.pawn-in-home .pawn-head {
+          position: relative;
+          width: clamp(9px, 2.2vmin, 15px);
+          height: clamp(9px, 2.2vmin, 15px);
+          background: #ffdbac;
+          border-radius: 50%;
+          z-index: 10;
+          box-shadow: inset -1px -1px 3px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .pawn-character.pawn-on-track .pawn-body-wrapper {
+          position: absolute;
+          bottom: 4px;
+          width: 85%;
+          height: 105%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          transform-origin: bottom center;
+        }
+
+        .pawn-character.pawn-on-track .pawn-head {
+          position: relative;
+          width: clamp(11px, 2.8vmin, 18px);
+          height: clamp(11px, 2.8vmin, 18px);
+          background: #ffdbac;
+          border-radius: 50%;
+          z-index: 10;
+          box-shadow: inset -1.5px -1.5px 4px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.2);
+        }
+
         .pawn-shadow {
           position: absolute;
           bottom: 2px;
@@ -1846,7 +1933,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Red'}</span>
-                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               {renderBaseDice('red', 'relative inset-0 ml-1')}
@@ -1867,7 +1954,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('green', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Green'}</span>
-                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#43a047] flex items-center justify-center text-[10px] shadow-sm">📍</div>
@@ -1900,16 +1987,23 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Left Red Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '1 / 7' }}
-            onClick={() => handleBaseYardClick('red')}
-            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative flex items-center justify-center p-[16.66%] cursor-pointer"
+            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative p-[16.66%]"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow z-0">RED</span>
-            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
-              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#e53935] bg-[#ffebee] shadow-inner"></div>
+            <div className="wood-base-yard w-full h-full relative">
+              <div className="w-full h-full grid grid-cols-4 grid-rows-4">
+                <div style={{ gridColumn: 2, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#e53935] bg-[#ffebee] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#e53935] bg-[#ffebee] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 2, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#e53935] bg-[#ffebee] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#e53935] bg-[#ffebee] shadow-inner" />
+                </div>
               </div>
             </div>
           </div>
@@ -1917,16 +2011,23 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Right Green Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '1 / 7' }}
-            onClick={() => handleBaseYardClick('green')}
-            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative flex items-center justify-center p-[16.66%] cursor-pointer"
+            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative p-[16.66%]"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow z-0">GREEN</span>
-            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
-              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#43a047] bg-[#e8f5e9] shadow-inner"></div>
+            <div className="wood-base-yard w-full h-full relative">
+              <div className="w-full h-full grid grid-cols-4 grid-rows-4">
+                <div style={{ gridColumn: 2, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#43a047] bg-[#e8f5e9] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#43a047] bg-[#e8f5e9] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 2, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#43a047] bg-[#e8f5e9] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#43a047] bg-[#e8f5e9] shadow-inner" />
+                </div>
               </div>
             </div>
           </div>
@@ -1934,16 +2035,23 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Left Blue Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '10 / 16' }}
-            onClick={() => handleBaseYardClick('blue')}
-            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative flex items-center justify-center p-[16.66%] cursor-pointer"
+            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative p-[16.66%]"
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow z-0">BLUE</span>
-            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
-              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#1e88e5] bg-[#e3f2fd] shadow-inner"></div>
+            <div className="wood-base-yard w-full h-full relative">
+              <div className="w-full h-full grid grid-cols-4 grid-rows-4">
+                <div style={{ gridColumn: 2, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#1e88e5] bg-[#e3f2fd] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#1e88e5] bg-[#e3f2fd] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 2, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#1e88e5] bg-[#e3f2fd] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#1e88e5] bg-[#e3f2fd] shadow-inner" />
+                </div>
               </div>
             </div>
           </div>
@@ -1951,16 +2059,23 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Right Yellow Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '10 / 16' }}
-            onClick={() => handleBaseYardClick('yellow')}
-            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative flex items-center justify-center p-[16.66%] cursor-pointer"
+            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative p-[16.66%]"
           >
             <span className="text-[#1a0802] font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow z-0">YELLOW</span>
-            <div className="wood-base-yard w-full h-full relative flex items-center justify-center">
-              <div className="grid grid-cols-2 grid-rows-2 w-full h-full justify-items-center items-center">
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
-                <div className="w-[75%] h-[75%] rounded-full border-3 sm:border-4 border-[#fdd835] bg-[#fffde7] shadow-inner"></div>
+            <div className="wood-base-yard w-full h-full relative">
+              <div className="w-full h-full grid grid-cols-4 grid-rows-4">
+                <div style={{ gridColumn: 2, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#fdd835] bg-[#fffde7] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 2 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#fdd835] bg-[#fffde7] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 2, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#fdd835] bg-[#fffde7] shadow-inner" />
+                </div>
+                <div style={{ gridColumn: 3, gridRow: 3 }} className="w-full h-full flex items-center justify-center">
+                  <div className="w-[85%] h-[85%] rounded-full border-2 sm:border-3 border-[#fdd835] bg-[#fffde7] shadow-inner" />
+                </div>
               </div>
             </div>
           </div>
@@ -2098,6 +2213,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 const key = `${p.color}-${t.id}`;
                 const visual = visualTokens[key];
 
+                const colVal = visual ? visual.col : BASE_COORDINATES[p.color][t.id][0];
+                const rowVal = visual ? visual.row : BASE_COORDINATES[p.color][t.id][1];
+                const safeCol = (colVal !== undefined && !isNaN(colVal)) ? colVal : 7;
+                const safeRow = (rowVal !== undefined && !isNaN(rowVal)) ? rowVal : 7;
+                const isHome = t.position === -1;
+
                 let dx = 0;
                 let dy = 0;
 
@@ -2123,15 +2244,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
-                      left: `calc((${itemCol} * 100% / 15))`,
-                      top: `calc((${itemRow} * 100% / 15))`,
+                      left: `calc(${safeCol} * 100% / 15)`,
+                      top: `calc(${safeRow} * 100% / 15)`,
                       width: 'calc(100% / 15)',
                       height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
                     }}
                   >
                     {/* Tiny Pixar-Style Human Model */}
-                    <div className={`pawn-character team-${p.color} ${visual?.isMoving ? 'walking' : 'idle'} ${isTokenEligible ? 'pawn-selectable-bounce' : ''} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
+                    <div className={`pawn-character team-${p.color} ${isHome ? 'pawn-in-home' : 'pawn-on-track'} ${visual?.isMoving ? 'walking' : 'idle'} ${isTokenEligible ? 'pawn-selectable-bounce' : ''} ${eliminatedKey === key ? 'eliminated' : ''} ${winnerKey === key ? 'victory-dance' : ''} ${isWinnerCelebration ? 'victory-dance' : ''}`}>
                       {/* Character shadow on ground */}
                       <div className="pawn-shadow"></div>
                       
@@ -2228,7 +2349,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Blue'}</span>
-                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               {renderBaseDice('blue', 'relative inset-0 ml-1')}
@@ -2249,7 +2370,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('yellow', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Yellow'}</span>
-                {renderMissDots(player?.unturnedMoves || 0)}
+                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#fdd835] flex items-center justify-center text-[10px] shadow-sm">📍</div>
