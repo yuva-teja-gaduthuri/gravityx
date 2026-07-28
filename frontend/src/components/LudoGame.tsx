@@ -644,7 +644,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   ) => {
     const key = `${color}-${tokenId}`;
     let stepIndex = 0;
-    const intervalTime = isSpeedUp ? 130 : 260;
+    const intervalTime = isSpeedUp ? 60 : 110;
 
     // Lock pawn in animatingTokensRef
     animatingTokensRef.current[key] = true;
@@ -871,7 +871,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       // Compute step-by-step reverse path back to home base yard
       const reverseCoords = getReversePathPositions(opponentColor, capturedTokenId, capturePos);
       let stepIdx = 0;
-      const captureInterval = isSpeedUp ? 60 : 110;
+      const captureInterval = isSpeedUp ? 25 : 45;
 
       const stepBack = () => {
         if (stepIdx >= reverseCoords.length) {
@@ -965,7 +965,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const interval = setInterval(() => {
         setRollingValue(Math.floor(Math.random() * 6) + 1);
         count++;
-        if (count > 12) {
+        if (count > 7) {
           clearInterval(interval);
           setIsRolling(false);
           setRollingValue(data.diceValue);
@@ -988,15 +988,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const isMyTurnNow = activePlayer ? activePlayer.id === user.id : false;
           if (isMyTurnNow && data.validTokens) {
             setValidTokens(data.validTokens);
-            // If only 1 token is eligible to move, auto-trigger move after 400ms for smooth gameplay
+            // If only 1 token is eligible to move, auto-trigger move after 150ms for smooth gameplay
             if (data.validTokens.length === 1) {
               setTimeout(() => {
                 handleMoveToken(data.validTokens[0]);
-              }, 400);
+              }, 150);
             }
           }
         }
-      }, 70);
+      }, 45);
     });
 
     socket.on('ludo_token_moved', (data: any) => {

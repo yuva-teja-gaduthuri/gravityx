@@ -204,11 +204,11 @@ export function handleLudo(io: Server, socket: Socket) {
       // Reset turn timer for movement decision
       resetTurnTimer(io, upperCode);
 
-      // If no valid moves, automatically switch turns after 2 seconds
+      // If no valid moves, automatically switch turns after 500ms
       if (validMoves.length === 0) {
         setTimeout(() => {
           nextTurn(io, upperCode);
-        }, 1500);
+        }, 500);
       }
     } catch (err: any) {
       socket.emit('error', err.message);
@@ -527,13 +527,13 @@ function startTurnTimer(io: Server, roomCode: string) {
           validTokens: validMoves,
         });
 
-        // Trigger next turn automatically after 1.5 seconds if no valid moves
+        // Trigger next turn automatically after 500ms if no valid moves
         if (validMoves.length === 0) {
           setTimeout(() => {
             nextTurn(io, roomCode);
-          }, 1500);
+          }, 500);
         } else {
-          // Force move the first valid token automatically after 2 seconds
+          // Force move the first valid token automatically after 750ms
           setTimeout(() => {
             const currentRoom = roomStore.getRoom(roomCode);
             if (currentRoom && currentRoom.status === 'PLAYING') {
@@ -575,10 +575,10 @@ function startTurnTimer(io: Server, roomCode: string) {
 
                 setTimeout(() => {
                   nextTurn(io, roomCode);
-                }, 1000);
+                }, 400);
               }
             }
-          }, 2000);
+          }, 750);
         }
       } else {
         // If movement phase timer expired, move turn to next player without duplicate increment
@@ -676,7 +676,7 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
 }
 
 function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
-  // Wait 1.5 seconds for bot to "think" before rolling the dice
+  // Wait 450ms for bot before rolling the dice
   setTimeout(() => {
     const room = roomStore.getRoom(roomCode);
     if (!room || room.status !== 'PLAYING') return;
@@ -702,7 +702,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
         });
         setTimeout(() => {
           nextTurn(io, roomCode);
-        }, 1500);
+        }, 500);
         return;
       }
     } else {
@@ -718,15 +718,15 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
       validTokens: validMoves,
     });
 
-    // If no valid moves, switch turn after 1.5 seconds
+    // If no valid moves, switch turn after 500ms
     if (validMoves.length === 0) {
       setTimeout(() => {
         nextTurn(io, roomCode);
-      }, 1500);
+      }, 500);
       return;
     }
 
-    // If there are valid moves, select the best move and execute it after 1.5 seconds
+    // If there are valid moves, select the best move and execute it after 450ms
     setTimeout(() => {
       const currentRoom = roomStore.getRoom(roomCode);
       if (!currentRoom || currentRoom.status !== 'PLAYING') return;
