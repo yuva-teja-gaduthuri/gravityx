@@ -657,6 +657,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       return;
     }
 
+    const startVisual = visualTokensRef.current ? visualTokensRef.current[key] : null;
+    const isBaseExit = path.length === 1 && path[0] === COLOR_CONFIGS[color].startCell;
+    let currentCol = isBaseExit ? BASE_COORDINATES[color][tokenId][0] : (startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0]);
+    let currentRow = isBaseExit ? BASE_COORDINATES[color][tokenId][1] : (startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1]);
+
     const takeStep = () => {
       if (stepIndex >= path.length) {
         console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
@@ -728,9 +733,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       }
 
       const nextPos = path[stepIndex];
-      let [col, row] = getTokenCoords(color, tokenId, nextPos);
-      if (isNaN(col) || isNaN(row) || col === undefined || row === undefined) {
-        [col, row] = getTokenCoords(color, tokenId, targetEndPos);
+      let [nextCol, nextRow] = getTokenCoords(color, tokenId, nextPos);
+      if (isNaN(nextCol) || isNaN(nextRow) || nextCol === undefined || nextRow === undefined) {
+        [nextCol, nextRow] = getTokenCoords(color, tokenId, targetEndPos);
       }
 
       // Track walking pawn with dynamic camera

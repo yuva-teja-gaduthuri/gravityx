@@ -242,7 +242,6 @@ export function handleLudo(io: Server, socket: Socket) {
       const oldPosition = token.position;
       const dice = state.diceValue;
 
-      const oldPosition = token.position;
       let newPosition = token.position;
 
       if (token.position === -1) {
@@ -541,8 +540,6 @@ function startTurnTimer(io: Server, roomCode: string) {
                 const activePl = curState.players[curState.activePlayerIndex];
                 const token = activePl.tokens.find((t) => t.id === firstToken)!;
                 const oldPos = token.position;
-                
-                const oldPosition = token.position;
                 let newPos = token.position;
                 if (token.position === -1 && roll === 6) newPos = activePl.startCell;
                 else if (token.position >= 0 && token.position <= 51) {
