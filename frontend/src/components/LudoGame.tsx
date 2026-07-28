@@ -7,6 +7,9 @@ import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings,
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
+const NORMAL_STEP_DURATION = 135; // ms per board square (Normal mode: 120-150ms)
+const FAST_STEP_DURATION = 70;    // ms per board square (Fast mode: 60-80ms)
+
 interface LudoToken {
   id: number;
   position: number;
@@ -20,6 +23,7 @@ interface LudoPlayer {
   color: 'red' | 'green' | 'yellow' | 'blue';
   tokens: LudoToken[];
   isWinner: boolean;
+  isEliminated?: boolean;
   placement?: number;
   unturnedMoves?: number;
 }
@@ -644,7 +648,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   ) => {
     const key = `${color}-${tokenId}`;
     let stepIndex = 0;
-    const intervalTime = isSpeedUp ? 50 : 90;
+    const intervalTime = isSpeedUp ? FAST_STEP_DURATION : NORMAL_STEP_DURATION;
 
     // Lock pawn in animatingTokensRef
     animatingTokensRef.current[key] = true;
@@ -1222,6 +1226,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     
     const player = gameState.players[playerIndex];
     const isPlayerActive = gameState.activePlayerIndex === playerIndex;
+    if (!isPlayerActive) return null;
     const isMyDice = player.id === user.id;
     const canIRoll = isPlayerActive && isMyDice && !gameState.hasRolled && !isRolling;
     
@@ -1927,7 +1932,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'red') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Red';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -1936,8 +1941,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Red'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               {renderBaseDice('red', 'relative inset-0 ml-1')}
             </div>
@@ -1949,7 +1958,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'green') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Green';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -1958,8 +1967,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('green', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Green'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#43a047] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>
@@ -2244,11 +2257,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                   <button
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
-                    disabled={!isTokenEligible}
+                    disabled={!isTokenEligible || p.isEliminated}
                     className={`absolute select-none ${
-                      visual?.isMoving ? 'transition-all duration-75 ease-linear' : 'transition-all duration-150 ease-out'
+                      visual?.isMoving ? (isSpeedUp ? `transition-all duration-[${FAST_STEP_DURATION}ms] ease-linear` : `transition-all duration-[${NORMAL_STEP_DURATION}ms] ease-linear`) : 'transition-all duration-100 ease-out'
                     } ${
-                      isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
+                      isTokenEligible && !p.isEliminated ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
                       left: `calc(${safeCol} * 100% / 15)`,
@@ -2349,7 +2362,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'blue') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Blue';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2358,8 +2371,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Blue'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               {renderBaseDice('blue', 'relative inset-0 ml-1')}
             </div>
@@ -2371,7 +2388,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'yellow') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Yellow';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2380,8 +2397,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('yellow', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Yellow'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#fdd835] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>
