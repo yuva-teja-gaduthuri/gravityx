@@ -96,10 +96,14 @@ export function handleRoom(io: Server, socket: Socket) {
     roomCode,
     userId,
     username,
+    displayName,
+    color,
   }: {
     roomCode: string;
     userId: string;
     username: string;
+    displayName?: string;
+    color?: 'red' | 'green' | 'yellow' | 'blue';
   }) => {
     try {
       // Check auth
@@ -146,9 +150,15 @@ export function handleRoom(io: Server, socket: Socket) {
         where: { id: userId },
       });
 
+      const cleanDisplayName = displayName && displayName.trim() ? displayName.trim().slice(0, 20) : undefined;
+      const validColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+      const reqColor = color && validColors.includes(color) ? color : undefined;
+
       const player: Player = {
         id: userId,
         username: username,
+        displayName: cleanDisplayName || (existingPlayer ? existingPlayer.displayName : undefined),
+        color: reqColor || (existingPlayer ? existingPlayer.color : undefined),
         socketId: socket.id,
         avatar: userProfile?.avatar || 'default_avatar',
         profileFrame: userProfile?.profileFrame || 'default_frame',
@@ -164,6 +174,15 @@ export function handleRoom(io: Server, socket: Socket) {
         existingPlayer.disconnected = false; // Mark as active
         existingPlayer.avatar = userProfile?.avatar || existingPlayer.avatar;
         existingPlayer.profileFrame = userProfile?.profileFrame || existingPlayer.profileFrame;
+        if (cleanDisplayName) {
+          existingPlayer.displayName = cleanDisplayName;
+        }
+        if (reqColor) {
+          const taken = room.players.some(p => p.id !== existingPlayer.id && p.color === reqColor);
+          if (!taken) {
+            existingPlayer.color = reqColor;
+          }
+        }
       }
 
       if (!updatedRoom) {
@@ -268,15 +287,15 @@ export function handleRoom(io: Server, socket: Socket) {
 
       const player = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!player) return socket.emit('error', 'Player not in room');
-      if (player.ready) return socket.emit('error', 'Unready first to change color');
 
       const validColors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
-      if (!validColors.includes(color)) return socket.emit('error', 'Invalid color');
+      if (!validColors.includes(color)) return socket.emit('error', 'Invalid color selection');
 
       const isTaken = room.players.some((p) => p.id !== player.id && p.color === color);
-      if (isTaken) return socket.emit('error', 'Color is already selected by another player');
+      if (isTaken) return socket.emit('error', `Colour ${color.toUpperCase()} is already selected by another player in this lobby`);
 
       player.color = color;
+      socket.emit('ludo_color_selected', { success: true, color });
       io.to(upperCode).emit('room_state_updated', room);
     } catch (err: any) {
       socket.emit('error', err.message);
@@ -293,13 +312,22 @@ export function handleRoom(io: Server, socket: Socket) {
 
       const player = room.players.find((p) => p.socketId === socket.id || (socket.data.user && p.id === socket.data.user.id));
       if (!player) return socket.emit('error', 'Player not in room');
-      if (player.ready) return socket.emit('error', 'Unready first to edit display name');
 
       const trimmed = (displayName || '').trim();
       if (!trimmed) return socket.emit('error', 'Display name cannot be empty');
+      if (trimmed.length > 20) return socket.emit('error', 'Display name must be 20 characters or less');
       const cleanName = trimmed.slice(0, 20);
 
+      // Check if duplicate name in the same lobby (case-insensitive)
+      const isDuplicate = room.players.some(
+        (p) => p.id !== player.id && (p.displayName || p.username).toLowerCase() === cleanName.toLowerCase()
+      );
+      if (isDuplicate) {
+        return socket.emit('error', `Name "${cleanName}" is already taken by another player in this lobby`);
+      }
+
       player.displayName = cleanName;
+      socket.emit('ludo_display_name_updated', { success: true, displayName: cleanName });
       io.to(upperCode).emit('room_state_updated', room);
     } catch (err: any) {
       socket.emit('error', err.message);

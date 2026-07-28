@@ -15,6 +15,7 @@ interface LudoToken {
 interface LudoPlayer {
   id: string;
   username: string;
+  displayName?: string;
   socketId: string;
   color: 'red' | 'green' | 'yellow' | 'blue';
   tokens: LudoToken[];
@@ -1916,11 +1917,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             activePlayer.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess shadow-[0_0_10px_rgba(0,208,132,0.3)]' :
             activePlayer.color === 'yellow' ? 'bg-[#fbc02d]/20 text-[#fbc02d] shadow-[0_0_10px_rgba(255,213,79,0.3)]' : 'bg-cyberblue/20 text-cyberblue shadow-[0_0_10px_rgba(0,245,255,0.3)]'
           }`}>
-            {activePlayer.username[0]}
+            {(activePlayer.displayName || activePlayer.username)[0]}
           </div>
           <div>
             <div className="text-sm font-extrabold flex items-center gap-2 text-white">
-              {activePlayer.username} 
+              {activePlayer.displayName || activePlayer.username} 
               <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border ${
                 activePlayer.color === 'red' ? 'text-cybererror border-cybererror/30 bg-cybererror/5' :
                 activePlayer.color === 'green' ? 'text-cybersuccess border-cybersuccess/30 bg-cybersuccess/5' :
@@ -1957,13 +1958,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
           const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const pName = player ? (player.displayName || player.username) : 'Red';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
               isPlayerActive ? 'border-red-400 bg-red-950/70 ring-2 ring-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
             }`}>
               <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Red'}</span>
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Red'}</span>
                 {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
@@ -1978,13 +1980,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
           const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const pName = player ? (player.displayName || player.username) : 'Green';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
               isPlayerActive ? 'border-green-400 bg-green-950/70 ring-2 ring-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
             }`}>
               {renderBaseDice('green', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
-                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Green'}</span>
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Green'}</span>
                 {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
@@ -2376,13 +2379,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
           const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const pName = player ? (player.displayName || player.username) : 'Blue';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
               isPlayerActive ? 'border-blue-400 bg-blue-950/70 ring-2 ring-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
             }`}>
               <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
-                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Blue'}</span>
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Blue'}</span>
                 {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
@@ -2397,13 +2401,14 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
           const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const pName = player ? (player.displayName || player.username) : 'Yellow';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
               isPlayerActive ? 'border-yellow-400 bg-yellow-950/70 ring-2 ring-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'border-white/10 bg-slate-900/60 opacity-80'
             }`}>
               {renderBaseDice('yellow', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
-                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? 'You' : player.username) : 'Yellow'}</span>
+                <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Yellow'}</span>
                 {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
                 {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
               </div>
@@ -2527,10 +2532,10 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                               row.color === 'green' ? 'bg-cybersuccess/20 text-cybersuccess' :
                               row.color === 'yellow' ? 'bg-cybergold/20 text-cybergold' : 'bg-cyberblue/20 text-cyberblue'
                             }`}>
-                              {row.username[0]}
+                              {(row.displayName || row.username)[0]}
                             </div>
                             <div>
-                              <span className="font-extrabold text-gray-200">{row.username}</span>
+                              <span className="font-extrabold text-gray-200">{row.displayName || row.username}</span>
                               <span className="text-[9px] text-gray-500 ml-2 font-semibold uppercase">({row.color})</span>
                             </div>
                           </div>

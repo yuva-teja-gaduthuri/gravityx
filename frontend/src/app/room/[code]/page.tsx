@@ -43,6 +43,179 @@ interface ChatMessage {
   createdAt: string;
 }
 
+function DisplayNameEditor({ player, roomCode, socket, room }: { player: Player; roomCode: string; socket: any; room: RoomData }) {
+  const [inputVal, setInputVal] = useState(player.displayName || player.username);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    setInputVal(player.displayName || player.username);
+  }, [player.displayName, player.username]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdated = (data: { success: boolean; displayName: string }) => {
+      setIsSaving(false);
+      setIsSuccess(true);
+      setTimeout(() => setIsSuccess(false), 2000);
+      try {
+        const raw = localStorage.getItem(`ludo_pref_${roomCode}`);
+        const pref = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(`ludo_pref_${roomCode}`, JSON.stringify({ ...pref, displayName: data.displayName }));
+      } catch (e) {}
+    };
+
+    const handleError = (msg: string) => {
+      setIsSaving(false);
+      setErrorMsg(msg);
+      setTimeout(() => setErrorMsg(''), 4000);
+    };
+
+    socket.on('ludo_display_name_updated', handleUpdated);
+    socket.on('error', handleError);
+
+    return () => {
+      socket.off('ludo_display_name_updated', handleUpdated);
+      socket.off('error', handleError);
+    };
+  }, [socket, roomCode]);
+
+  const handleSave = () => {
+    const trimmed = inputVal.trim();
+    if (!trimmed) {
+      setErrorMsg('Name cannot be empty');
+      setTimeout(() => setErrorMsg(''), 3000);
+      return;
+    }
+    if (trimmed.length > 20) {
+      setErrorMsg('Max 20 characters allowed');
+      setTimeout(() => setErrorMsg(''), 3000);
+      return;
+    }
+    const isDup = room.players.some(
+      (p) => p.id !== player.id && (p.displayName || p.username).toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDup) {
+      setErrorMsg('Name taken in this lobby');
+      setTimeout(() => setErrorMsg(''), 3000);
+      return;
+    }
+
+    if (trimmed === (player.displayName || player.username)) return;
+
+    setIsSaving(true);
+    setErrorMsg('');
+    socket.emit('ludo_update_display_name', { roomCode, displayName: trimmed });
+  };
+
+  return (
+    <div className="w-full max-w-[200px] mb-1 flex flex-col items-center">
+      <label className="text-[9px] font-bold uppercase text-gray-400 flex items-center justify-center gap-1 mb-0.5">
+        <span>Display Name ✏️</span>
+        {isSaving && <span className="w-2 h-2 rounded-full border border-cyberblue border-t-transparent animate-spin inline-block" />}
+        {isSuccess && <span className="text-cybersuccess font-black">✓ Saved</span>}
+      </label>
+      <div className="relative w-full flex items-center">
+        <input
+          type="text"
+          maxLength={20}
+          value={inputVal}
+          onChange={(e) => {
+            setInputVal(e.target.value);
+            if (errorMsg) setErrorMsg('');
+          }}
+          onBlur={handleSave}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSave();
+              e.currentTarget.blur();
+            }
+          }}
+          className={`w-full px-2 py-1 text-xs font-bold text-center text-white bg-white/10 border rounded-lg focus:outline-none transition-all ${
+            errorMsg ? 'border-cybererror bg-cybererror/10' : isSuccess ? 'border-cybersuccess bg-cybersuccess/10' : 'border-cyberblue/40 focus:border-cyberblue'
+          }`}
+          placeholder="Your display name"
+        />
+      </div>
+      {errorMsg && (
+        <span className="text-[9px] font-bold text-cybererror mt-0.5 animate-bounce">
+          {errorMsg}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function LudoColorPicker({ player, roomCode, socket, room }: { player: Player; roomCode: string; socket: any; room: RoomData }) {
+  const colors: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+  const colorLabels: Record<'red' | 'green' | 'yellow' | 'blue', string> = {
+    red: '🔴 Red',
+    green: '🟢 Green',
+    blue: '🔵 Blue',
+    yellow: '🟡 Yellow',
+  };
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdated = (data: { success: boolean; color: 'red' | 'green' | 'yellow' | 'blue' }) => {
+      setIsSaving(false);
+      try {
+        const raw = localStorage.getItem(`ludo_pref_${roomCode}`);
+        const pref = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(`ludo_pref_${roomCode}`, JSON.stringify({ ...pref, color: data.color }));
+      } catch (e) {}
+    };
+    socket.on('ludo_color_selected', handleUpdated);
+    return () => {
+      socket.off('ludo_color_selected', handleUpdated);
+    };
+  }, [socket, roomCode]);
+
+  return (
+    <div className="mt-3 w-full border-t border-white/10 pt-2 flex flex-col items-center gap-1.5">
+      <div className="flex items-center gap-1">
+        <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
+          Color: {player.color ? player.color.toUpperCase() : 'Not Set'}
+        </span>
+        {isSaving && <span className="w-2.5 h-2.5 rounded-full border border-cyberblue border-t-transparent animate-spin inline-block" />}
+      </div>
+
+      <div className="flex items-center justify-center gap-1 flex-wrap">
+        {colors.map((c) => {
+          const isSelected = player.color === c;
+          const takenByPlayer = room.players.find((p) => p.id !== player.id && p.color === c);
+          const isTaken = !!takenByPlayer;
+
+          return (
+            <button
+              key={c}
+              disabled={isTaken || isSaving}
+              onClick={() => {
+                if (isSelected || isTaken) return;
+                setIsSaving(true);
+                socket.emit('ludo_select_color', { roomCode, color: c });
+              }}
+              title={isTaken ? `Selected by ${takenByPlayer.displayName || takenByPlayer.username}` : `Select ${c.toUpperCase()}`}
+              className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                isSelected
+                  ? 'border-white bg-white/20 shadow-md ring-2 ring-white scale-105 font-black text-white'
+                  : isTaken
+                  ? 'opacity-30 border-transparent cursor-not-allowed bg-black/40 text-gray-500 line-through'
+                  : 'border-white/10 hover:border-cyberblue hover:scale-105 bg-white/5 text-gray-300 active:scale-95'
+              }`}
+            >
+              {colorLabels[c]}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function RoomPage() {
   const router = useRouter();
   const params = useParams();
@@ -84,10 +257,18 @@ export default function RoomPage() {
     if (!socket || !user || !roomCode) return;
 
     const handleConnect = () => {
+      let savedPref: any = null;
+      try {
+        const raw = localStorage.getItem(`ludo_pref_${roomCode}`);
+        if (raw) savedPref = JSON.parse(raw);
+      } catch (e) {}
+
       socket.emit('join_room', {
         roomCode,
         userId: user.id,
         username: user.username,
+        displayName: savedPref?.displayName,
+        color: savedPref?.color,
       });
     };
 
@@ -103,7 +284,7 @@ export default function RoomPage() {
       }
       socket.off('connect', handleConnect);
     };
-  }, [socket, roomCode]); // DO NOT run when user updates to avoid leave/join cycles
+  }, [socket, roomCode, user]);
 
   // Register socket event listeners
   useEffect(() => {
@@ -451,28 +632,13 @@ export default function RoomPage() {
                         </div>
 
                         {/* Player Display Name / Editing */}
-                        {isLudo && isSelf && !player.ready ? (
-                          <div className="w-full max-w-[180px] mb-1">
-                            <label className="text-[9px] font-bold uppercase text-gray-400 block mb-0.5">Display Name ✏️</label>
-                            <input
-                              type="text"
-                              maxLength={20}
-                              defaultValue={player.displayName || player.username}
-                              onBlur={(e) => {
-                                const val = e.target.value.trim();
-                                if (val && val !== (player.displayName || player.username)) {
-                                  socket.emit('ludo_update_display_name', { roomCode, displayName: val });
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.currentTarget.blur();
-                                }
-                              }}
-                              className="w-full px-2 py-1 text-xs font-bold text-center text-white bg-white/10 border border-cyberblue/40 rounded-lg focus:outline-none focus:border-cyberblue"
-                              placeholder="Your display name"
-                            />
-                          </div>
+                        {isLudo && isSelf ? (
+                          <DisplayNameEditor
+                            player={player}
+                            roomCode={roomCode}
+                            socket={socket}
+                            room={room}
+                          />
                         ) : (
                           <h4 className="font-extrabold text-sm text-gray-200 truncate w-full flex items-center justify-center gap-1">
                             {displayName}
@@ -490,44 +656,23 @@ export default function RoomPage() {
                         )}
 
                         <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                          {isPlayerHost ? 'Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
+                          {isPlayerHost ? '👑 Team Captain' : player.ready ? 'Ready to launch' : 'Calibrating'}
                         </p>
 
                         {/* Ludo Color Selection */}
                         {isLudo && (
-                          <div className="mt-3 w-full border-t border-white/10 pt-2 flex flex-col items-center gap-1.5">
-                            <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
-                              Color: {player.color ? player.color.toUpperCase() : 'Not Set'}
-                            </span>
-
-                            {isSelf ? (
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
-                                {colors.map((c) => {
-                                  const isSelected = player.color === c;
-                                  const isTaken = room.players.some((p) => p.id !== player.id && p.color === c);
-                                  const isLocked = player.ready;
-
-                                  return (
-                                    <button
-                                      key={c}
-                                      disabled={isTaken || isLocked}
-                                      onClick={() => socket.emit('ludo_select_color', { roomCode, color: c })}
-                                      className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all ${
-                                        isSelected
-                                          ? 'border-white bg-white/20 shadow-md ring-1 ring-white scale-105'
-                                          : isTaken
-                                          ? 'opacity-30 border-transparent cursor-not-allowed bg-black/40 text-gray-500 line-through'
-                                          : isLocked
-                                          ? 'opacity-50 border-white/10 cursor-not-allowed'
-                                          : 'border-white/10 hover:border-cyberblue hover:scale-105 bg-white/5 text-gray-300'
-                                      }`}
-                                    >
-                                      {colorLabels[c]}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
+                          isSelf ? (
+                            <LudoColorPicker
+                              player={player}
+                              roomCode={roomCode}
+                              socket={socket}
+                              room={room}
+                            />
+                          ) : (
+                            <div className="mt-3 w-full border-t border-white/10 pt-2 flex flex-col items-center gap-1.5">
+                              <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
+                                Color: {player.color ? player.color.toUpperCase() : 'Not Set'}
+                              </span>
                               <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
                                 player.color === 'red' ? 'text-red-400 border-red-400/40 bg-red-950/40' :
                                 player.color === 'green' ? 'text-green-400 border-green-400/40 bg-green-950/40' :
@@ -537,8 +682,8 @@ export default function RoomPage() {
                               }`}>
                                 {player.color ? colorLabels[player.color] : 'Assigning'}
                               </span>
-                            )}
-                          </div>
+                            </div>
+                          )
                         )}
                       </div>
                     </div>

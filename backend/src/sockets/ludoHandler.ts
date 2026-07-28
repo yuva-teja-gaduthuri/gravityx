@@ -11,6 +11,7 @@ interface LudoToken {
 interface LudoPlayer {
   id: string;
   username: string;
+  displayName?: string;
   socketId: string;
   color: 'red' | 'green' | 'yellow' | 'blue';
   startCell: number;
@@ -91,9 +92,11 @@ export function handleLudo(io: Server, socket: Socket) {
       const ludoPlayers: LudoPlayer[] = room.players.map((p) => {
         const color = assignedColors.get(p.id) || 'red';
         const config = COLOR_CONFIGS[color];
+        const effectiveName = p.displayName || p.username;
         return {
           id: p.id,
-          username: p.displayName || p.username,
+          username: effectiveName,
+          displayName: effectiveName,
           socketId: p.socketId,
           color,
           startCell: config.startCell,
@@ -657,7 +660,8 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
 
     scoreboardData.push({
       userId: p.id,
-      username: p.username,
+      username: p.displayName || p.username,
+      displayName: p.displayName || p.username,
       color: p.color,
       placement,
       coinsEarned: reward.coins,
