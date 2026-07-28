@@ -644,10 +644,20 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   ) => {
     const key = `${color}-${tokenId}`;
     let stepIndex = 0;
-    const intervalTime = isSpeedUp ? 60 : 110;
+    const intervalTime = isSpeedUp ? 50 : 90;
 
     // Lock pawn in animatingTokensRef
     animatingTokensRef.current[key] = true;
+
+    // Set camera ONCE towards target destination to avoid camera jitter during walking
+    const [finalTargetCol, finalTargetRow] = getTokenCoords(color, tokenId, targetEndPos);
+    if (!isNaN(finalTargetCol) && !isNaN(finalTargetRow)) {
+      const camTargetX = (7 - finalTargetCol) * 8;
+      const camTargetY = (7 - finalTargetRow) * 8;
+      setCamZoom(1.12);
+      setCamX(camTargetX);
+      setCamY(camTargetY);
+    }
 
     // Safety timeout to prevent permanent animation lock
     const maxDuration = ((path ? path.length : 1) + 20) * intervalTime + 3000;
@@ -689,27 +699,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
         clearTimeout(safetyTimer);
         
-        // Landing rebound
-        setVisualTokens((prev) => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            scale: 1.25,
-            translateY: 0,
-            isMoving: false,
-          },
-        }));
-
-        setTimeout(() => {
-          setVisualTokens((prev) => ({
-            ...prev,
-            [key]: {
-              ...prev[key],
-              scale: 1.0,
-            },
-          }));
-        }, 120);
-
         audioRef.current?.playImpact();
 
         const finalPos = path.length > 0 ? path[path.length - 1] : targetEndPos;
@@ -733,7 +722,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         }));
         
         // Spawn sparkles on land
-        spawnParticles(finalCol, finalRow, 'sparkle', 6);
+        spawnParticles(finalCol, finalRow, 'sparkle', 4);
 
         // Home entry visual celebration
         if (finalPos === 58) {
@@ -762,13 +751,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         [nextCol, nextRow] = getTokenCoords(color, tokenId, targetEndPos);
       }
 
-      // Track walking pawn with dynamic camera
-      const camTargetX = (7 - nextCol) * 12;
-      const camTargetY = (7 - nextRow) * 12;
-      setCamZoom(1.18);
-      setCamX(camTargetX);
-      setCamY(camTargetY);
-
       // Orientation turn rotation
       const dx = nextCol - currentCol;
       const dy = nextRow - currentRow;
@@ -778,17 +760,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       else if (dy > 0) rotation = 90;  // Facing Down
       else if (dy < 0) rotation = 270; // Facing Up
 
-      console.log(`📍 [STEP ${stepIndex + 1}/${path.length}]: Token ${key} walking from (${currentCol}, ${currentRow}) -> (${nextCol}, ${nextRow}) | Facing: ${rotation}°`);
-
       currentCol = nextCol;
       currentRow = nextRow;
 
       const stepVisualState: VisualToken = {
         col: nextCol,
         row: nextRow,
-        scale: 1.15,
+        scale: 1.0,
         rotation,
-        translateY: -16, // Hop lift
+        translateY: 0,
         isMoving: true,
         isCaptured: false
       };
@@ -797,16 +777,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setVisualTokens({ ...visualTokensRef.current });
 
       audioRef.current?.playStep();
-      spawnParticles(nextCol, nextRow, 'dust', 3);
-
-      setTimeout(() => {
-        const cur = visualTokensRef.current[key];
-        if (cur) {
-          const grounded = { ...cur, translateY: 0, scale: 1.0 };
-          visualTokensRef.current[key] = grounded;
-          setVisualTokens({ ...visualTokensRef.current });
-        }
-      }, intervalTime / 2);
 
       stepIndex++;
       setTimeout(takeStep, intervalTime);
@@ -2276,7 +2246,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible}
                     className={`absolute select-none ${
-                      visual?.isMoving ? 'transition-none' : 'transition-all duration-150 ease-out'
+                      visual?.isMoving ? 'transition-all duration-75 ease-linear' : 'transition-all duration-150 ease-out'
                     } ${
                       isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
@@ -2286,6 +2256,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                       width: 'calc(100% / 15)',
                       height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
+                      willChange: 'left, top, transform',
                     }}
                   >
                     {/* Tiny Pixar-Style Human Model */}
