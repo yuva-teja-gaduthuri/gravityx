@@ -319,7 +319,6 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
         });
         setTimeout(() => setGuessResult(null), 3000);
       }
-      setGuesses(prev => prev + 1);
     });
 
     socket.on('rs_round_ended', (data: any) => {
@@ -393,6 +392,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
     if (targetPlayerId === user.id || revealedIds.includes(targetPlayerId)) return;
 
     setHasGuessed(true);
+    setGuesses(1);
     socket.emit('rs_guess', {
       roomCode,
       targetUserId: targetPlayerId
