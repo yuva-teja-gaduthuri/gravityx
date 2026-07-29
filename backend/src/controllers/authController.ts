@@ -524,8 +524,57 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const matchesPlayed = (user.matchPlayers || []).length;
-    const wins = (user.matchPlayers || []).filter((mp: any) => mp.placement === 1).length;
+    // Deduplicate match history records for strict match accuracy
+    const uniqueMatchPlayers: any[] = [];
+    const seenMatchIds = new Set<string>();
+    const duplicateMatchPlayerIds: string[] = [];
+    const duplicateMatchIds: string[] = [];
+
+    for (const mp of (user.matchPlayers || [])) {
+      // 1. Check for duplicate MatchPlayer entry with exact same matchId
+      if (seenMatchIds.has(mp.matchId)) {
+        duplicateMatchPlayerIds.push(mp.id);
+        continue;
+      }
+
+      // 2. Check for near-duplicate Match entry created within 10s window with identical attributes
+      const isDuplicateMatch = uniqueMatchPlayers.some((existingMp) => {
+        if (!mp.match || !existingMp.match) return false;
+        const sameGame = mp.match.gameType === existingMp.match.gameType;
+        const samePlacement = mp.placement === existingMp.placement;
+        const sameScore = mp.score === existingMp.score;
+        const sameCoins = mp.coinsEarned === existingMp.coinsEarned;
+        const timeDiffMs = Math.abs(
+          new Date(mp.match.createdAt || mp.createdAt).getTime() - 
+          new Date(existingMp.match.createdAt || existingMp.createdAt).getTime()
+        );
+        return sameGame && samePlacement && sameScore && sameCoins && timeDiffMs < 10000;
+      });
+
+      if (isDuplicateMatch) {
+        duplicateMatchPlayerIds.push(mp.id);
+        if (mp.matchId) duplicateMatchIds.push(mp.matchId);
+        continue;
+      }
+
+      seenMatchIds.add(mp.matchId);
+      uniqueMatchPlayers.push(mp);
+    }
+
+    // Clean up duplicate entries from database asynchronously
+    if (duplicateMatchPlayerIds.length > 0) {
+      prisma.matchPlayer.deleteMany({
+        where: { id: { in: duplicateMatchPlayerIds } },
+      }).catch((err) => console.error('Error deleting duplicate matchPlayers:', err));
+    }
+    if (duplicateMatchIds.length > 0) {
+      prisma.match.deleteMany({
+        where: { id: { in: duplicateMatchIds } },
+      }).catch((err) => console.error('Error deleting duplicate matches:', err));
+    }
+
+    const matchesPlayed = uniqueMatchPlayers.length;
+    const wins = uniqueMatchPlayers.filter((mp: any) => mp.placement === 1).length;
     const losses = matchesPlayed - wins;
     const winRate = matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0;
 
@@ -557,14 +606,14 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
       },
       inventory: (user.inventory || []).map((inv: any) => inv.item),
       achievements: (user.achievements || []).map((ach: any) => ach.achievement),
-      matchHistory: (user.matchPlayers || []).map((mp: any) => ({
+      matchHistory: uniqueMatchPlayers.map((mp: any) => ({
         matchId: mp.matchId,
         gameType: mp.match?.gameType,
         score: mp.score,
         coinsEarned: mp.coinsEarned,
         placement: mp.placement,
-        date: mp.match?.createdAt,
-        status: mp.match?.status,
+        date: mp.match?.createdAt || mp.createdAt,
+        status: mp.match?.status || 'COMPLETED',
       })),
     });
   } catch (error: any) {
