@@ -21,7 +21,7 @@ export interface Room {
   voiceChat: boolean;
   allowSpectators: boolean;
   hostId: string;
-  status: 'LOBBY' | 'PLAYING';
+  status: 'LOBBY' | 'PLAYING' | 'FINISHED';
   players: Player[];
   spectators: string[];
   gameState: any; // polymorphic game state representation
@@ -140,7 +140,7 @@ class RoomStore {
     return room;
   }
 
-  updateRoomStatus(code: string, status: 'LOBBY' | 'PLAYING'): Room | undefined {
+  updateRoomStatus(code: string, status: 'LOBBY' | 'PLAYING' | 'FINISHED'): Room | undefined {
     const room = this.rooms.get(code);
     if (!room) return undefined;
     room.status = status;

@@ -64,16 +64,16 @@ const TRACK_COORDINATES: { [idx: number]: [number, number] } = {
 
 const STRETCH_COORDINATES: { [color: string]: { [idx: number]: [number, number] } } = {
   red: {
-    52: [1, 7], 53: [2, 7], 54: [3, 7], 55: [4, 7], 56: [5, 7], 57: [6, 7], 58: [7, 7]
+    52: [1, 7], 53: [2, 7], 54: [3, 7], 55: [4, 7], 56: [5, 7], 57: [7, 7]
   },
   green: {
-    52: [7, 1], 53: [7, 2], 54: [7, 3], 55: [7, 4], 56: [7, 5], 57: [7, 6], 58: [7, 7]
+    52: [7, 1], 53: [7, 2], 54: [7, 3], 55: [7, 4], 56: [7, 5], 57: [7, 7]
   },
   yellow: {
-    52: [13, 7], 53: [12, 7], 54: [11, 7], 55: [10, 7], 56: [9, 7], 57: [8, 7], 58: [7, 7]
+    52: [13, 7], 53: [12, 7], 54: [11, 7], 55: [10, 7], 56: [9, 7], 57: [7, 7]
   },
   blue: {
-    52: [7, 13], 53: [7, 12], 54: [7, 11], 55: [7, 10], 56: [7, 9], 57: [7, 8], 58: [7, 7]
+    52: [7, 13], 53: [7, 12], 54: [7, 11], 55: [7, 10], 56: [7, 9], 57: [7, 7]
   }
 };
 
@@ -565,7 +565,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       let temp = startCell;
       const config = COLOR_CONFIGS[color];
       let enteredStretch = false;
-      for (let i = 0; i < 58; i++) {
+      for (let i = 0; i < 57; i++) {
         if (temp === endPos) break;
         if (temp === config.lastCell) {
           temp = config.stretchStart;
@@ -585,7 +585,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let temp = startPos;
     let enteredStretch = startPos >= 52;
     
-    for (let i = 0; i < 58; i++) {
+    for (let i = 0; i < 57; i++) {
       if (temp === endPos) break;
       
       if (temp === config.lastCell) {
@@ -613,7 +613,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     // Add initial capture cell coordinate
     coordsList.push(getTokenCoords(color, tokenId, currentPos));
 
-    // If in stretch (52..58)
+    // If in stretch (52..57)
     if (currentPos >= 52) {
       while (currentPos > 52) {
         currentPos--;
@@ -636,7 +636,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     return coordsList;
   };
 
-  // Handlers for step-by-step walking animations
   // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
@@ -729,7 +728,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         spawnParticles(finalCol, finalRow, 'sparkle', 4);
 
         // Home entry visual celebration
-        if (finalPos === 58) {
+        if (finalPos === 57) {
           audioRef.current?.playHome();
           triggerFireworks(7, 7);
           confetti({ particleCount: 50, spread: 60, origin: { x: 0.5, y: 0.5 } });
@@ -976,13 +975,21 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     socket.on('ludo_token_moved', (data: any) => {
       setValidTokens([]); // Prevent duplicate movement clicks during animation
 
+      if (data.players) {
+        setGameState(prev => prev ? {
+          ...prev,
+          players: data.players,
+          activePlayerIndex: data.activePlayerIndex !== undefined ? data.activePlayerIndex : prev.activePlayerIndex
+        } : prev);
+      }
+
       const currentGS = gameStateRef.current;
-      if (!currentGS) return;
-      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
-      const activePlayer = currentGS.players[activePlayerIndex];
+      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : (currentGS ? currentGS.activePlayerIndex : 0);
+      const playersList = data.players || currentGS?.players;
+      const activePlayer = playersList ? playersList[activePlayerIndex] : null;
       if (!activePlayer) return;
       
-      const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
+      const currentToken = activePlayer.tokens.find((t: any) => t.id === data.tokenId);
       const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
 
@@ -1211,7 +1218,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       return BASE_COORDINATES[playerColor][tokenId];
     } else if (position >= 0 && position <= 51) {
       return TRACK_COORDINATES[position];
-    } else if (position >= 52 && position <= 58) {
+    } else if (position >= 52 && position <= 57) {
       return STRETCH_COORDINATES[playerColor][position];
     }
     return [7, 7];
@@ -2248,7 +2255,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 }
 
                 const isSafeCell = t.position !== -1 && SAFE_CELLS.includes(t.position);
-                const isWinnerCelebration = t.position === 58;
+                const isWinnerCelebration = t.position === 57;
 
                 const itemCol = visual?.col ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][0] : col);
                 const itemRow = visual?.row ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][1] : row);
@@ -2258,8 +2265,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
                     disabled={!isTokenEligible || p.isEliminated}
-                    className={`absolute select-none ${
-                      visual?.isMoving ? (isSpeedUp ? `transition-all duration-[${FAST_STEP_DURATION}ms] ease-linear` : `transition-all duration-[${NORMAL_STEP_DURATION}ms] ease-linear`) : 'transition-all duration-100 ease-out'
+                    className={`absolute select-none transition-all ${
+                      visual?.isMoving ? 'ease-linear' : 'ease-out'
                     } ${
                       isTokenEligible && !p.isEliminated ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
@@ -2269,6 +2276,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                       width: 'calc(100% / 15)',
                       height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
+                      transitionDuration: visual?.isMoving ? `${isSpeedUp ? FAST_STEP_DURATION : NORMAL_STEP_DURATION}ms` : '100ms',
                       willChange: 'left, top, transform',
                     }}
                   >

@@ -153,6 +153,10 @@ export function startChessGame(io: Server, room: any) {
 
 async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gameState: ChessState) {
   try {
+    if (room.status === 'FINISHED' || (gameState as any).isEnded) return;
+    (gameState as any).isEnded = true;
+    roomStore.updateRoomStatus(roomCode, 'FINISHED');
+
     const scoreboardData: any[] = [];
 
     const dbMatch = await prisma.match.create({

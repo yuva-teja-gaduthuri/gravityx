@@ -462,6 +462,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
           },
           matchPlayers: {
             include: { match: true },
+            orderBy: { createdAt: 'desc' },
           },
         },
       });
