@@ -613,21 +613,31 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     if (currentPos >= 52) {
       while (currentPos > 52) {
         currentPos--;
-        coordsList.push(STRETCH_COORDINATES[color][currentPos]);
+        if (STRETCH_COORDINATES[color] && STRETCH_COORDINATES[color][currentPos]) {
+          coordsList.push(STRETCH_COORDINATES[color][currentPos]);
+        }
       }
       // Step out of stretch to lastCell
       currentPos = lastCell;
-      coordsList.push(TRACK_COORDINATES[currentPos]);
+      if (TRACK_COORDINATES[currentPos]) {
+        coordsList.push(TRACK_COORDINATES[currentPos]);
+      }
     }
 
     // Step backwards along main track until startCell is reached
-    while (currentPos !== startCell) {
+    let maxSteps = 0;
+    while (currentPos !== startCell && maxSteps < 60) {
       currentPos = (currentPos - 1 + 52) % 52;
-      coordsList.push(TRACK_COORDINATES[currentPos]);
+      if (TRACK_COORDINATES[currentPos]) {
+        coordsList.push(TRACK_COORDINATES[currentPos]);
+      }
+      maxSteps++;
     }
 
     // Final step: Home base yard coordinate slot
-    coordsList.push(BASE_COORDINATES[color][tokenId]);
+    if (BASE_COORDINATES[color] && BASE_COORDINATES[color][tokenId]) {
+      coordsList.push(BASE_COORDINATES[color][tokenId]);
+    }
 
     return coordsList;
   };
@@ -817,30 +827,46 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
   // Opponent captures walking loop (retracing path back to home base yard)
   const handleCaptureAnimation = (mainKey: string, capturePos: number, finalPlayersState: any) => {
-    if (!gameState) {
-      delete animatingTokensRef.current[mainKey];
-      return;
-    }
-    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    const currentGS = gameStateRef.current;
 
     let capturedKey = '';
     let targetBaseCoords: [number, number] = [0, 0];
     let opponentColor = '';
     let capturedTokenId = 0;
 
-    gameState.players.forEach((p) => {
-      if (p.id === activePlayer.id) return;
-      p.tokens.forEach((t) => {
-        const finalP = finalPlayersState.find((fp: any) => fp.id === p.id);
-        const finalT = finalP?.tokens.find((ft: any) => ft.id === t.id);
-        if (t.position === capturePos && finalT?.position === -1) {
-          capturedKey = `${p.color}-${t.id}`;
-          opponentColor = p.color;
-          capturedTokenId = t.id;
-          targetBaseCoords = BASE_COORDINATES[p.color][t.id];
-        }
+    // Search finalPlayersState for captured token
+    if (finalPlayersState && Array.isArray(finalPlayersState)) {
+      // First priority: find token with animating lock active
+      finalPlayersState.forEach((fp: any) => {
+        fp.tokens.forEach((ft: any) => {
+          const key = `${fp.color}-${ft.id}`;
+          if (ft.position === -1 && animatingTokensRef.current[key]) {
+            capturedKey = key;
+            opponentColor = fp.color;
+            capturedTokenId = ft.id;
+            targetBaseCoords = BASE_COORDINATES[fp.color][ft.id];
+          }
+        });
       });
-    });
+
+      // Second priority: state comparison matching
+      if (!capturedKey && currentGS) {
+        const activePlayer = currentGS.players[currentGS.activePlayerIndex];
+        currentGS.players.forEach((p) => {
+          if (activePlayer && p.id === activePlayer.id) return;
+          p.tokens.forEach((t) => {
+            const finalP = finalPlayersState.find((fp: any) => fp.id === p.id);
+            const finalT = finalP?.tokens.find((ft: any) => ft.id === t.id);
+            if (finalT?.position === -1 && (t.position === capturePos || t.position !== -1)) {
+              capturedKey = `${p.color}-${t.id}`;
+              opponentColor = p.color;
+              capturedTokenId = t.id;
+              targetBaseCoords = BASE_COORDINATES[p.color][t.id];
+            }
+          });
+        });
+      }
+    }
 
     if (capturedKey) {
       animatingTokensRef.current[capturedKey] = true;
@@ -1013,6 +1039,22 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const endPos = data.newPosition;
 
       if (endPos === undefined || endPos === null || isNaN(endPos)) return;
+
+      // Lock captured token immediately so useEffect does not snap it prematurely
+      if (data.captured && data.players && Array.isArray(data.players)) {
+        data.players.forEach((p: any) => {
+          if (p.id !== activePlayer.id) {
+            p.tokens.forEach((t: any) => {
+              const oldP = currentGS.players.find(gp => gp.id === p.id);
+              const oldT = oldP?.tokens.find(gt => gt.id === t.id);
+              if (t.position === -1 && (oldT?.position === endPos || oldT?.position !== -1)) {
+                const capKey = `${p.color}-${t.id}`;
+                animatingTokensRef.current[capKey] = true;
+              }
+            });
+          }
+        });
+      }
 
       // Build path sequence using authoritative startPos and endPos
       const path = getPathPositions(activePlayer.color, startPos, endPos);
@@ -2021,7 +2063,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Left Red Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '1 / 7' }}
-            className="bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative p-[16.66%]"
+            onClick={() => handleBaseYardClick('red')}
+            className={`bg-[#e53935] border-r-2 border-b-2 border-[#b71c1c] relative p-[16.66%] transition-all ${
+              isMyTurn && activePlayer.color === 'red' && activePlayer.tokens.some(t => t.position === -1 && validTokens.includes(t.id))
+                ? 'cursor-pointer ring-4 ring-white/80 animate-pulse'
+                : ''
+            }`}
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 left-2 drop-shadow z-0">RED</span>
             <div className="wood-base-yard w-full h-full relative">
@@ -2045,7 +2092,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Top-Right Green Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '1 / 7' }}
-            className="bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative p-[16.66%]"
+            onClick={() => handleBaseYardClick('green')}
+            className={`bg-[#43a047] border-l-2 border-b-2 border-[#1b5e20] relative p-[16.66%] transition-all ${
+              isMyTurn && activePlayer.color === 'green' && activePlayer.tokens.some(t => t.position === -1 && validTokens.includes(t.id))
+                ? 'cursor-pointer ring-4 ring-white/80 animate-pulse'
+                : ''
+            }`}
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute top-1.5 right-2 drop-shadow z-0">GREEN</span>
             <div className="wood-base-yard w-full h-full relative">
@@ -2069,7 +2121,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Left Blue Base Yard */}
           <div 
             style={{ gridColumn: '1 / 7', gridRow: '10 / 16' }}
-            className="bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative p-[16.66%]"
+            onClick={() => handleBaseYardClick('blue')}
+            className={`bg-[#1e88e5] border-r-2 border-t-2 border-[#0d47a1] relative p-[16.66%] transition-all ${
+              isMyTurn && activePlayer.color === 'blue' && activePlayer.tokens.some(t => t.position === -1 && validTokens.includes(t.id))
+                ? 'cursor-pointer ring-4 ring-white/80 animate-pulse'
+                : ''
+            }`}
           >
             <span className="text-white font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 left-2 drop-shadow z-0">BLUE</span>
             <div className="wood-base-yard w-full h-full relative">
@@ -2093,7 +2150,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           {/* Bottom-Right Yellow Base Yard */}
           <div 
             style={{ gridColumn: '10 / 16', gridRow: '10 / 16' }}
-            className="bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative p-[16.66%]"
+            onClick={() => handleBaseYardClick('yellow')}
+            className={`bg-[#fdd835] border-l-2 border-t-2 border-[#f57f17] relative p-[16.66%] transition-all ${
+              isMyTurn && activePlayer.color === 'yellow' && activePlayer.tokens.some(t => t.position === -1 && validTokens.includes(t.id))
+                ? 'cursor-pointer ring-4 ring-white/80 animate-pulse'
+                : ''
+            }`}
           >
             <span className="text-[#1a0802] font-black text-[9px] sm:text-xs uppercase tracking-widest absolute bottom-1.5 right-2 drop-shadow z-0">YELLOW</span>
             <div className="wood-base-yard w-full h-full relative">
