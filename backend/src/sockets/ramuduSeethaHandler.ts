@@ -234,6 +234,10 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         };
       });
 
+    if (room.status === 'FINISHED' || (room.gameState && (room.gameState as any).isEnded)) return;
+    if (room.gameState) (room.gameState as any).isEnded = true;
+    roomStore.updateRoomStatus(room.code, 'FINISHED');
+
     // Record Match in DB & Award stats
     const match = await prisma.match.create({
       data: {

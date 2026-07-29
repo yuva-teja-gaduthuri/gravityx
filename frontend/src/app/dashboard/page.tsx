@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [voiceChat, setVoiceChat] = useState(false);
   const [allowSpectators, setAllowSpectators] = useState(false);
+  const [chessTimeControl, setChessTimeControl] = useState<number | 'UNLIMITED'>('UNLIMITED');
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [createError, setCreateError] = useState('');
@@ -306,12 +307,7 @@ export default function Dashboard() {
     setCreateError('');
     if (!user || !socket) return;
 
-    if (selectedGame === 'CHESS') {
-      setCreateError('Chess Strategy module is locked and deploying soon!');
-      return;
-    }
-
-    const finalMaxPlayers = selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
+    const finalMaxPlayers = selectedGame === 'CHESS' ? 2 : selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
 
     socket.emit('create_room', {
       userId: user.id,
@@ -322,6 +318,7 @@ export default function Dashboard() {
       maxPlayers: finalMaxPlayers,
       voiceChat,
       allowSpectators,
+      timeControl: selectedGame === 'CHESS' ? chessTimeControl : undefined,
     });
   };
 
@@ -698,31 +695,28 @@ export default function Dashboard() {
               {/* Chess Card */}
               <div className="flex flex-col gap-4">
                 <div 
-                  onClick={() => alert("Chess Game module is deploying soon! Stay tuned.")}
-                  className="glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] opacity-60 hover:-translate-y-2 transition-all duration-300"
+                  onClick={() => setExpandedGame(expandedGame === 'CHESS' ? null : 'CHESS')}
+                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cybergold group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-gold duration-300 ${expandedGame === 'CHESS' ? 'border-cybergold shadow-neon-gold ring-1 ring-cybergold' : ''}`}
                   style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
                 >
-                  <div className="absolute inset-0 bg-[#050816]/75 flex flex-col items-center justify-center z-10">
-                    <Lock className="text-cyberpink mb-2 animate-pulse" size={24} />
-                    <span className="text-[9px] font-black uppercase text-cyberpink tracking-widest">Launching Soon</span>
-                  </div>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cybergold/5 rounded-full blur-3xl group-hover:bg-cybergold/10 transition-all"></div>
 
                   {/* Artwork Top */}
                   <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                    <span className="text-4xl filter drop-shadow-neon-gold">♟️</span>
+                    <span className="text-4xl filter drop-shadow-neon-gold transform group-hover:scale-110 transition-all duration-300">♟️</span>
                     <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
                       tactical
                     </span>
                   </div>
 
                   <div>
-                    <h4 className="font-extrabold text-lg mt-3 text-white">Chess Strategy</h4>
-                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess.</p>
+                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cybergold transition-colors">Chess Strategy</h4>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess with high contrast pure pieces.</p>
                   </div>
 
                   <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                     <span>2 Players</span>
-                    <span className="text-gray-500 font-black">LOCKED</span>
+                    <span className="text-cybergold font-black">{expandedGame === 'CHESS' ? 'Close Panel' : 'Control Deck'}</span>
                   </div>
                 </div>
                 {expandedGame === 'CHESS' && (
@@ -847,7 +841,7 @@ export default function Dashboard() {
                   >
                     <option value="RAMUDU_SEETHA">Ramudu-Seetha</option>
                     <option value="LUDO">Cosmic Ludo</option>
-                    <option value="CHESS" disabled>Chess Strategy (Locked 🔒)</option>
+                    <option value="CHESS">Chess Strategy ♟️</option>
                   </select>
                 </div>
                 <div>
@@ -899,16 +893,34 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Turn Timer Speed</label>
-                  <select 
-                    value={turnTimer}
-                    onChange={(e) => setTurnTimer(Number(e.target.value))}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
-                  >
-                    <option value={15}>15s (Blitz)</option>
-                    <option value={30}>30s (Normal)</option>
-                    <option value={60}>60s (Slow)</option>
-                  </select>
+                  <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
+                    {selectedGame === 'CHESS' ? 'Chess Time Control' : 'Turn Timer Speed'}
+                  </label>
+                  {selectedGame === 'CHESS' ? (
+                    <select
+                      value={chessTimeControl}
+                      onChange={(e) => setChessTimeControl(e.target.value === 'UNLIMITED' ? 'UNLIMITED' : Number(e.target.value))}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cybergold font-bold text-white bg-slate-900"
+                    >
+                      <option value="UNLIMITED">∞ Unlimited (No Timer)</option>
+                      <option value={60}>⚡ 1 Min (Bullet)</option>
+                      <option value={180}>🔥 3 Min (Blitz)</option>
+                      <option value={300}>🎯 5 Min (Blitz)</option>
+                      <option value={600}>⏳ 10 Min (Rapid)</option>
+                      <option value={900}>🏆 15 Min</option>
+                      <option value={1800}>👑 30 Min</option>
+                    </select>
+                  ) : (
+                    <select 
+                      value={turnTimer}
+                      onChange={(e) => setTurnTimer(Number(e.target.value))}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                    >
+                      <option value={15}>15s (Blitz)</option>
+                      <option value={30}>30s (Normal)</option>
+                      <option value={60}>60s (Slow)</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

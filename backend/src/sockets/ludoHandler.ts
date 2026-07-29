@@ -5,7 +5,7 @@ import { awardUserStats } from '../utils/gameHelpers';
 
 interface LudoToken {
   id: number; // 0, 1, 2, 3
-  position: number; // -1 = Home yard, 0..51 = Main track, 52..57 = Home stretch, 58 = Home triangle (done)
+  position: number; // -1 = Home yard, 0..51 = Main track, 52..56 = Home stretch, 57 = Home triangle (done)
 }
 
 interface LudoPlayer {
@@ -19,6 +19,7 @@ interface LudoPlayer {
   stretchStart: number; // position value offset for stretch
   tokens: LudoToken[];
   isWinner: boolean;
+  isEliminated?: boolean;
   placement?: number;
   unturnedMoves?: number;
 }
@@ -32,6 +33,8 @@ interface LudoState {
   turnTimerDuration?: number;
   startTime: number;
   consecutiveSixes: number;
+  turnToken?: number;
+  isEnded?: boolean;
 }
 
 const COLOR_CONFIGS = {
@@ -109,8 +112,14 @@ export function handleLudo(io: Server, socket: Socket) {
             { id: 3, position: -1 },
           ],
           isWinner: false,
+          isEliminated: false,
+          unturnedMoves: 0,
         };
       });
+
+      // Sort players in canonical clockwise order: RED -> GREEN -> YELLOW -> BLUE
+      const COLOR_ORDER: ('red' | 'green' | 'yellow' | 'blue')[] = ['red', 'green', 'yellow', 'blue'];
+      ludoPlayers.sort((a, b) => COLOR_ORDER.indexOf(a.color) - COLOR_ORDER.indexOf(b.color));
 
       const gameState: LudoState = {
         players: ludoPlayers,
@@ -120,6 +129,8 @@ export function handleLudo(io: Server, socket: Socket) {
         turnTimeLeft: TURN_TIMEOUT,
         startTime: Date.now(),
         consecutiveSixes: 0,
+        turnToken: 1,
+        isEnded: false,
       };
 
       roomStore.updateGameState(upperCode, gameState);
@@ -159,13 +170,17 @@ export function handleLudo(io: Server, socket: Socket) {
       if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Game not active');
 
       const state = room.gameState as LudoState;
-      if (!state) return socket.emit('error', 'Ludo game state missing');
+      if (!state || state.isEnded) return socket.emit('error', 'Ludo game state missing or ended');
 
       const activePlayer = state.players[state.activePlayerIndex];
       const playerSocket = room.players.find((p) => p.id === activePlayer.id);
 
       if (!playerSocket || playerSocket.socketId !== socket.id) {
         return socket.emit('error', "It's not your turn");
+      }
+
+      if (activePlayer.isEliminated) {
+        return socket.emit('error', 'You have been eliminated from this match');
       }
 
       if (state.hasRolled) {
@@ -176,7 +191,6 @@ export function handleLudo(io: Server, socket: Socket) {
       const roll = Math.floor(Math.random() * 6) + 1;
       state.diceValue = roll;
       state.hasRolled = true;
-      activePlayer.unturnedMoves = 0;
 
       // Rule: Three consecutive sixes loses turn
       if (roll === 6) {
@@ -185,7 +199,7 @@ export function handleLudo(io: Server, socket: Socket) {
           state.consecutiveSixes = 0;
           state.diceValue = null;
           state.hasRolled = false;
-          nextTurn(io, upperCode);
+          nextTurn(io, upperCode, state.turnToken);
           return;
         }
       } else {
@@ -200,15 +214,19 @@ export function handleLudo(io: Server, socket: Socket) {
         activePlayerIndex: state.activePlayerIndex,
         validTokens: validMoves,
       });
+      io.to(upperCode).emit('ludo_state_sync', state);
 
       // Reset turn timer for movement decision
       resetTurnTimer(io, upperCode);
 
-      // If no valid moves, automatically switch turns after 2 seconds
+      // If no valid moves, player has completed their turn phase per game rules -> reset unturnedMoves counter
       if (validMoves.length === 0) {
+        activePlayer.unturnedMoves = 0;
+        io.to(upperCode).emit('ludo_state_sync', state);
+        const currentToken = state.turnToken;
         setTimeout(() => {
-          nextTurn(io, upperCode);
-        }, 1500);
+          nextTurn(io, upperCode, currentToken);
+        }, 500);
       }
     } catch (err: any) {
       socket.emit('error', err.message);
@@ -223,7 +241,7 @@ export function handleLudo(io: Server, socket: Socket) {
       if (!room || room.status !== 'PLAYING') return socket.emit('error', 'Game not active');
 
       const state = room.gameState as LudoState;
-      if (!state || !state.hasRolled || state.diceValue === null) {
+      if (!state || state.isEnded || !state.hasRolled || state.diceValue === null) {
         return socket.emit('error', 'Invalid move parameters');
       }
 
@@ -232,6 +250,10 @@ export function handleLudo(io: Server, socket: Socket) {
 
       if (!playerSocket || playerSocket.socketId !== socket.id) {
         return socket.emit('error', "It's not your turn");
+      }
+
+      if (activePlayer.isEliminated) {
+        return socket.emit('error', 'You have been eliminated from this match');
       }
 
       const validTokens = getValidTokensToMove(activePlayer, state.diceValue);
@@ -254,14 +276,13 @@ export function handleLudo(io: Server, socket: Socket) {
         }
       } else if (token.position >= 0 && token.position <= 51) {
         // On main track
-        let stepsMoved = 0;
         let tempPos = token.position;
         let enteredStretch = false;
 
         for (let i = 0; i < dice; i++) {
           if (tempPos === activePlayer.lastCell) {
-            // Enter home stretch
-            tempPos = activePlayer.stretchStart; // position 52
+            // Enter home stretch (position 52)
+            tempPos = activePlayer.stretchStart;
             enteredStretch = true;
           } else if (enteredStretch) {
             tempPos += 1;
@@ -270,15 +291,20 @@ export function handleLudo(io: Server, socket: Socket) {
           }
         }
         newPosition = tempPos;
-      } else if (token.position >= 52 && token.position <= 57) {
-        // In home stretch
+      } else if (token.position >= 52 && token.position <= 56) {
+        // In home stretch (52..56 -> 57 Goal)
         newPosition = token.position + dice;
+      }
+
+      if (newPosition > 57) {
+        return socket.emit('error', 'Token movement overshoots goal');
       }
 
       token.position = newPosition;
 
       // Handle collision (capturing opponent tokens)
       let captured = false;
+      let capturedTokenInfo: { color: string; tokenId: number } | null = null;
       if (newPosition >= 0 && newPosition <= 51 && !SAFE_CELLS.includes(newPosition)) {
         // Find other players tokens on same cell
         state.players.forEach((p) => {
@@ -288,50 +314,54 @@ export function handleLudo(io: Server, socket: Socket) {
                 // Landed on opponent token! Knock back to yard
                 t.position = -1;
                 captured = true;
+                capturedTokenInfo = { color: p.color, tokenId: t.id };
               }
             });
           }
         });
       }
 
-      // Check if player won / token reached home (58)
-      if (newPosition === 58) {
+      // Check if player won / token reached goal (57)
+      const reachedGoal = (newPosition === 57);
+      if (reachedGoal) {
         // check if all tokens finished
-        const allFinished = activePlayer.tokens.every((t) => t.position === 58);
+        const allFinished = activePlayer.tokens.every((t) => t.position === 57);
         if (allFinished && !activePlayer.isWinner) {
           activePlayer.isWinner = true;
           // Count winners to determine placement
           const winnersCount = state.players.filter((p) => p.isWinner).length;
           activePlayer.placement = winnersCount;
 
-          io.to(roomCode).emit('ludo_player_won', {
+          io.to(upperCode).emit('ludo_player_won', {
             playerId: activePlayer.id,
             placement: winnersCount,
           });
 
           // Check if game should end (only one player/no active players left)
-          const activePlayersCount = state.players.filter((p) => !p.isWinner).length;
+          const activePlayersCount = state.players.filter((p) => !p.isWinner && !p.isEliminated).length;
           if (activePlayersCount <= 1) {
-            await endLudoGame(io, roomCode, state);
+            await endLudoGame(io, upperCode, state);
             return;
           }
         }
       }
 
-      console.log(`🎲 [LUDO MOVE]: Player ${activePlayer.username} (${activePlayer.color}) moved token ${tokenId} from ${oldPosition} -> ${newPosition} (Dice: ${dice}, Captured: ${captured})`);
+      console.log(`🎲 [LUDO MOVE]: Player ${activePlayer.username} (${activePlayer.color}) moved token ${tokenId} from ${oldPosition} -> ${newPosition} (Dice: ${dice}, Captured: ${captured}, Reached Goal: ${reachedGoal})`);
 
-      // Broadcast move animation update
-      io.to(roomCode).emit('ludo_token_moved', {
+      // Broadcast move animation update and full state sync so all clients update visually in real time
+      io.to(upperCode).emit('ludo_token_moved', {
         activePlayerIndex: state.activePlayerIndex,
         tokenId,
         oldPosition,
         newPosition,
         captured,
+        capturedToken: capturedTokenInfo,
         players: state.players,
       });
+      io.to(upperCode).emit('ludo_state_sync', state);
 
-      // Rule: Rolling a 6 or capturing a token awards a bonus turn
-      const awardBonus = (dice === 6 || captured) && !activePlayer.isWinner;
+      // Rule: Rolling a 6, capturing a token, or landing a token in Goal awards a bonus turn
+      const awardBonus = (dice === 6 || captured || reachedGoal) && !activePlayer.isWinner && !activePlayer.isEliminated;
 
       if (awardBonus) {
         // Reset dice rolled state and stay on same player turn
@@ -351,7 +381,7 @@ export function handleLudo(io: Server, socket: Socket) {
           triggerBotTurn(io, upperCode, state.activePlayerIndex);
         }
       } else {
-        nextTurn(io, upperCode);
+        nextTurn(io, upperCode, state.turnToken);
       }
     } catch (err: any) {
       socket.emit('error', err.message);
@@ -406,12 +436,26 @@ function getValidTokensToMove(player: LudoPlayer, dice: number): number[] {
     }
     // If token is on track
     else if (t.position >= 0 && t.position <= 51) {
-      valid.push(t.id); // track positions can always move
+      let tempPos = t.position;
+      let enteredStretch = false;
+      for (let i = 0; i < dice; i++) {
+        if (tempPos === player.lastCell) {
+          tempPos = player.stretchStart; // position 52
+          enteredStretch = true;
+        } else if (enteredStretch) {
+          tempPos += 1;
+        } else {
+          tempPos = (tempPos + 1) % 52;
+        }
+      }
+      if (tempPos <= 57) {
+        valid.push(t.id);
+      }
     }
-    // If token is in home stretch (52..57)
-    else if (t.position >= 52 && t.position <= 57) {
-      // Must land exactly on 58
-      if (t.position + dice <= 58) {
+    // If token is in home stretch (52..56)
+    else if (t.position >= 52 && t.position <= 56) {
+      // Must land exactly on or before 57 (Goal)
+      if (t.position + dice <= 57) {
         valid.push(t.id);
       }
     }
@@ -420,24 +464,42 @@ function getValidTokensToMove(player: LudoPlayer, dice: number): number[] {
   return valid;
 }
 
-function nextTurn(io: Server, roomCode: string) {
+function nextTurn(io: Server, roomCode: string, expectedTurnToken?: number) {
   const room = roomStore.getRoom(roomCode);
   if (!room) return;
 
   const state = room.gameState as LudoState;
-  if (!state) return;
+  if (!state || state.isEnded) return;
+
+  // Guard against stale turn callbacks or duplicate executions
+  if (expectedTurnToken !== undefined && state.turnToken !== expectedTurnToken) {
+    return;
+  }
+
+  // Increment turn token to lock this new turn
+  state.turnToken = (state.turnToken || 0) + 1;
 
   // Clear previous dice rolled state
   state.diceValue = null;
   state.hasRolled = false;
 
-  // Move to next player index (skip winners)
+  // Check remaining active players (neither winner nor eliminated)
+  const remainingActive = state.players.filter((p) => !p.isWinner && !p.isEliminated);
+  if (remainingActive.length <= 1) {
+    endLudoGame(io, roomCode, state);
+    return;
+  }
+
+  // Move to next player index in clockwise order (skip winners and eliminated players)
   let nextIndex = state.activePlayerIndex;
   let attempts = 0;
   do {
     nextIndex = (nextIndex + 1) % state.players.length;
     attempts += 1;
-  } while (state.players[nextIndex].isWinner && attempts < state.players.length);
+  } while (
+    (state.players[nextIndex].isWinner || state.players[nextIndex].isEliminated) &&
+    attempts < state.players.length
+  );
 
   state.activePlayerIndex = nextIndex;
 
@@ -446,6 +508,7 @@ function nextTurn(io: Server, roomCode: string) {
     diceValue: null,
     hasRolled: false,
   });
+  io.to(roomCode).emit('ludo_state_sync', state);
 
   resetTurnTimer(io, roomCode);
 
@@ -468,7 +531,7 @@ function startTurnTimer(io: Server, roomCode: string) {
     }
 
     const state = room.gameState as LudoState;
-    if (!state) {
+    if (!state || state.isEnded) {
       clearInterval(activeTimers[roomCode]);
       return;
     }
@@ -478,13 +541,11 @@ function startTurnTimer(io: Server, roomCode: string) {
 
     if (state.turnTimeLeft <= 0) {
       const activePlayer = state.players[state.activePlayerIndex];
+      const currentToken = state.turnToken;
 
       // Only increment missed turn counter once per player turn cycle (when turn times out before rolling)
       if (!state.hasRolled) {
         activePlayer.unturnedMoves = (activePlayer.unturnedMoves || 0) + 1;
-
-        // Broadcast state sync so all clients receive updated unturnedMoves count
-        io.to(roomCode).emit('ludo_state_sync', state);
 
         io.to(roomCode).emit('chat_message', {
           id: Math.random().toString(),
@@ -493,96 +554,34 @@ function startTurnTimer(io: Server, roomCode: string) {
           createdAt: new Date(),
         });
 
-        // If 5 consecutive unturned moves, kick/forfeit player for inactivity
+        // Broadcast state sync so all clients receive updated unturnedMoves count immediately
+        io.to(roomCode).emit('ludo_state_sync', state);
+
+        // If 5 missed turns, eliminate player from match
         if (activePlayer.unturnedMoves >= 5) {
-          activePlayer.isWinner = true; // Mark as done to skip turn loop
-          activePlayer.placement = state.players.filter((p) => p.isWinner).length;
-          
+          activePlayer.isEliminated = true;
+
           io.to(roomCode).emit('chat_message', {
             id: Math.random().toString(),
             senderName: 'SYSTEM',
-            content: `🚨 ${activePlayer.username} left the game due to 5 consecutive unturned moves.`,
+            content: `🚨 ${activePlayer.username} has been eliminated due to 5 consecutive missed turns.`,
             createdAt: new Date(),
           });
 
           io.to(activePlayer.socketId).emit('room_kicked', { 
-            message: 'You have been removed from the game due to 5 consecutive unturned moves.' 
+            message: 'You have been eliminated from the game due to 5 consecutive missed turns.' 
           });
 
-          nextTurn(io, roomCode);
-          return;
-        }
-
-        // Auto Roll / Auto Move if timeout
-        const roll = Math.floor(Math.random() * 6) + 1;
-        state.diceValue = roll;
-        state.hasRolled = true;
-        state.consecutiveSixes = 0;
-
-        const validMoves = getValidTokensToMove(activePlayer, roll);
-
-        io.to(roomCode).emit('ludo_dice_rolled', {
-          diceValue: roll,
-          activePlayerIndex: state.activePlayerIndex,
-          validTokens: validMoves,
-        });
-
-        // Trigger next turn automatically after 1.5 seconds if no valid moves
-        if (validMoves.length === 0) {
-          setTimeout(() => {
-            nextTurn(io, roomCode);
-          }, 1500);
+          // Broadcast updated state after elimination
+          io.to(roomCode).emit('ludo_state_sync', state);
+          nextTurn(io, roomCode, currentToken);
         } else {
-          // Force move the first valid token automatically after 2 seconds
-          setTimeout(() => {
-            const currentRoom = roomStore.getRoom(roomCode);
-            if (currentRoom && currentRoom.status === 'PLAYING') {
-              const curState = currentRoom.gameState as LudoState;
-              if (curState && curState.activePlayerIndex === state.activePlayerIndex && curState.hasRolled) {
-                const firstToken = validMoves[0];
-                const activePl = curState.players[curState.activePlayerIndex];
-                const token = activePl.tokens.find((t) => t.id === firstToken)!;
-                const oldPos = token.position;
-                let newPos = token.position;
-                if (token.position === -1 && roll === 6) newPos = activePl.startCell;
-                else if (token.position >= 0 && token.position <= 51) {
-                  let temp = token.position;
-                  let entered = false;
-                  for (let i=0; i<roll; i++) {
-                    if (temp === activePl.lastCell) { temp = activePl.stretchStart; entered = true; }
-                    else if (entered) temp += 1;
-                    else temp = (temp + 1) % 52;
-                  }
-                  newPos = temp;
-                } else if (token.position >= 52 && token.position <= 57) newPos = token.position + roll;
-
-                token.position = newPos;
-
-                if (newPos >= 0 && newPos <= 51 && !SAFE_CELLS.includes(newPos)) {
-                  curState.players.forEach(p => {
-                    if (p.id !== activePl.id) p.tokens.forEach(t => { if (t.position === newPos) t.position = -1; });
-                  });
-                }
-
-                io.to(roomCode).emit('ludo_token_moved', {
-                  activePlayerIndex: curState.activePlayerIndex,
-                  tokenId: firstToken,
-                  oldPosition: oldPos,
-                  newPosition: newPos,
-                  captured: false,
-                  players: curState.players,
-                });
-
-                setTimeout(() => {
-                  nextTurn(io, roomCode);
-                }, 1000);
-              }
-            }
-          }, 2000);
+          // Auto-play turn for timed-out player
+          triggerBotTurn(io, roomCode, state.activePlayerIndex);
         }
       } else {
-        // If movement phase timer expired, move turn to next player without duplicate increment
-        nextTurn(io, roomCode);
+        // If dice was rolled but movement timed out, trigger bot logic to move token
+        triggerBotTurn(io, roomCode, state.activePlayerIndex);
       }
     }
   }, 1000);
@@ -597,18 +596,18 @@ function resetTurnTimer(io: Server, roomCode: string) {
 }
 
 async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
+  if (state.isEnded) return;
+  state.isEnded = true;
+
   if (activeTimers[roomCode]) clearInterval(activeTimers[roomCode]);
 
   const room = roomStore.getRoom(roomCode);
   if (!room) return;
 
+  roomStore.updateRoomStatus(roomCode, 'FINISHED');
+
   const duration = Math.floor((Date.now() - state.startTime) / 1000);
 
-  // Determine ranking and award stats
-  // First place: 1000 XP, 200 Coins
-  // Second place: 500 XP, 100 Coins
-  // Third place: 300 XP, 50 Coins
-  // Fourth place: 100 XP, 25 Coins
   const placementsRewards = [
     { xp: 500, coins: 200 },
     { xp: 250, coins: 100 },
@@ -621,6 +620,9 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
     if (a.isWinner && b.isWinner) return (a.placement || 0) - (b.placement || 0);
     if (a.isWinner) return -1;
     if (b.isWinner) return 1;
+
+    if (a.isEliminated && !b.isEliminated) return 1;
+    if (!a.isEliminated && b.isEliminated) return -1;
 
     // Calculate sum of distances for non-winners
     const sumA = a.tokens.reduce((acc, t) => acc + (t.position === -1 ? 0 : t.position), 0);
@@ -676,12 +678,12 @@ async function endLudoGame(io: Server, roomCode: string, state: LudoState) {
 }
 
 function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
-  // Wait 1.5 seconds for bot to "think" before rolling the dice
+  // Wait 450ms for bot before rolling the dice
   setTimeout(() => {
     const room = roomStore.getRoom(roomCode);
     if (!room || room.status !== 'PLAYING') return;
     const state = room.gameState as LudoState;
-    if (!state || state.activePlayerIndex !== botIndex || state.hasRolled) return;
+    if (!state || state.isEnded || state.activePlayerIndex !== botIndex || state.hasRolled) return;
 
     // Roll dice
     const roll = Math.floor(Math.random() * 6) + 1;
@@ -700,9 +702,10 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
           activePlayerIndex: botIndex,
           validTokens: [],
         });
+        const currentToken = state.turnToken;
         setTimeout(() => {
-          nextTurn(io, roomCode);
-        }, 1500);
+          nextTurn(io, roomCode, currentToken);
+        }, 500);
         return;
       }
     } else {
@@ -718,20 +721,23 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
       validTokens: validMoves,
     });
 
-    // If no valid moves, switch turn after 1.5 seconds
+    // If no valid moves, switch turn after 500ms
     if (validMoves.length === 0) {
+      activePlayer.unturnedMoves = 0;
+      io.to(roomCode).emit('ludo_state_sync', state);
+      const currentToken = state.turnToken;
       setTimeout(() => {
-        nextTurn(io, roomCode);
-      }, 1500);
+        nextTurn(io, roomCode, currentToken);
+      }, 500);
       return;
     }
 
-    // If there are valid moves, select the best move and execute it after 1.5 seconds
+    // If there are valid moves, select the best move and execute it after 450ms
     setTimeout(() => {
       const currentRoom = roomStore.getRoom(roomCode);
       if (!currentRoom || currentRoom.status !== 'PLAYING') return;
       const curState = currentRoom.gameState as LudoState;
-      if (!curState || curState.activePlayerIndex !== botIndex) return;
+      if (!curState || curState.isEnded || curState.activePlayerIndex !== botIndex) return;
 
       // Bot strategy:
       // 1. Prefer moving a token that can capture an opponent.
@@ -760,12 +766,12 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
           }
           newPos = temp;
           score += newPos; // Encourage moving forward
-        } else if (token.position >= 52 && token.position <= 57) {
+        } else if (token.position >= 52 && token.position <= 56) {
           newPos = token.position + roll;
           score += newPos * 1.5;
         }
 
-        if (newPos === 58) {
+        if (newPos === 57) {
           score += 100; // Winning a token is excellent
         }
 
@@ -804,11 +810,14 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
           else temp = (temp + 1) % 52;
         }
         finalPos = temp;
-      } else if (token.position >= 52 && token.position <= 57) {
+      } else if (token.position >= 52 && token.position <= 56) {
         finalPos = token.position + roll;
       }
 
+      if (finalPos > 57) return;
+
       token.position = finalPos;
+      activePlayer.unturnedMoves = 0;
 
       // Check capture
       let captured = false;
@@ -826,8 +835,9 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
       }
 
       // Check if player won
-      if (finalPos === 58) {
-        const allFinished = activePlayer.tokens.every(t => t.position === 58);
+      const botReachedGoal = (finalPos === 57);
+      if (botReachedGoal) {
+        const allFinished = activePlayer.tokens.every(t => t.position === 57);
         if (allFinished && !activePlayer.isWinner) {
           activePlayer.isWinner = true;
           const winnersCount = curState.players.filter(p => p.isWinner).length;
@@ -838,7 +848,7 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
             placement: winnersCount,
           });
 
-          const activePlayersCount = curState.players.filter(p => !p.isWinner).length;
+          const activePlayersCount = curState.players.filter(p => !p.isWinner && !p.isEliminated).length;
           if (activePlayersCount <= 1) {
             endLudoGame(io, roomCode, curState);
             return;
@@ -854,9 +864,10 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
         captured,
         players: curState.players,
       });
+      io.to(roomCode).emit('ludo_state_sync', curState);
 
-      // Rule: Rolling a 6 or capturing a token awards a bonus turn
-      const awardBonus = (roll === 6 || captured) && !activePlayer.isWinner;
+      // Rule: Rolling a 6, capturing a token, or landing a token in Goal awards a bonus turn
+      const awardBonus = (roll === 6 || captured || botReachedGoal) && !activePlayer.isWinner && !activePlayer.isEliminated;
       if (awardBonus) {
         curState.diceValue = null;
         curState.hasRolled = false;
@@ -868,10 +879,11 @@ function triggerBotTurn(io: Server, roomCode: string, botIndex: number) {
         // Bot plays again!
         triggerBotTurn(io, roomCode, botIndex);
       } else {
-        nextTurn(io, roomCode);
+        nextTurn(io, roomCode, curState.turnToken);
       }
 
     }, 1500);
 
   }, 1500);
 }
+

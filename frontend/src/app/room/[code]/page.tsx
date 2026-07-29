@@ -488,6 +488,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('rs_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setLocalReturnToLobby(true);
                 setMatchEndedData(null);
@@ -503,6 +505,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('chess_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setMatchEndedData(null);
               }}
@@ -517,6 +521,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('ludo_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setMatchEndedData(null);
               }}
@@ -744,7 +750,8 @@ export default function RoomPage() {
                         type: room.type,
                         maxPlayers: room.maxPlayers,
                         voiceChat: e.target.value === 'true',
-                        allowSpectators: room.allowSpectators
+                        allowSpectators: room.allowSpectators,
+                        timeControl: (room as any).timeControl
                       })}
                       className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cyberblue mt-1 bg-white/5 text-white"
                     >
@@ -752,6 +759,31 @@ export default function RoomPage() {
                       <option value="false" className="bg-[#0b0f19] text-white">Disabled</option>
                     </select>
                   </div>
+                  {room.gameType === 'CHESS' && (
+                    <div>
+                      <label className="text-[10px] uppercase font-bold text-cybergold tracking-wider">Chess Clock</label>
+                      <select
+                        value={(room as any).timeControl !== undefined ? (room as any).timeControl : 'UNLIMITED'}
+                        onChange={(e) => socket.emit('edit_room_settings', {
+                          roomCode: room.code,
+                          type: room.type,
+                          maxPlayers: room.maxPlayers,
+                          voiceChat: room.voiceChat,
+                          allowSpectators: room.allowSpectators,
+                          timeControl: e.target.value === 'UNLIMITED' ? 'UNLIMITED' : Number(e.target.value)
+                        })}
+                        className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cybergold mt-1 bg-white/5 text-white"
+                      >
+                        <option value="UNLIMITED" className="bg-[#0b0f19] text-white">∞ Unlimited (No Timer)</option>
+                        <option value={60} className="bg-[#0b0f19] text-white">⚡ 1 Min (Bullet)</option>
+                        <option value={180} className="bg-[#0b0f19] text-white">🔥 3 Min (Blitz)</option>
+                        <option value={300} className="bg-[#0b0f19] text-white">🎯 5 Min (Blitz)</option>
+                        <option value={600} className="bg-[#0b0f19] text-white">⏳ 10 Min (Rapid)</option>
+                        <option value={900} className="bg-[#0b0f19] text-white">🏆 15 Min</option>
+                        <option value={1800} className="bg-[#0b0f19] text-white">👑 30 Min</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="flex items-end">
                     <button
                       onClick={() => {

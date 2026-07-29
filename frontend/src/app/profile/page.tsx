@@ -100,7 +100,18 @@ export default function ProfilePage() {
         if (res.ok) {
           setInventory(data.inventory || []);
           setAchievements(data.achievements || []);
-          setMatchHistory(data.matchHistory || []);
+
+          const rawHistory: any[] = data.matchHistory || [];
+          const uniqueHistory: any[] = [];
+          const seenKeys = new Set<string>();
+          for (const item of rawHistory) {
+            const key = item.matchId || `${item.gameType}-${item.date}-${item.placement}-${item.score}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              uniqueHistory.push(item);
+            }
+          }
+          setMatchHistory(uniqueHistory);
         }
       } catch (err) {
         console.error(err);

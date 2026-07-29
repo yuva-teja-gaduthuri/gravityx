@@ -15,13 +15,13 @@ export interface Player {
 export interface Room {
   code: string;
   name: string;
-  gameType: 'RAMUDU_SEETHA' | 'LUDO';
+  gameType: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS';
   type: 'PUBLIC' | 'PRIVATE';
   maxPlayers: number;
   voiceChat: boolean;
   allowSpectators: boolean;
   hostId: string;
-  status: 'LOBBY' | 'PLAYING';
+  status: 'LOBBY' | 'PLAYING' | 'FINISHED';
   players: Player[];
   spectators: string[];
   gameState: any; // polymorphic game state representation
@@ -30,6 +30,7 @@ export interface Room {
   maxRounds?: number;
   sessionScoreboard?: { [userId: string]: { username: string; score: number } };
   previousRoles?: { [userId: string]: string };
+  timeControl?: number | 'UNLIMITED';
 }
 
 class RoomStore {
@@ -140,7 +141,7 @@ class RoomStore {
     return room;
   }
 
-  updateRoomStatus(code: string, status: 'LOBBY' | 'PLAYING'): Room | undefined {
+  updateRoomStatus(code: string, status: 'LOBBY' | 'PLAYING' | 'FINISHED'): Room | undefined {
     const room = this.rooms.get(code);
     if (!room) return undefined;
     room.status = status;

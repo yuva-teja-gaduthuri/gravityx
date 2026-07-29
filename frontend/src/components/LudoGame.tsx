@@ -3,9 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize } from 'lucide-react';
+import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize, LogOut } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
+
+const NORMAL_STEP_DURATION = 135; // ms per board square (Normal mode: 120-150ms)
+const FAST_STEP_DURATION = 70;    // ms per board square (Fast mode: 60-80ms)
 
 interface LudoToken {
   id: number;
@@ -20,6 +23,7 @@ interface LudoPlayer {
   color: 'red' | 'green' | 'yellow' | 'blue';
   tokens: LudoToken[];
   isWinner: boolean;
+  isEliminated?: boolean;
   placement?: number;
   unturnedMoves?: number;
 }
@@ -60,16 +64,16 @@ const TRACK_COORDINATES: { [idx: number]: [number, number] } = {
 
 const STRETCH_COORDINATES: { [color: string]: { [idx: number]: [number, number] } } = {
   red: {
-    52: [1, 7], 53: [2, 7], 54: [3, 7], 55: [4, 7], 56: [5, 7], 57: [6, 7], 58: [7, 7]
+    52: [1, 7], 53: [2, 7], 54: [3, 7], 55: [4, 7], 56: [5, 7], 57: [7, 7]
   },
   green: {
-    52: [7, 1], 53: [7, 2], 54: [7, 3], 55: [7, 4], 56: [7, 5], 57: [7, 6], 58: [7, 7]
+    52: [7, 1], 53: [7, 2], 54: [7, 3], 55: [7, 4], 56: [7, 5], 57: [7, 7]
   },
   yellow: {
-    52: [13, 7], 53: [12, 7], 54: [11, 7], 55: [10, 7], 56: [9, 7], 57: [8, 7], 58: [7, 7]
+    52: [13, 7], 53: [12, 7], 54: [11, 7], 55: [10, 7], 56: [9, 7], 57: [7, 7]
   },
   blue: {
-    52: [7, 13], 53: [7, 12], 54: [7, 11], 55: [7, 10], 56: [7, 9], 57: [7, 8], 58: [7, 7]
+    52: [7, 13], 53: [7, 12], 54: [7, 11], 55: [7, 10], 56: [7, 9], 57: [7, 7]
   }
 };
 
@@ -315,10 +319,53 @@ interface VisualToken {
   isCaptured: boolean;
 }
 
+function getValidTokensToMove(color: string, tokens: LudoToken[], lastCell: number, stretchStart: number, dice: number): number[] {
+  const valid: number[] = [];
+  tokens.forEach((t) => {
+    if (t.position === -1) {
+      if (dice === 6) valid.push(t.id);
+    } else if (t.position >= 0 && t.position <= 51) {
+      let tempPos = t.position;
+      let enteredStretch = false;
+      for (let i = 0; i < dice; i++) {
+        if (tempPos === lastCell) {
+          tempPos = stretchStart;
+          enteredStretch = true;
+        } else if (enteredStretch) {
+          tempPos += 1;
+        } else {
+          tempPos = (tempPos + 1) % 52;
+        }
+      }
+      if (tempPos <= 57) valid.push(t.id);
+    } else if (t.position >= 52 && t.position <= 56) {
+      if (t.position + dice <= 57) valid.push(t.id);
+    }
+  });
+  return valid;
+}
+
+function getTokenCoords(playerColor: string, tokenId: number, position: number): [number, number] {
+  if (position === -1) {
+    return BASE_COORDINATES[playerColor] ? BASE_COORDINATES[playerColor][tokenId] : [0, 0];
+  } else if (position >= 0 && position <= 51) {
+    return TRACK_COORDINATES[position] || [7, 7];
+  } else if (position >= 52 && position <= 57) {
+    return (STRETCH_COORDINATES[playerColor] && STRETCH_COORDINATES[playerColor][position]) ? STRETCH_COORDINATES[playerColor][position] : [7, 7];
+  }
+  return [7, 7];
+}
+
 export default function LudoGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: LudoGameProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<LudoState | null>(null);
   const [validTokens, setValidTokens] = useState<number[]>([]);
+  const validTokensRef = useRef<number[]>([]);
+
+  const updateValidTokens = (tokens: number[]) => {
+    validTokensRef.current = tokens;
+    setValidTokens(tokens);
+  };
   const [isRolling, setIsRolling] = useState(false);
   const [rollingValue, setRollingValue] = useState<number>(1);
   const [matchEnded, setMatchEnded] = useState(false);
@@ -561,7 +608,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       let temp = startCell;
       const config = COLOR_CONFIGS[color];
       let enteredStretch = false;
-      for (let i = 0; i < 58; i++) {
+      for (let i = 0; i < 57; i++) {
         if (temp === endPos) break;
         if (temp === config.lastCell) {
           temp = config.stretchStart;
@@ -581,7 +628,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let temp = startPos;
     let enteredStretch = startPos >= 52;
     
-    for (let i = 0; i < 58; i++) {
+    for (let i = 0; i < 57; i++) {
       if (temp === endPos) break;
       
       if (temp === config.lastCell) {
@@ -607,57 +654,66 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let currentPos = capturePos;
 
     // Add initial capture cell coordinate
-    coordsList.push(getTokenCoords(color, tokenId, currentPos));
+    const startCoord = getTokenCoords(color, tokenId, currentPos);
+    coordsList.push((startCoord && !isNaN(startCoord[0]) && !isNaN(startCoord[1])) ? startCoord : [7, 7]);
 
-    // If in stretch (52..58)
+    // If in stretch (52..57)
     if (currentPos >= 52) {
       while (currentPos > 52) {
         currentPos--;
-        if (STRETCH_COORDINATES[color] && STRETCH_COORDINATES[color][currentPos]) {
-          coordsList.push(STRETCH_COORDINATES[color][currentPos]);
-        }
+        const c = STRETCH_COORDINATES[color] ? STRETCH_COORDINATES[color][currentPos] : [7, 7];
+        const safeTuple: [number, number] = c ? [c[0], c[1]] : [7, 7];
+        coordsList.push(safeTuple);
       }
-      // Step out of stretch to lastCell
       currentPos = lastCell;
-      if (TRACK_COORDINATES[currentPos]) {
-        coordsList.push(TRACK_COORDINATES[currentPos]);
-      }
+      const trackTuple: [number, number] = TRACK_COORDINATES[currentPos] ? [TRACK_COORDINATES[currentPos][0], TRACK_COORDINATES[currentPos][1]] : [7, 7];
+      coordsList.push(trackTuple);
     }
 
     // Step backwards along main track until startCell is reached
-    let maxSteps = 0;
-    while (currentPos !== startCell && maxSteps < 60) {
+    let safetyCounter = 0;
+    while (currentPos !== startCell && safetyCounter < 60) {
       currentPos = (currentPos - 1 + 52) % 52;
-      if (TRACK_COORDINATES[currentPos]) {
-        coordsList.push(TRACK_COORDINATES[currentPos]);
-      }
-      maxSteps++;
+      const trackTuple: [number, number] = TRACK_COORDINATES[currentPos] ? [TRACK_COORDINATES[currentPos][0], TRACK_COORDINATES[currentPos][1]] : [7, 7];
+      coordsList.push(trackTuple);
+      safetyCounter++;
     }
 
     // Final step: Home base yard coordinate slot
-    if (BASE_COORDINATES[color] && BASE_COORDINATES[color][tokenId]) {
-      coordsList.push(BASE_COORDINATES[color][tokenId]);
-    }
+    const baseSlot = BASE_COORDINATES[color] ? BASE_COORDINATES[color][tokenId] : [0, 0];
+    const baseTuple: [number, number] = baseSlot ? [baseSlot[0], baseSlot[1]] : [0, 0];
+    coordsList.push(baseTuple);
 
     return coordsList;
   };
 
   // Handlers for step-by-step walking animations
-  // Handlers for step-by-step walking animations
   const animatePawnPath = (
     color: 'red' | 'green' | 'yellow' | 'blue',
     tokenId: number,
+    startPos: number,
     path: number[],
     captured: boolean,
+    capturedTokenInfo: { color: string; tokenId: number } | null,
     finalPlayersState: any,
     targetEndPos: number
   ) => {
     const key = `${color}-${tokenId}`;
     let stepIndex = 0;
-    const intervalTime = isSpeedUp ? 130 : 260;
+    const intervalTime = isSpeedUp ? FAST_STEP_DURATION : NORMAL_STEP_DURATION;
 
     // Lock pawn in animatingTokensRef
     animatingTokensRef.current[key] = true;
+
+    // Set camera ONCE towards target destination to avoid camera jitter during walking
+    const [finalTargetCol, finalTargetRow] = getTokenCoords(color, tokenId, targetEndPos);
+    if (!isNaN(finalTargetCol) && !isNaN(finalTargetRow)) {
+      const camTargetX = (7 - finalTargetCol) * 8;
+      const camTargetY = (7 - finalTargetRow) * 8;
+      setCamZoom(1.12);
+      setCamX(camTargetX);
+      setCamY(camTargetY);
+    }
 
     // Safety timeout to prevent permanent animation lock
     const maxDuration = ((path ? path.length : 1) + 20) * intervalTime + 3000;
@@ -689,37 +745,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       return;
     }
 
-    const startVisual = visualTokensRef.current ? visualTokensRef.current[key] : null;
-    const isBaseExit = path.length === 1 && path[0] === COLOR_CONFIGS[color].startCell;
-    let currentCol = isBaseExit ? BASE_COORDINATES[color][tokenId][0] : (startVisual ? startVisual.col : BASE_COORDINATES[color][tokenId][0]);
-    let currentRow = isBaseExit ? BASE_COORDINATES[color][tokenId][1] : (startVisual ? startVisual.row : BASE_COORDINATES[color][tokenId][1]);
+    const [startCol, startRow] = getTokenCoords(color, tokenId, startPos);
+    let currentCol = !isNaN(startCol) ? startCol : BASE_COORDINATES[color][tokenId][0];
+    let currentRow = !isNaN(startRow) ? startRow : BASE_COORDINATES[color][tokenId][1];
 
     const takeStep = () => {
       if (stepIndex >= path.length) {
         console.log(`🏁 [ANIMATE PAWN PATH]: Completed all steps for ${key}`);
         clearTimeout(safetyTimer);
         
-        // Landing rebound
-        setVisualTokens((prev) => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            scale: 1.25,
-            translateY: 0,
-            isMoving: false,
-          },
-        }));
-
-        setTimeout(() => {
-          setVisualTokens((prev) => ({
-            ...prev,
-            [key]: {
-              ...prev[key],
-              scale: 1.0,
-            },
-          }));
-        }, 120);
-
         audioRef.current?.playImpact();
 
         const finalPos = path.length > 0 ? path[path.length - 1] : targetEndPos;
@@ -743,10 +777,10 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         }));
         
         // Spawn sparkles on land
-        spawnParticles(finalCol, finalRow, 'sparkle', 6);
+        spawnParticles(finalCol, finalRow, 'sparkle', 4);
 
         // Home entry visual celebration
-        if (finalPos === 58) {
+        if (finalPos === 57) {
           audioRef.current?.playHome();
           triggerFireworks(7, 7);
           confetti({ particleCount: 50, spread: 60, origin: { x: 0.5, y: 0.5 } });
@@ -754,7 +788,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         if (captured) {
           setWinnerKey(key);
-          handleCaptureAnimation(key, finalPos, finalPlayersState);
+          handleCaptureAnimation(key, finalPos, capturedTokenInfo, finalPlayersState);
         } else {
           delete animatingTokensRef.current[key];
           setGameState((prev) => (prev ? { ...prev, players: finalPlayersState, diceValue: null, hasRolled: false } : null));
@@ -772,13 +806,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         [nextCol, nextRow] = getTokenCoords(color, tokenId, targetEndPos);
       }
 
-      // Track walking pawn with dynamic camera
-      const camTargetX = (7 - nextCol) * 12;
-      const camTargetY = (7 - nextRow) * 12;
-      setCamZoom(1.18);
-      setCamX(camTargetX);
-      setCamY(camTargetY);
-
       // Orientation turn rotation
       const dx = nextCol - currentCol;
       const dy = nextRow - currentRow;
@@ -788,17 +815,15 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       else if (dy > 0) rotation = 90;  // Facing Down
       else if (dy < 0) rotation = 270; // Facing Up
 
-      console.log(`📍 [STEP ${stepIndex + 1}/${path.length}]: Token ${key} walking from (${currentCol}, ${currentRow}) -> (${nextCol}, ${nextRow}) | Facing: ${rotation}°`);
-
       currentCol = nextCol;
       currentRow = nextRow;
 
       const stepVisualState: VisualToken = {
         col: nextCol,
         row: nextRow,
-        scale: 1.15,
+        scale: 1.12,
         rotation,
-        translateY: -16, // Hop lift
+        translateY: -14, // Hop up on each step for lively Pixar-style character walk
         isMoving: true,
         isCaptured: false
       };
@@ -807,16 +832,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setVisualTokens({ ...visualTokensRef.current });
 
       audioRef.current?.playStep();
-      spawnParticles(nextCol, nextRow, 'dust', 3);
-
-      setTimeout(() => {
-        const cur = visualTokensRef.current[key];
-        if (cur) {
-          const grounded = { ...cur, translateY: 0, scale: 1.0 };
-          visualTokensRef.current[key] = grounded;
-          setVisualTokens({ ...visualTokensRef.current });
-        }
-      }, intervalTime / 2);
+      spawnParticles(Math.floor(nextCol), Math.floor(nextRow), 'smoke', 1);
 
       stepIndex++;
       setTimeout(takeStep, intervalTime);
@@ -826,7 +842,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   };
 
   // Opponent captures walking loop (retracing path back to home base yard)
-  const handleCaptureAnimation = (mainKey: string, capturePos: number, finalPlayersState: any) => {
+  const handleCaptureAnimation = (
+    mainKey: string, 
+    capturePos: number, 
+    capturedTokenInfo: { color: string; tokenId: number } | null, 
+    finalPlayersState: any
+  ) => {
     const currentGS = gameStateRef.current;
 
     let capturedKey = '';
@@ -834,8 +855,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     let opponentColor = '';
     let capturedTokenId = 0;
 
-    // Search finalPlayersState for captured token
-    if (finalPlayersState && Array.isArray(finalPlayersState)) {
+    if (capturedTokenInfo) {
+      opponentColor = capturedTokenInfo.color;
+      capturedTokenId = capturedTokenInfo.tokenId;
+      capturedKey = `${opponentColor}-${capturedTokenId}`;
+      targetBaseCoords = BASE_COORDINATES[opponentColor] ? BASE_COORDINATES[opponentColor][capturedTokenId] : [0, 0];
+    } else if (finalPlayersState && Array.isArray(finalPlayersState)) {
       // First priority: find token with animating lock active
       finalPlayersState.forEach((fp: any) => {
         fp.tokens.forEach((ft: any) => {
@@ -844,7 +869,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
             capturedKey = key;
             opponentColor = fp.color;
             capturedTokenId = ft.id;
-            targetBaseCoords = BASE_COORDINATES[fp.color][ft.id];
+            targetBaseCoords = BASE_COORDINATES[fp.color] ? BASE_COORDINATES[fp.color][ft.id] : [0, 0];
           }
         });
       });
@@ -857,11 +882,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           p.tokens.forEach((t) => {
             const finalP = finalPlayersState.find((fp: any) => fp.id === p.id);
             const finalT = finalP?.tokens.find((ft: any) => ft.id === t.id);
-            if (finalT?.position === -1 && (t.position === capturePos || t.position !== -1)) {
+            if (finalT?.position === -1 && (t.position === capturePos || t.position >= 0)) {
               capturedKey = `${p.color}-${t.id}`;
               opponentColor = p.color;
               capturedTokenId = t.id;
-              targetBaseCoords = BASE_COORDINATES[p.color][t.id];
+              targetBaseCoords = BASE_COORDINATES[p.color] ? BASE_COORDINATES[p.color][t.id] : [0, 0];
             }
           });
         });
@@ -897,7 +922,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       // Compute step-by-step reverse path back to home base yard
       const reverseCoords = getReversePathPositions(opponentColor, capturedTokenId, capturePos);
       let stepIdx = 0;
-      const captureInterval = isSpeedUp ? 60 : 110;
+      const captureInterval = isSpeedUp ? 25 : 45;
 
       const stepBack = () => {
         if (stepIdx >= reverseCoords.length) {
@@ -927,14 +952,16 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           return;
         }
 
-        const [stepCol, stepRow] = reverseCoords[stepIdx];
+        const [stepCol, stepRow] = reverseCoords[stepIdx] || targetBaseCoords;
+        const safeCol = (!isNaN(stepCol) && stepCol !== undefined) ? stepCol : targetBaseCoords[0];
+        const safeRow = (!isNaN(stepRow) && stepRow !== undefined) ? stepRow : targetBaseCoords[1];
 
         const stepCapState: VisualToken = {
-          col: stepCol,
-          row: stepRow,
-          scale: 1.15,
+          col: safeCol,
+          row: safeRow,
+          scale: 1.18,
           rotation: (visualTokensRef.current[capturedKey]?.rotation || 0) - 90,
-          translateY: -10,
+          translateY: -12,
           isMoving: false,
           isCaptured: true
         };
@@ -942,7 +969,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         setVisualTokens({ ...visualTokensRef.current });
 
         audioRef.current?.playStep();
-        spawnParticles(Math.floor(stepCol), Math.floor(stepRow), 'smoke', 2);
+        spawnParticles(Math.floor(safeCol), Math.floor(safeRow), 'smoke', 2);
 
         stepIdx++;
         setTimeout(stepBack, captureInterval);
@@ -961,6 +988,36 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     }
   };
 
+  const handleRollDice = () => {
+    if (!gameState) return;
+    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    if (activePlayer.id !== user.id) return;
+    if (gameState.hasRolled || isRolling) return;
+
+    socket.emit('ludo_roll_dice', roomCode);
+  };
+
+  const handleMoveToken = (tokenId: number) => {
+    if (!gameState) return;
+    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    if (activePlayer.id !== user.id) return;
+    if (!validTokensRef.current.includes(tokenId)) return;
+
+    audioRef.current?.playSelect();
+    socket.emit('ludo_move_token', { roomCode, tokenId });
+  };
+
+  const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
+    if (!gameState) return;
+    const activePlayer = gameState.players[gameState.activePlayerIndex];
+    if (activePlayer.id !== user.id || activePlayer.color !== color) return;
+
+    const eligibleYardToken = activePlayer.tokens.find(t => t.position === -1 && validTokensRef.current.includes(t.id));
+    if (eligibleYardToken) {
+      handleMoveToken(eligibleYardToken.id);
+    }
+  };
+
   const gameStateRef = useRef<LudoState | null>(null);
   useEffect(() => {
     gameStateRef.current = gameState;
@@ -971,11 +1028,24 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setGameState(data.gameState);
       setMatchEnded(false);
       setScoreboard([]);
-      setValidTokens([]);
+      updateValidTokens([]);
     });
 
     socket.on('ludo_state_sync', (state: LudoState) => {
       setGameState(state);
+      if (state && state.diceValue !== null) {
+        setRollingValue(state.diceValue);
+      }
+      if (state && state.players && state.activePlayerIndex !== undefined) {
+        const activePlayer = state.players[state.activePlayerIndex];
+        if (activePlayer && activePlayer.id === user.id && state.hasRolled && state.diceValue !== null) {
+          const config = COLOR_CONFIGS[activePlayer.color];
+          if (config) {
+            const calcValid = getValidTokensToMove(activePlayer.color, activePlayer.tokens, config.lastCell, config.stretchStart, state.diceValue);
+            updateValidTokens(calcValid);
+          }
+        }
+      }
     });
 
     socket.on('ludo_timer_tick', (timeLeft: number) => {
@@ -983,65 +1053,75 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     });
 
     socket.on('ludo_dice_rolled', (data: any) => {
-      setIsRolling(true);
+      // Immediately stop any rolling state and lock displayed value directly to authoritative backend result
+      setIsRolling(false);
+      setRollingValue(data.diceValue);
       audioRef.current?.playRoll();
 
-      // Simulate dice rotation cycle
-      let count = 0;
-      const interval = setInterval(() => {
-        setRollingValue(Math.floor(Math.random() * 6) + 1);
-        count++;
-        if (count > 12) {
-          clearInterval(interval);
-          setIsRolling(false);
-          setRollingValue(data.diceValue);
+      // Immediately synchronize dice value and hasRolled state for real-time responsiveness
+      setGameState(prev => prev ? { 
+        ...prev, 
+        activePlayerIndex: data.activePlayerIndex !== undefined ? data.activePlayerIndex : prev.activePlayerIndex,
+        diceValue: data.diceValue, 
+        hasRolled: true 
+      } : null);
 
-          // Dice thud sound
-          audioRef.current?.playImpact();
+      const currentGS = gameStateRef.current;
+      const activePlayer = data.activePlayerIndex !== undefined && currentGS ? currentGS.players[data.activePlayerIndex] : currentGS?.players[currentGS.activePlayerIndex];
+      const isMyTurnNow = activePlayer ? activePlayer.id === user.id : false;
+      if (isMyTurnNow && data.validTokens) {
+        updateValidTokens(data.validTokens);
+      }
 
-          // Rule: Lucky 6 visual alert
-          if (data.diceValue === 6) {
-            setLuckySix(true);
-            setTimeout(() => setLuckySix(false), 1500);
-            // Spawn fireworks around dice console
-            triggerFireworks(12, 12);
-          }
+      // Dice thud sound
+      audioRef.current?.playImpact();
 
-          setGameState(prev => prev ? { ...prev, diceValue: data.diceValue, hasRolled: true } : null);
-          
-          const currentGS = gameStateRef.current;
-          const activePlayer = data.activePlayerIndex !== undefined && currentGS ? currentGS.players[data.activePlayerIndex] : currentGS?.players[currentGS.activePlayerIndex];
-          const isMyTurnNow = activePlayer ? activePlayer.id === user.id : false;
-          if (isMyTurnNow && data.validTokens) {
-            setValidTokens(data.validTokens);
-            // If only 1 token is eligible to move, auto-trigger move after 400ms for smooth gameplay
-            if (data.validTokens.length === 1) {
-              setTimeout(() => {
-                handleMoveToken(data.validTokens[0]);
-              }, 400);
-            }
-          }
-        }
-      }, 70);
+      // Rule: Lucky 6 visual alert
+      if (data.diceValue === 6) {
+        setLuckySix(true);
+        setTimeout(() => setLuckySix(false), 1500);
+        triggerFireworks(12, 12);
+      }
+
+      // ONLY AFTER dice value is locked to data.diceValue on screen, initiate single valid move option
+      if (isMyTurnNow && data.validTokens && data.validTokens.length === 1) {
+        const autoMoveTokenId = data.validTokens[0];
+        setTimeout(() => {
+          handleMoveToken(autoMoveTokenId);
+        }, 150);
+      }
     });
 
     socket.on('ludo_token_moved', (data: any) => {
-      setValidTokens([]); // Prevent duplicate movement clicks during animation
+      updateValidTokens([]); // Prevent duplicate movement clicks during animation
 
       const currentGS = gameStateRef.current;
-      if (!currentGS) return;
-      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : currentGS.activePlayerIndex;
-      const activePlayer = currentGS.players[activePlayerIndex];
+      const activePlayerIndex = data.activePlayerIndex !== undefined ? data.activePlayerIndex : (currentGS ? currentGS.activePlayerIndex : 0);
+      const playersList = data.players || currentGS?.players;
+      const activePlayer = playersList ? playersList[activePlayerIndex] : null;
       if (!activePlayer) return;
+
+      const animKey = `${activePlayer.color}-${data.tokenId}`;
+      animatingTokensRef.current[animKey] = true; // Lock animation immediately to prevent snapping
+
+      if (data.players) {
+        setGameState(prev => prev ? {
+          ...prev,
+          players: data.players,
+          diceValue: null,
+          hasRolled: false,
+          activePlayerIndex: data.activePlayerIndex !== undefined ? data.activePlayerIndex : prev.activePlayerIndex
+        } : prev);
+      }
       
-      const currentToken = activePlayer.tokens.find(t => t.id === data.tokenId);
+      const currentToken = activePlayer.tokens.find((t: any) => t.id === data.tokenId);
       const startPos = data.oldPosition !== undefined ? data.oldPosition : (currentToken ? currentToken.position : -1);
       const endPos = data.newPosition;
 
       if (endPos === undefined || endPos === null || isNaN(endPos)) return;
 
       // Lock captured token immediately so useEffect does not snap it prematurely
-      if (data.captured && data.players && Array.isArray(data.players)) {
+      if (data.captured && data.players && Array.isArray(data.players) && currentGS) {
         data.players.forEach((p: any) => {
           if (p.id !== activePlayer.id) {
             p.tokens.forEach((t: any) => {
@@ -1059,8 +1139,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       // Build path sequence using authoritative startPos and endPos
       const path = getPathPositions(activePlayer.color, startPos, endPos);
       
-      // Animate movement walk
-      animatePawnPath(activePlayer.color, data.tokenId, path, data.captured, data.players, endPos);
+      // Animate movement walk and trigger capture rewind when attacker arrives
+      animatePawnPath(activePlayer.color, data.tokenId, startPos, path, data.captured, data.capturedToken || null, data.players, endPos);
     });
 
     socket.on('ludo_new_turn', (data: any) => {
@@ -1070,9 +1150,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         diceValue: null,
         hasRolled: false
       } : null);
-      setValidTokens([]);
+      updateValidTokens([]);
 
-      // Play turn transitions chime
       const currentGS = gameStateRef.current;
       const nextActivePlayer = currentGS?.players[data.activePlayerIndex];
       if (nextActivePlayer && nextActivePlayer.id === user.id) {
@@ -1233,36 +1312,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     }
   };
 
-  const handleRollDice = () => {
-    if (!gameState) return;
-    const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id) return;
-    if (gameState.hasRolled || isRolling) return;
-
-    socket.emit('ludo_roll_dice', roomCode);
-  };
-
-  const handleMoveToken = (tokenId: number) => {
-    if (!gameState) return;
-    const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id) return;
-    if (!validTokens.includes(tokenId)) return;
-
-    audioRef.current?.playSelect();
-    socket.emit('ludo_move_token', { roomCode, tokenId });
-  };
-
-  const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
-    if (!gameState) return;
-    const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id || activePlayer.color !== color) return;
-
-    const eligibleYardToken = activePlayer.tokens.find(t => t.position === -1 && validTokens.includes(t.id));
-    if (eligibleYardToken) {
-      handleMoveToken(eligibleYardToken.id);
-    }
-  };
-
   if (!gameState) {
     return (
       <div className="flex-grow flex items-center justify-center">
@@ -1274,17 +1323,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   const activePlayer = gameState.players[gameState.activePlayerIndex];
   const isMyTurn = activePlayer.id === user.id;
 
-  const getTokenCoords = (playerColor: string, tokenId: number, position: number): [number, number] => {
-    if (position === -1) {
-      return BASE_COORDINATES[playerColor][tokenId];
-    } else if (position >= 0 && position <= 51) {
-      return TRACK_COORDINATES[position];
-    } else if (position >= 52 && position <= 58) {
-      return STRETCH_COORDINATES[playerColor][position];
-    }
-    return [7, 7];
-  };
-
   const renderBaseDice = (color: 'red' | 'green' | 'yellow' | 'blue', customPosClass?: string) => {
     if (!gameState) return null;
     
@@ -1294,6 +1332,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     
     const player = gameState.players[playerIndex];
     const isPlayerActive = gameState.activePlayerIndex === playerIndex;
+    if (!isPlayerActive) return null;
     const isMyDice = player.id === user.id;
     const canIRoll = isPlayerActive && isMyDice && !gameState.hasRolled && !isRolling;
     
@@ -1499,10 +1538,10 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         /* Roll positions using responsive variable calc */
         .dice-cube[data-roll="1"] { transform: rotateX(0deg) rotateY(0deg); }
         .dice-cube[data-roll="6"] { transform: rotateX(180deg) rotateY(0deg); }
+        .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(-90deg); }
+        .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(90deg); }
         .dice-cube[data-roll="3"] { transform: rotateX(-90deg) rotateY(0deg); }
         .dice-cube[data-roll="4"] { transform: rotateX(90deg) rotateY(0deg); }
-        .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(90deg); }
-        .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(-90deg); }
 
         /* Character Styles */
         .pawn-character {
@@ -1891,8 +1930,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         }
       `}} />
 
-      {/* Settings Panel Toggle */}
-      <div className="absolute top-4 right-4 z-30">
+      {/* Settings & Exit Controls */}
+      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+        <button
+          onClick={() => onReturnToLobby && onReturnToLobby()}
+          className="px-3 py-2.5 bg-cybererror/10 border border-cybererror/30 hover:bg-cybererror hover:text-white text-cybererror text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-lg active:scale-95"
+          title="Return to Lobby"
+        >
+          <LogOut size={16} />
+          <span className="hidden sm:inline">Return to Lobby</span>
+        </button>
+
         <button 
           onClick={() => setShowSettings(!showSettings)} 
           className="p-3 bg-white/5 border border-white/10 hover:border-cyberblue text-white rounded-xl transition-all"
@@ -1999,7 +2047,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'red') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Red';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2008,8 +2056,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#e53935] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Red'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-red-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               {renderBaseDice('red', 'relative inset-0 ml-1')}
             </div>
@@ -2021,7 +2073,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'green') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Green';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2030,8 +2082,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('green', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Green'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-green-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#43a047] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>
@@ -2289,7 +2345,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 const row = visual ? visual.row : BASE_COORDINATES[p.color][t.id][1];
                 
                 const coordKey = `${Math.round(col)},${Math.round(row)}`;
-                const isTokenEligible = isMyTurn && validTokens.includes(t.id);
+                const isTokenEligible = isMyTurn && p.id === user.id && validTokensRef.current.includes(t.id);
                 
                 if (!tokenGroups[coordKey]) {
                   tokenGroups[coordKey] = [];
@@ -2327,7 +2383,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                 }
 
                 const isSafeCell = t.position !== -1 && SAFE_CELLS.includes(t.position);
-                const isWinnerCelebration = t.position === 58;
+                const isWinnerCelebration = t.position === 57;
 
                 const itemCol = visual?.col ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][0] : col);
                 const itemRow = visual?.row ?? (t.position === -1 ? BASE_COORDINATES[p.color][t.id][1] : row);
@@ -2336,11 +2392,11 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                   <button
                     key={`${p.color}-${t.id}`}
                     onClick={() => handleMoveToken(t.id)}
-                    disabled={!isTokenEligible}
-                    className={`absolute select-none ${
-                      visual?.isMoving ? 'transition-none' : 'transition-all duration-150 ease-out'
+                    disabled={!isTokenEligible || p.isEliminated}
+                    className={`absolute select-none transition-all ${
+                      visual?.isMoving ? 'ease-linear' : 'ease-out'
                     } ${
-                      isTokenEligible ? 'cursor-pointer z-50' : 'cursor-default z-40'
+                      isTokenEligible && !p.isEliminated ? 'cursor-pointer z-50' : 'cursor-default z-40'
                     }`}
                     style={{
                       left: `calc(${safeCol} * 100% / 15)`,
@@ -2348,6 +2404,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
                       width: 'calc(100% / 15)',
                       height: 'calc(100% / 15)',
                       transform: `translate(${dx}px, ${dy + (visual?.translateY ?? 0)}px) scale(${visual?.scale ?? 1.0}) rotate(${visual?.rotation ?? 0}deg)`,
+                      transitionDuration: visual?.isMoving ? `${isSpeedUp ? FAST_STEP_DURATION : NORMAL_STEP_DURATION}ms` : '100ms',
+                      willChange: 'left, top, transform',
                     }}
                   >
                     {/* Tiny Pixar-Style Human Model */}
@@ -2440,7 +2498,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'blue') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Blue';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2449,8 +2507,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               <div className="w-4 h-4 rounded-full bg-[#1e88e5] flex items-center justify-center text-[10px] shadow-sm">📍</div>
               <div className="flex flex-col">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Blue'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-blue-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               {renderBaseDice('blue', 'relative inset-0 ml-1')}
             </div>
@@ -2462,7 +2524,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'yellow') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling;
+          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Yellow';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2471,8 +2533,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
               {renderBaseDice('yellow', 'relative inset-0 mr-1')}
               <div className="flex flex-col items-end">
                 <span className="text-xs font-black text-white truncate max-w-[90px]">{player ? (player.id === user.id ? `You (${pName})` : pName) : 'Yellow'}</span>
-                {isPlayerActive && renderMissDots(player?.unturnedMoves || 0)}
-                {isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>}
+                {player && renderMissDots(player?.unturnedMoves || 0)}
+                {player?.isEliminated ? (
+                  <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider mt-0.5">ELIMINATED</span>
+                ) : (
+                  isPlayerActive && <span className="text-[9px] font-bold text-yellow-400 animate-pulse mt-0.5">{canRoll ? 'ROLL NOW' : 'TURN'}</span>
+                )}
               </div>
               <div className="w-4 h-4 rounded-full bg-[#fdd835] flex items-center justify-center text-[10px] shadow-sm">📍</div>
             </div>
@@ -2480,81 +2546,13 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         })()}
       </div>
 
-      {/* Tiny Humans Pop-Up Selector Modal */}
+      {/* Non-intrusive Top Banner Instruction when move is required */}
       {isMyTurn && validTokens.length > 0 && gameState.hasRolled && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-md z-40 bg-slate-900/95 backdrop-blur-2xl border-2 border-cyberblue/50 rounded-3xl p-3.5 sm:p-4 shadow-[0_12px_40px_rgba(0,245,255,0.35)] animate-bounce-short">
-          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-cybergold animate-spin-slow" />
-              <h5 className="text-xs sm:text-sm font-black uppercase text-white tracking-wider">
-                CHOOSE YOUR TINY HUMAN
-              </h5>
-            </div>
-            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyberblue/20 text-cyberblue border border-cyberblue/40">
-              +{gameState.diceValue} Steps
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
-            {validTokens.map((tokenId) => {
-              const token = activePlayer.tokens.find((t) => t.id === tokenId);
-              const pos = token ? token.position : -1;
-              
-              let statusText = 'In Base Yard';
-              let statusColor = 'text-amber-400';
-
-              if (pos >= 52) {
-                statusText = `Near Goal (${pos - 51}/6)`;
-                statusColor = 'text-green-400 font-extrabold';
-              } else if (pos >= 0) {
-                statusText = `On Track (Cell ${pos})`;
-                statusColor = 'text-cyberblue font-bold';
-              }
-
-              return (
-                <button
-                  key={tokenId}
-                  onClick={() => handleMoveToken(tokenId)}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border text-left transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg group ${
-                    activePlayer.color === 'red' ? 'border-red-500/40 bg-red-950/40 hover:bg-red-900/60' :
-                    activePlayer.color === 'green' ? 'border-green-500/40 bg-green-950/40 hover:bg-green-900/60' :
-                    activePlayer.color === 'yellow' ? 'border-yellow-500/40 bg-yellow-950/40 hover:bg-yellow-900/60' :
-                    'border-blue-500/40 bg-blue-950/40 hover:bg-blue-900/60'
-                  }`}
-                >
-                  {/* Miniature 3D Character Preview Icon */}
-                  <div className="w-9 h-9 relative shrink-0 flex items-center justify-center bg-white/10 rounded-xl p-1 border border-white/20 group-hover:scale-110 transition-transform">
-                    <div className={`pawn-character team-${activePlayer.color} idle w-full h-full`}>
-                      <div className="pawn-body-wrapper scale-75">
-                        <div className="pawn-outfit">
-                          {activePlayer.color === 'red' && <div className="pawn-cape"></div>}
-                          {activePlayer.color === 'yellow' && <div className="pawn-medal"></div>}
-                        </div>
-                        <div className="pawn-head">
-                          {activePlayer.color === 'red' && <div className="pawn-hair warrior-hair"></div>}
-                          {activePlayer.color === 'blue' && <div className="pawn-hair adventurer-hat"></div>}
-                          {activePlayer.color === 'green' && <div className="pawn-hair explorer-hat"></div>}
-                          {activePlayer.color === 'yellow' && <div className="pawn-hair champion-crown"></div>}
-                          <div className="pawn-face">
-                            <div className="pawn-eyes"><div className="pawn-eye left-eye"><div className="pawn-pupil"></div></div></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col flex-grow min-w-0">
-                    <span className="text-xs font-black text-white truncate">Human #{tokenId + 1}</span>
-                    <span className={`text-[9px] truncate ${statusColor}`}>{statusText}</span>
-                  </div>
-
-                  <div className="w-5 h-5 rounded-full bg-white/10 group-hover:bg-cyberblue group-hover:text-darkbg flex items-center justify-center text-[10px] font-bold text-white transition-colors">
-                    ➔
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 pointer-events-none z-30 bg-slate-900/90 backdrop-blur-xl border border-cybergold/60 rounded-full px-4 py-1.5 shadow-[0_4px_20px_rgba(255,215,0,0.35)] animate-pulse flex items-center gap-2">
+          <Sparkles size={14} className="text-cybergold animate-spin-slow" />
+          <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">
+            Tap glowing pawn to move (+{gameState.diceValue} Steps)
+          </span>
         </div>
       )}
 
