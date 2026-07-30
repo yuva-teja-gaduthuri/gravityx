@@ -1040,7 +1040,9 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     });
 
     socket.on('ludo_dice_rolled', (data: any) => {
-      setIsRolling(true);
+      // Immediately stop any rolling state and lock displayed value directly to authoritative backend result
+      setIsRolling(false);
+      setRollingValue(data.diceValue);
       audioRef.current?.playRoll();
 
       // Immediately synchronize dice value and hasRolled state for real-time responsiveness
@@ -1058,33 +1060,23 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         updateValidTokens(data.validTokens);
       }
 
-      // Simulate dice rotation cycle
-      let count = 0;
-      const interval = setInterval(() => {
-        setRollingValue(Math.floor(Math.random() * 6) + 1);
-        count++;
-        if (count > 7) {
-          clearInterval(interval);
-          setIsRolling(false);
-          setRollingValue(data.diceValue);
+      // Dice thud sound
+      audioRef.current?.playImpact();
 
-          // Dice thud sound
-          audioRef.current?.playImpact();
+      // Rule: Lucky 6 visual alert
+      if (data.diceValue === 6) {
+        setLuckySix(true);
+        setTimeout(() => setLuckySix(false), 1500);
+        triggerFireworks(12, 12);
+      }
 
-          // Rule: Lucky 6 visual alert
-          if (data.diceValue === 6) {
-            setLuckySix(true);
-            setTimeout(() => setLuckySix(false), 1500);
-            triggerFireworks(12, 12);
-          }
-
-          if (isMyTurnNow && data.validTokens && data.validTokens.length === 1) {
-            setTimeout(() => {
-              handleMoveToken(data.validTokens[0]);
-            }, 100);
-          }
-        }
-      }, 45);
+      // ONLY AFTER dice value is locked to data.diceValue on screen, initiate single valid move option
+      if (isMyTurnNow && data.validTokens && data.validTokens.length === 1) {
+        const autoMoveTokenId = data.validTokens[0];
+        setTimeout(() => {
+          handleMoveToken(autoMoveTokenId);
+        }, 150);
+      }
     });
 
     socket.on('ludo_token_moved', (data: any) => {
@@ -1098,6 +1090,50 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
       const animKey = `${activePlayer.color}-${data.tokenId}`;
       animatingTokensRef.current[animKey] = true; // Lock animation immediately to prevent snapping
+
+      // Immediate visual reset for captured tokens to home base yard
+      if (data.captured && (data.capturedToken || data.players)) {
+        const capturedColor = data.capturedToken?.color;
+        const capturedId = data.capturedToken?.tokenId;
+        
+        if (capturedColor !== undefined && capturedId !== undefined) {
+          const capKey = `${capturedColor}-${capturedId}`;
+          delete animatingTokensRef.current[capKey];
+          const baseCoords = BASE_COORDINATES[capturedColor] ? BASE_COORDINATES[capturedColor][capturedId] : [0, 0];
+          visualTokensRef.current[capKey] = {
+            col: baseCoords[0],
+            row: baseCoords[1],
+            scale: 1.0,
+            rotation: 0,
+            translateY: 0,
+            isMoving: false,
+            isCaptured: false,
+          };
+        }
+        
+        // Reset all tokens marked position === -1 across all players
+        if (data.players) {
+          data.players.forEach((p: any) => {
+            p.tokens.forEach((t: any) => {
+              if (t.position === -1) {
+                const tkKey = `${p.color}-${t.id}`;
+                delete animatingTokensRef.current[tkKey];
+                const baseSlot = BASE_COORDINATES[p.color] ? BASE_COORDINATES[p.color][t.id] : [0, 0];
+                visualTokensRef.current[tkKey] = {
+                  col: baseSlot[0],
+                  row: baseSlot[1],
+                  scale: 1.0,
+                  rotation: 0,
+                  translateY: 0,
+                  isMoving: false,
+                  isCaptured: false,
+                };
+              }
+            });
+          });
+        }
+        setVisualTokens({ ...visualTokensRef.current });
+      }
 
       if (data.players) {
         setGameState(prev => prev ? {
@@ -1517,10 +1553,10 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         /* Roll positions using responsive variable calc */
         .dice-cube[data-roll="1"] { transform: rotateX(0deg) rotateY(0deg); }
         .dice-cube[data-roll="6"] { transform: rotateX(180deg) rotateY(0deg); }
+        .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(-90deg); }
+        .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(90deg); }
         .dice-cube[data-roll="3"] { transform: rotateX(-90deg) rotateY(0deg); }
         .dice-cube[data-roll="4"] { transform: rotateX(90deg) rotateY(0deg); }
-        .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(90deg); }
-        .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(-90deg); }
 
         /* Character Styles */
         .pawn-character {
