@@ -15,7 +15,7 @@ export interface Player {
 export interface Room {
   code: string;
   name: string;
-  gameType: 'RAMUDU_SEETHA' | 'LUDO';
+  gameType: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS';
   type: 'PUBLIC' | 'PRIVATE';
   maxPlayers: number;
   voiceChat: boolean;

@@ -31,7 +31,7 @@ export function handleRoom(io: Server, socket: Socket) {
     userId: string;
     username: string;
     name: string;
-    gameType: 'RAMUDU_SEETHA' | 'LUDO';
+    gameType: 'RAMUDU_SEETHA' | 'LUDO' | 'CHESS';
     type: 'PUBLIC' | 'PRIVATE';
     maxPlayers: number;
     voiceChat: boolean;
@@ -74,7 +74,7 @@ export function handleRoom(io: Server, socket: Socket) {
         name: name || `${username}'s Room`,
         gameType,
         type,
-        maxPlayers: maxPlayers || 4,
+        maxPlayers: gameType === 'CHESS' ? 2 : (maxPlayers || 4),
         voiceChat: voiceChat || false,
         allowSpectators: allowSpectators || false,
         hostId: userId,
