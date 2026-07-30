@@ -2496,81 +2496,13 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         })()}
       </div>
 
-      {/* Tiny Humans Pop-Up Selector Modal */}
+      {/* Non-intrusive Top Banner Instruction when move is required */}
       {isMyTurn && validTokens.length > 0 && gameState.hasRolled && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-md z-40 bg-slate-900/95 backdrop-blur-2xl border-2 border-cyberblue/50 rounded-3xl p-3.5 sm:p-4 shadow-[0_12px_40px_rgba(0,245,255,0.35)] animate-bounce-short">
-          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} className="text-cybergold animate-spin-slow" />
-              <h5 className="text-xs sm:text-sm font-black uppercase text-white tracking-wider">
-                CHOOSE YOUR TINY HUMAN
-              </h5>
-            </div>
-            <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-cyberblue/20 text-cyberblue border border-cyberblue/40">
-              +{gameState.diceValue} Steps
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto pr-1">
-            {validTokens.map((tokenId) => {
-              const token = activePlayer.tokens.find((t) => t.id === tokenId);
-              const pos = token ? token.position : -1;
-              
-              let statusText = 'In Base Yard';
-              let statusColor = 'text-amber-400';
-
-              if (pos >= 52) {
-                statusText = `Near Goal (${pos - 51}/6)`;
-                statusColor = 'text-green-400 font-extrabold';
-              } else if (pos >= 0) {
-                statusText = `On Track (Cell ${pos})`;
-                statusColor = 'text-cyberblue font-bold';
-              }
-
-              return (
-                <button
-                  key={tokenId}
-                  onClick={() => handleMoveToken(tokenId)}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border text-left transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg group ${
-                    activePlayer.color === 'red' ? 'border-red-500/40 bg-red-950/40 hover:bg-red-900/60' :
-                    activePlayer.color === 'green' ? 'border-green-500/40 bg-green-950/40 hover:bg-green-900/60' :
-                    activePlayer.color === 'yellow' ? 'border-yellow-500/40 bg-yellow-950/40 hover:bg-yellow-900/60' :
-                    'border-blue-500/40 bg-blue-950/40 hover:bg-blue-900/60'
-                  }`}
-                >
-                  {/* Miniature 3D Character Preview Icon */}
-                  <div className="w-9 h-9 relative shrink-0 flex items-center justify-center bg-white/10 rounded-xl p-1 border border-white/20 group-hover:scale-110 transition-transform">
-                    <div className={`pawn-character team-${activePlayer.color} idle w-full h-full`}>
-                      <div className="pawn-body-wrapper scale-75">
-                        <div className="pawn-outfit">
-                          {activePlayer.color === 'red' && <div className="pawn-cape"></div>}
-                          {activePlayer.color === 'yellow' && <div className="pawn-medal"></div>}
-                        </div>
-                        <div className="pawn-head">
-                          {activePlayer.color === 'red' && <div className="pawn-hair warrior-hair"></div>}
-                          {activePlayer.color === 'blue' && <div className="pawn-hair adventurer-hat"></div>}
-                          {activePlayer.color === 'green' && <div className="pawn-hair explorer-hat"></div>}
-                          {activePlayer.color === 'yellow' && <div className="pawn-hair champion-crown"></div>}
-                          <div className="pawn-face">
-                            <div className="pawn-eyes"><div className="pawn-eye left-eye"><div className="pawn-pupil"></div></div></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col flex-grow min-w-0">
-                    <span className="text-xs font-black text-white truncate">Human #{tokenId + 1}</span>
-                    <span className={`text-[9px] truncate ${statusColor}`}>{statusText}</span>
-                  </div>
-
-                  <div className="w-5 h-5 rounded-full bg-white/10 group-hover:bg-cyberblue group-hover:text-darkbg flex items-center justify-center text-[10px] font-bold text-white transition-colors">
-                    ➔
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 pointer-events-none z-30 bg-slate-900/90 backdrop-blur-xl border border-cybergold/60 rounded-full px-4 py-1.5 shadow-[0_4px_20px_rgba(255,215,0,0.35)] animate-pulse flex items-center gap-2">
+          <Sparkles size={14} className="text-cybergold animate-spin-slow" />
+          <span className="text-[11px] sm:text-xs font-black text-white uppercase tracking-wider">
+            Tap glowing pawn to move (+{gameState.diceValue} Steps)
+          </span>
         </div>
       )}
 
