@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize } from 'lucide-react';
+import { Trophy, Timer, Play, ShieldAlert, Sparkles, Volume2, VolumeX, Settings, Eye, Heart, UserPlus, MessageSquare, X, Maximize, Minimize, LogOut } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -1091,50 +1091,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       const animKey = `${activePlayer.color}-${data.tokenId}`;
       animatingTokensRef.current[animKey] = true; // Lock animation immediately to prevent snapping
 
-      // Immediate visual reset for captured tokens to home base yard
-      if (data.captured && (data.capturedToken || data.players)) {
-        const capturedColor = data.capturedToken?.color;
-        const capturedId = data.capturedToken?.tokenId;
-        
-        if (capturedColor !== undefined && capturedId !== undefined) {
-          const capKey = `${capturedColor}-${capturedId}`;
-          delete animatingTokensRef.current[capKey];
-          const baseCoords = BASE_COORDINATES[capturedColor] ? BASE_COORDINATES[capturedColor][capturedId] : [0, 0];
-          visualTokensRef.current[capKey] = {
-            col: baseCoords[0],
-            row: baseCoords[1],
-            scale: 1.0,
-            rotation: 0,
-            translateY: 0,
-            isMoving: false,
-            isCaptured: false,
-          };
-        }
-        
-        // Reset all tokens marked position === -1 across all players
-        if (data.players) {
-          data.players.forEach((p: any) => {
-            p.tokens.forEach((t: any) => {
-              if (t.position === -1) {
-                const tkKey = `${p.color}-${t.id}`;
-                delete animatingTokensRef.current[tkKey];
-                const baseSlot = BASE_COORDINATES[p.color] ? BASE_COORDINATES[p.color][t.id] : [0, 0];
-                visualTokensRef.current[tkKey] = {
-                  col: baseSlot[0],
-                  row: baseSlot[1],
-                  scale: 1.0,
-                  rotation: 0,
-                  translateY: 0,
-                  isMoving: false,
-                  isCaptured: false,
-                };
-              }
-            });
-          });
-        }
-        setVisualTokens({ ...visualTokensRef.current });
-      }
-
       if (data.players) {
         setGameState(prev => prev ? {
           ...prev,
@@ -1154,7 +1110,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       // Build path sequence using authoritative startPos and endPos
       const path = getPathPositions(activePlayer.color, startPos, endPos);
       
-      // Animate movement walk
+      // Animate movement walk and trigger capture rewind when attacker arrives
       animatePawnPath(activePlayer.color, data.tokenId, startPos, path, data.captured, data.capturedToken || null, data.players, endPos);
     });
 
@@ -1945,8 +1901,17 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         }
       `}} />
 
-      {/* Settings Panel Toggle */}
-      <div className="absolute top-4 right-4 z-30">
+      {/* Settings & Exit Controls */}
+      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+        <button
+          onClick={() => onReturnToLobby && onReturnToLobby()}
+          className="px-3 py-2.5 bg-cybererror/10 border border-cybererror/30 hover:bg-cybererror hover:text-white text-cybererror text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shadow-lg active:scale-95"
+          title="Return to Lobby"
+        >
+          <LogOut size={16} />
+          <span className="hidden sm:inline">Return to Lobby</span>
+        </button>
+
         <button 
           onClick={() => setShowSettings(!showSettings)} 
           className="p-3 bg-white/5 border border-white/10 hover:border-cyberblue text-white rounded-xl transition-all"

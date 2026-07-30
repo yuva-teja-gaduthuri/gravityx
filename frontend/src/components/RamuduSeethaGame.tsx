@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import confetti from 'canvas-confetti';
-import { HelpCircle, Star, ShieldCheck, Crown, Heart, UserPlus, MessageSquare, ThumbsUp, X, Award, User } from 'lucide-react';
+import { HelpCircle, Star, ShieldCheck, Crown, Heart, UserPlus, MessageSquare, ThumbsUp, X, Award, User, LogOut } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -510,6 +510,17 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       <div className="flex-1 flex flex-col space-y-6 min-w-0 z-10">
         
         {/* Top dashboard row: Session stats and Identity status */}
+        <div className="flex justify-between items-center mb-2">
+          <button
+            onClick={() => onReturnToLobby && onReturnToLobby()}
+            className="px-3 py-2 rounded-xl bg-cybererror/10 border border-cybererror/30 hover:bg-cybererror hover:text-white text-cybererror text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-md active:scale-95 z-20"
+            title="Return to Lobby"
+          >
+            <LogOut size={14} />
+            <span>Return to Lobby</span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 glass-panel rounded-3xl p-5 border-white/5 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyberblue via-cybergold to-cyberpink"></div>
           

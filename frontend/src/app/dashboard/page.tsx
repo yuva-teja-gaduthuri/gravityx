@@ -698,31 +698,28 @@ export default function Dashboard() {
               {/* Chess Card */}
               <div className="flex flex-col gap-4">
                 <div 
-                  onClick={() => alert("Chess Game module is deploying soon! Stay tuned.")}
-                  className="glass-card rounded-3xl p-5 border-white/5 relative overflow-hidden flex flex-col justify-between h-[340px] opacity-60 hover:-translate-y-2 transition-all duration-300"
+                  onClick={() => setExpandedGame(expandedGame === 'CHESS' ? null : 'CHESS')}
+                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cybergold group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-gold duration-300 ${expandedGame === 'CHESS' ? 'border-cybergold shadow-neon-gold ring-1 ring-cybergold' : ''}`}
                   style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
                 >
-                  <div className="absolute inset-0 bg-[#050816]/75 flex flex-col items-center justify-center z-10">
-                    <Lock className="text-cyberpink mb-2 animate-pulse" size={24} />
-                    <span className="text-[9px] font-black uppercase text-cyberpink tracking-widest">Launching Soon</span>
-                  </div>
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-cybergold/5 rounded-full blur-3xl group-hover:bg-cybergold/10 transition-all"></div>
 
                   {/* Artwork Top */}
                   <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                    <span className="text-4xl filter drop-shadow-neon-gold">♟️</span>
+                    <span className="text-4xl filter drop-shadow-neon-gold transform group-hover:scale-110 transition-all duration-300">♟️</span>
                     <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
                       tactical
                     </span>
                   </div>
 
                   <div>
-                    <h4 className="font-extrabold text-lg mt-3 text-white">Chess Strategy</h4>
-                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess.</p>
+                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cybergold transition-colors">Chess Strategy</h4>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess with high contrast pure pieces.</p>
                   </div>
 
                   <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
                     <span>2 Players</span>
-                    <span className="text-gray-500 font-black">LOCKED</span>
+                    <span className="text-cybergold font-black">{expandedGame === 'CHESS' ? 'Close Panel' : 'Control Deck'}</span>
                   </div>
                 </div>
                 {expandedGame === 'CHESS' && (
@@ -847,7 +844,7 @@ export default function Dashboard() {
                   >
                     <option value="RAMUDU_SEETHA">Ramudu-Seetha</option>
                     <option value="LUDO">Cosmic Ludo</option>
-                    <option value="CHESS" disabled>Chess Strategy (Locked 🔒)</option>
+                    <option value="CHESS">Chess Strategy ♟️</option>
                   </select>
                 </div>
                 <div>

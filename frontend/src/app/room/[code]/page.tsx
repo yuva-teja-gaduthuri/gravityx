@@ -488,6 +488,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('rs_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setLocalReturnToLobby(true);
                 setMatchEndedData(null);
@@ -503,6 +505,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('chess_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setMatchEndedData(null);
               }}
@@ -517,6 +521,8 @@ export default function RoomPage() {
               onReturnToLobby={() => {
                 if (isHost) {
                   socket.emit('ludo_return_to_lobby', roomCode);
+                } else {
+                  handleLeaveRoom();
                 }
                 setMatchEndedData(null);
               }}

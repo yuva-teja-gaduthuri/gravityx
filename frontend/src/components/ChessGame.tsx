@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { Chess, Square } from 'chess.js';
 import confetti from 'canvas-confetti';
-import { Trophy, Maximize, Minimize, Heart, UserPlus, MessageSquare, X, RefreshCw } from 'lucide-react';
+import { Trophy, Maximize, Minimize, Heart, UserPlus, MessageSquare, X, RefreshCw, LogOut } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -399,6 +399,14 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => onReturnToLobby && onReturnToLobby()}
+            className="px-2.5 py-1.5 rounded-lg bg-cybererror/10 border border-cybererror/30 hover:bg-cybererror hover:text-white text-cybererror text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+            title="Return to Lobby"
+          >
+            <LogOut size={14} />
+            <span>Return to Lobby</span>
+          </button>
           <button
             onClick={toggleFullscreen}
             className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
