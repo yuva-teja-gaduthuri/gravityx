@@ -27,8 +27,10 @@ interface ChessState {
   blackPlayerId: string;
   whiteUsername: string;
   blackUsername: string;
-  whiteTimeLeft: number;
-  blackTimeLeft: number;
+  timeControl?: number | 'UNLIMITED';
+  whiteTimeLeft: number | null;
+  blackTimeLeft: number | null;
+  timerStarted?: boolean;
   lastMoveTimestamp: number;
   capturedPieces: CapturedPiece[];
   lastMove: { from: string; to: string; piece?: string; san?: string } | null;
@@ -119,7 +121,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
       }
     };
 
-    const handleTimerTick = (data: { whiteTimeLeft: number; blackTimeLeft: number; activeTurn: 'w' | 'b' }) => {
+    const handleTimerTick = (data: { whiteTimeLeft: number | null; blackTimeLeft: number | null; activeTurn: 'w' | 'b' }) => {
       setGameState((prev) =>
         prev
           ? {
@@ -127,6 +129,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
               whiteTimeLeft: data.whiteTimeLeft,
               blackTimeLeft: data.blackTimeLeft,
               turn: data.activeTurn,
+              timerStarted: true,
             }
           : prev
       );

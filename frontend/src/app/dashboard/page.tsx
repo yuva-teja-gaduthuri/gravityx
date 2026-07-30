@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [voiceChat, setVoiceChat] = useState(false);
   const [allowSpectators, setAllowSpectators] = useState(false);
+  const [chessTimeControl, setChessTimeControl] = useState<number | 'UNLIMITED'>('UNLIMITED');
   const [joinCode, setJoinCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [createError, setCreateError] = useState('');
@@ -317,6 +318,7 @@ export default function Dashboard() {
       maxPlayers: finalMaxPlayers,
       voiceChat,
       allowSpectators,
+      timeControl: selectedGame === 'CHESS' ? chessTimeControl : undefined,
     });
   };
 
@@ -891,16 +893,34 @@ export default function Dashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Turn Timer Speed</label>
-                  <select 
-                    value={turnTimer}
-                    onChange={(e) => setTurnTimer(Number(e.target.value))}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
-                  >
-                    <option value={15}>15s (Blitz)</option>
-                    <option value={30}>30s (Normal)</option>
-                    <option value={60}>60s (Slow)</option>
-                  </select>
+                  <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
+                    {selectedGame === 'CHESS' ? 'Chess Time Control' : 'Turn Timer Speed'}
+                  </label>
+                  {selectedGame === 'CHESS' ? (
+                    <select
+                      value={chessTimeControl}
+                      onChange={(e) => setChessTimeControl(e.target.value === 'UNLIMITED' ? 'UNLIMITED' : Number(e.target.value))}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cybergold font-bold text-white bg-slate-900"
+                    >
+                      <option value="UNLIMITED">∞ Unlimited (No Timer)</option>
+                      <option value={60}>⚡ 1 Min (Bullet)</option>
+                      <option value={180}>🔥 3 Min (Blitz)</option>
+                      <option value={300}>🎯 5 Min (Blitz)</option>
+                      <option value={600}>⏳ 10 Min (Rapid)</option>
+                      <option value={900}>🏆 15 Min</option>
+                      <option value={1800}>👑 30 Min</option>
+                    </select>
+                  ) : (
+                    <select 
+                      value={turnTimer}
+                      onChange={(e) => setTurnTimer(Number(e.target.value))}
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                    >
+                      <option value={15}>15s (Blitz)</option>
+                      <option value={30}>30s (Normal)</option>
+                      <option value={60}>60s (Slow)</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

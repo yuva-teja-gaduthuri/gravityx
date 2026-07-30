@@ -275,10 +275,14 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
           {/* Target move indicator overlays */}
           {isPossible && (
             <div
-              className={`absolute z-30 rounded-full pointer-events-none transition-transform ${
+              onClick={(e) => {
+                e.stopPropagation();
+                onSquareClick(squareName);
+              }}
+              className={`absolute z-30 rounded-full cursor-pointer transition-transform ${
                 square
-                  ? 'inset-1 border-4 border-black/30 bg-red-500/20 animate-pulse'
-                  : 'w-3.5 h-3.5 bg-black/25 shadow-inner'
+                  ? 'inset-1 border-4 border-cybererror/60 bg-cybererror/30 animate-pulse ring-2 ring-cybererror'
+                  : 'w-4 h-4 bg-cybergold/80 shadow-[0_0_10px_rgba(255,213,79,0.8)]'
               }`}
             />
           )}
@@ -315,7 +319,13 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 willChange: 'left, top, transform, opacity',
               }}
             >
-              <div className="w-[85%] h-[85%] transition-transform duration-150 active:scale-95 hover:scale-105 pointer-events-auto cursor-pointer">
+              <div 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSquareClick(piece.square);
+                }}
+                className="w-[85%] h-[85%] transition-transform duration-150 active:scale-95 hover:scale-105 pointer-events-auto cursor-pointer"
+              >
                 <ChessSVG type={piece.type} color={piece.color} />
               </div>
             </div>

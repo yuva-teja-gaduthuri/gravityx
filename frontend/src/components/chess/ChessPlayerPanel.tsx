@@ -13,7 +13,7 @@ interface ChessPlayerPanelProps {
   username: string;
   color: 'w' | 'b';
   isTurn: boolean;
-  timeLeft: number; // in seconds
+  timeLeft: number | null; // in seconds or null for Unlimited
   isCheck: boolean;
   capturedPieces: CapturedPiece[];
   rating?: number;
@@ -32,8 +32,9 @@ export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
 }) => {
   const isWhite = color === 'w';
 
-  // Format seconds to MM:SS
-  const formatTime = (secs: number) => {
+  // Format seconds to MM:SS or Unlimited
+  const formatTime = (secs: number | null) => {
+    if (secs === null || secs === undefined) return '∞ Unlimited';
     const minutes = Math.floor(secs / 60);
     const seconds = secs % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
@@ -41,7 +42,7 @@ export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
 
   // Clock visual state styling based on time left
   let timerBg = 'bg-slate-800/90 text-gray-200 border-white/10';
-  if (isTurn) {
+  if (isTurn && typeof timeLeft === 'number') {
     if (timeLeft <= 30) {
       timerBg = 'bg-red-600/90 text-white border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.7)] animate-pulse';
     } else if (timeLeft <= 120) {

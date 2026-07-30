@@ -17,8 +17,10 @@ export interface ChessState {
   blackPlayerId: string;
   whiteUsername: string;
   blackUsername: string;
-  whiteTimeLeft: number; // in seconds (e.g. 600 for 10 min clock)
-  blackTimeLeft: number; // in seconds
+  timeControl: number | 'UNLIMITED';
+  whiteTimeLeft: number | null;
+  blackTimeLeft: number | null;
+  timerStarted: boolean;
   lastMoveTimestamp: number;
   capturedPieces: CapturedPiece[];
   lastMove: { from: string; to: string; piece?: string; san?: string } | null;
@@ -111,6 +113,15 @@ export function handleChess(io: Server, socket: Socket) {
           });
         }
 
+        // Start timer countdown loop upon first move of the match (if timeControl is not UNLIMITED)
+        if (!gameState.timerStarted) {
+          gameState.timerStarted = true;
+        }
+
+        if (gameState.timeControl !== 'UNLIMITED' && !activeChessTimers[upperCode]) {
+          startChessTurnTimer(io, upperCode);
+        }
+
         if (chess.isGameOver()) {
           gameState.isGameOver = true;
           if (chess.isCheckmate()) {
@@ -181,6 +192,9 @@ export function startChessGame(io: Server, room: any) {
   const whitePlayer = room.players[0];
   const blackPlayer = room.players[1];
 
+  const tc = room.timeControl !== undefined ? room.timeControl : 'UNLIMITED';
+  const initialSeconds = typeof tc === 'number' ? tc : null;
+
   const gameState: ChessState = {
     fen: chess.fen(),
     turn: 'w',
@@ -188,8 +202,10 @@ export function startChessGame(io: Server, room: any) {
     blackPlayerId: blackPlayer.id,
     whiteUsername: whitePlayer.displayName || whitePlayer.username,
     blackUsername: blackPlayer.displayName || blackPlayer.username,
-    whiteTimeLeft: 600, // 10 minutes clock per player
-    blackTimeLeft: 600,
+    timeControl: tc,
+    whiteTimeLeft: initialSeconds,
+    blackTimeLeft: initialSeconds,
+    timerStarted: false,
     lastMoveTimestamp: Date.now(),
     capturedPieces: [],
     lastMove: null,
@@ -205,8 +221,7 @@ export function startChessGame(io: Server, room: any) {
   room.status = 'PLAYING';
   room.gameState = gameState;
 
-  // Start active game timer loop
-  startChessTurnTimer(io, room.code);
+  // Note: Timer ONLY starts after 1st move of game! Do NOT start timer here.
 
   io.to(room.code).emit('room_state_updated', room);
   io.to(room.code).emit('chess_state_sync', gameState);
@@ -226,41 +241,43 @@ function startChessTurnTimer(io: Server, roomCode: string) {
     }
 
     const state = room.gameState as ChessState;
-    if (!state || state.isGameOver) {
+    if (!state || state.isGameOver || state.timeControl === 'UNLIMITED' || !state.timerStarted) {
       clearInterval(activeChessTimers[roomCode]);
       delete activeChessTimers[roomCode];
       return;
     }
 
-    // Decrement time for active player
-    if (state.turn === 'w') {
-      state.whiteTimeLeft = Math.max(0, state.whiteTimeLeft - 1);
-    } else {
-      state.blackTimeLeft = Math.max(0, state.blackTimeLeft - 1);
-    }
-
-    io.to(roomCode).emit('chess_timer_tick', {
-      whiteTimeLeft: state.whiteTimeLeft,
-      blackTimeLeft: state.blackTimeLeft,
-      activeTurn: state.turn,
-    });
-
-    // Check for clock timeout
-    if (state.whiteTimeLeft <= 0 || state.blackTimeLeft <= 0) {
-      clearInterval(activeChessTimers[roomCode]);
-      delete activeChessTimers[roomCode];
-
-      state.isGameOver = true;
-      if (state.whiteTimeLeft <= 0) {
-        state.winnerId = state.blackPlayerId;
-        state.drawReason = 'White Time Out';
+    // Decrement time for active player if numerical timer set
+    if (typeof state.whiteTimeLeft === 'number' && typeof state.blackTimeLeft === 'number') {
+      if (state.turn === 'w') {
+        state.whiteTimeLeft = Math.max(0, state.whiteTimeLeft - 1);
       } else {
-        state.winnerId = state.whitePlayerId;
-        state.drawReason = 'Black Time Out';
+        state.blackTimeLeft = Math.max(0, state.blackTimeLeft - 1);
       }
 
-      io.to(roomCode).emit('chess_state_sync', state);
-      triggerChessMatchEnd(io, roomCode, room, state);
+      io.to(roomCode).emit('chess_timer_tick', {
+        whiteTimeLeft: state.whiteTimeLeft,
+        blackTimeLeft: state.blackTimeLeft,
+        activeTurn: state.turn,
+      });
+
+      // Check for clock timeout
+      if (state.whiteTimeLeft <= 0 || state.blackTimeLeft <= 0) {
+        clearInterval(activeChessTimers[roomCode]);
+        delete activeChessTimers[roomCode];
+
+        state.isGameOver = true;
+        if (state.whiteTimeLeft <= 0) {
+          state.winnerId = state.blackPlayerId;
+          state.drawReason = 'White Time Out';
+        } else {
+          state.winnerId = state.whitePlayerId;
+          state.drawReason = 'Black Time Out';
+        }
+
+        io.to(roomCode).emit('chess_state_sync', state);
+        triggerChessMatchEnd(io, roomCode, room, state);
+      }
     }
   }, 1000);
 }

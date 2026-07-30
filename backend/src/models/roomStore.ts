@@ -30,6 +30,7 @@ export interface Room {
   maxRounds?: number;
   sessionScoreboard?: { [userId: string]: { username: string; score: number } };
   previousRoles?: { [userId: string]: string };
+  timeControl?: number | 'UNLIMITED';
 }
 
 class RoomStore {

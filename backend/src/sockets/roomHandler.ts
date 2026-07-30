@@ -27,6 +27,7 @@ export function handleRoom(io: Server, socket: Socket) {
     maxPlayers,
     voiceChat,
     allowSpectators,
+    timeControl,
   }: {
     userId: string;
     username: string;
@@ -36,6 +37,7 @@ export function handleRoom(io: Server, socket: Socket) {
     maxPlayers: number;
     voiceChat: boolean;
     allowSpectators: boolean;
+    timeControl?: number | 'UNLIMITED';
   }) => {
     try {
       // Check auth
@@ -78,6 +80,7 @@ export function handleRoom(io: Server, socket: Socket) {
         voiceChat: voiceChat || false,
         allowSpectators: allowSpectators || false,
         hostId: userId,
+        timeControl: timeControl !== undefined ? timeControl : 'UNLIMITED',
       });
 
       roomStore.addPlayer(code, hostPlayer);
@@ -479,7 +482,7 @@ export function handleRoom(io: Server, socket: Socket) {
     }
   });
 
-  socket.on('edit_room_settings', ({ roomCode, type, maxPlayers, voiceChat, allowSpectators }: { roomCode: string; type: 'PUBLIC' | 'PRIVATE'; maxPlayers: number; voiceChat: boolean; allowSpectators: boolean }) => {
+  socket.on('edit_room_settings', ({ roomCode, type, maxPlayers, voiceChat, allowSpectators, timeControl }: { roomCode: string; type: 'PUBLIC' | 'PRIVATE'; maxPlayers: number; voiceChat: boolean; allowSpectators: boolean; timeControl?: number | 'UNLIMITED' }) => {
     try {
       const upperCode = roomCode.trim().toUpperCase();
       const room = roomStore.getRoom(upperCode);
@@ -494,6 +497,9 @@ export function handleRoom(io: Server, socket: Socket) {
       room.maxPlayers = maxPlayers;
       room.voiceChat = voiceChat;
       room.allowSpectators = allowSpectators;
+      if (timeControl !== undefined) {
+        room.timeControl = timeControl;
+      }
 
       io.to(upperCode).emit('room_state_updated', room);
     } catch (err: any) {
