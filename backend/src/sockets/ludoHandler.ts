@@ -214,6 +214,7 @@ export function handleLudo(io: Server, socket: Socket) {
         activePlayerIndex: state.activePlayerIndex,
         validTokens: validMoves,
       });
+      io.to(upperCode).emit('ludo_state_sync', state);
 
       // Reset turn timer for movement decision
       resetTurnTimer(io, upperCode);
@@ -303,6 +304,7 @@ export function handleLudo(io: Server, socket: Socket) {
 
       // Handle collision (capturing opponent tokens)
       let captured = false;
+      let capturedTokenInfo: { color: string; tokenId: number } | null = null;
       if (newPosition >= 0 && newPosition <= 51 && !SAFE_CELLS.includes(newPosition)) {
         // Find other players tokens on same cell
         state.players.forEach((p) => {
@@ -312,6 +314,7 @@ export function handleLudo(io: Server, socket: Socket) {
                 // Landed on opponent token! Knock back to yard
                 t.position = -1;
                 captured = true;
+                capturedTokenInfo = { color: p.color, tokenId: t.id };
               }
             });
           }
@@ -352,6 +355,7 @@ export function handleLudo(io: Server, socket: Socket) {
         oldPosition,
         newPosition,
         captured,
+        capturedToken: capturedTokenInfo,
         players: state.players,
       });
       io.to(upperCode).emit('ludo_state_sync', state);
@@ -570,13 +574,14 @@ function startTurnTimer(io: Server, roomCode: string) {
 
           // Broadcast updated state after elimination
           io.to(roomCode).emit('ludo_state_sync', state);
+          nextTurn(io, roomCode, currentToken);
+        } else {
+          // Auto-play turn for timed-out player
+          triggerBotTurn(io, roomCode, state.activePlayerIndex);
         }
-
-        // Pass turn immediately to next player
-        nextTurn(io, roomCode, currentToken);
       } else {
-        // If movement phase timer expired, pass turn to next player
-        nextTurn(io, roomCode, currentToken);
+        // If dice was rolled but movement timed out, trigger bot logic to move token
+        triggerBotTurn(io, roomCode, state.activePlayerIndex);
       }
     }
   }, 1000);

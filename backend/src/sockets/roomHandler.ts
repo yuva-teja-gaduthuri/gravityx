@@ -172,6 +172,10 @@ export function handleRoom(io: Server, socket: Socket) {
       } else {
         existingPlayer.socketId = socket.id;
         existingPlayer.disconnected = false; // Mark as active
+        if (room.gameState && room.gameState.players) {
+          const gp = room.gameState.players.find((p: any) => p.id === userId);
+          if (gp) gp.socketId = socket.id;
+        }
         existingPlayer.avatar = userProfile?.avatar || existingPlayer.avatar;
         existingPlayer.profileFrame = userProfile?.profileFrame || existingPlayer.profileFrame;
         if (cleanDisplayName) {
