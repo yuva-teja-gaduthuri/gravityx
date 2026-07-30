@@ -306,12 +306,7 @@ export default function Dashboard() {
     setCreateError('');
     if (!user || !socket) return;
 
-    if (selectedGame === 'CHESS') {
-      setCreateError('Chess Strategy module is locked and deploying soon!');
-      return;
-    }
-
-    const finalMaxPlayers = selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
+    const finalMaxPlayers = selectedGame === 'CHESS' ? 2 : selectedGame === 'RAMUDU_SEETHA' ? Math.max(3, Number(maxPlayers)) : Number(maxPlayers);
 
     socket.emit('create_room', {
       userId: user.id,
