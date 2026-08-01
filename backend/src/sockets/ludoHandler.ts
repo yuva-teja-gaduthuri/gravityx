@@ -199,7 +199,16 @@ export function handleLudo(io: Server, socket: Socket) {
           state.consecutiveSixes = 0;
           state.diceValue = null;
           state.hasRolled = false;
-          nextTurn(io, upperCode, state.turnToken);
+          io.to(upperCode).emit('ludo_dice_rolled', {
+            diceValue: roll,
+            activePlayerIndex: state.activePlayerIndex,
+            validTokens: [],
+          });
+          io.to(upperCode).emit('ludo_state_sync', state);
+          const currentToken = state.turnToken;
+          setTimeout(() => {
+            nextTurn(io, upperCode, currentToken);
+          }, 500);
           return;
         }
       } else {
@@ -348,6 +357,15 @@ export function handleLudo(io: Server, socket: Socket) {
 
       console.log(`🎲 [LUDO MOVE]: Player ${activePlayer.username} (${activePlayer.color}) moved token ${tokenId} from ${oldPosition} -> ${newPosition} (Dice: ${dice}, Captured: ${captured}, Reached Goal: ${reachedGoal})`);
 
+      // Rule: Rolling a 6, capturing a token, or landing a token in Goal awards a bonus turn
+      const awardBonus = (dice === 6 || captured || reachedGoal) && !activePlayer.isWinner && !activePlayer.isEliminated;
+
+      if (awardBonus) {
+        // Reset dice rolled state and stay on same player turn before state sync
+        state.diceValue = null;
+        state.hasRolled = false;
+      }
+
       // Broadcast move animation update and full state sync so all clients update visually in real time
       io.to(upperCode).emit('ludo_token_moved', {
         activePlayerIndex: state.activePlayerIndex,
@@ -360,13 +378,7 @@ export function handleLudo(io: Server, socket: Socket) {
       });
       io.to(upperCode).emit('ludo_state_sync', state);
 
-      // Rule: Rolling a 6, capturing a token, or landing a token in Goal awards a bonus turn
-      const awardBonus = (dice === 6 || captured || reachedGoal) && !activePlayer.isWinner && !activePlayer.isEliminated;
-
       if (awardBonus) {
-        // Reset dice rolled state and stay on same player turn
-        state.diceValue = null;
-        state.hasRolled = false;
         io.to(upperCode).emit('ludo_new_turn', {
           activePlayerIndex: state.activePlayerIndex,
           diceValue: null,
@@ -479,9 +491,10 @@ function nextTurn(io: Server, roomCode: string, expectedTurnToken?: number) {
   // Increment turn token to lock this new turn
   state.turnToken = (state.turnToken || 0) + 1;
 
-  // Clear previous dice rolled state
+  // Clear previous dice rolled state and reset consecutive sixes count
   state.diceValue = null;
   state.hasRolled = false;
+  state.consecutiveSixes = 0;
 
   // Check remaining active players (neither winner nor eliminated)
   const remainingActive = state.players.filter((p) => !p.isWinner && !p.isEliminated);
