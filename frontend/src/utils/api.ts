@@ -44,6 +44,41 @@ interface CacheEntry {
 const apiCache: { [key: string]: CacheEntry } = {};
 
 /**
+ * Safely parse JSON from a fetch Response, handling non-JSON error responses (like 502 Bad Gateway HTML/text)
+ */
+export const parseResponseJson = async (res: Response) => {
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  if (isJson) {
+    try {
+      return await res.json();
+    } catch {
+      // Continue to text fallback if JSON parsing fails
+    }
+  }
+
+  const rawText = await res.text().catch(() => '');
+
+  if (res.status === 502 || rawText.toLowerCase().includes('bad gateway')) {
+    throw new Error('Unable to connect to backend server (502 Bad Gateway). Please verify backend server is running on port 3001.');
+  }
+  if (res.status === 503 || res.status === 504 || rawText.toLowerCase().includes('gateway timeout')) {
+    throw new Error(`Server temporarily unavailable (${res.status}). Please try again.`);
+  }
+
+  if (!res.ok) {
+    throw new Error(rawText || `Server error (${res.status})`);
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    return { text: rawText };
+  }
+};
+
+/**
  * Fetch helper with client-side cache and staleTime check
  * @param path API endpoint path
  * @param staleTime Expiration window in milliseconds (default 1 minute)
@@ -69,11 +104,11 @@ export const fetchWithCache = async (path: string, staleTime: number = 60000) =>
     }
   });
 
+  const data = await parseResponseJson(res);
+
   if (!res.ok) {
-    throw new Error(`API fetch error! status: ${res.status}`);
+    throw new Error(data?.error || `API fetch error! status: ${res.status}`);
   }
-  
-  const data = await res.json();
 
   // 3. Store fresh copy in cache
   apiCache[cacheKey] = {

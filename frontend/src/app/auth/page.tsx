@@ -8,7 +8,7 @@ import {
   Rocket, Gamepad2, Zap, Shield, Star, Trophy
 } from 'lucide-react';
 import Turnstile from 'react-turnstile';
-import { getApiUrl } from '../../utils/api';
+import { getApiUrl, parseResponseJson } from '../../utils/api';
 import { useTranslation } from '../../hooks/useTranslation';
 
 /* ── Password Strength Meter ── */
@@ -175,7 +175,7 @@ function AuthContent() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token }),
           });
-          const data = await res.json();
+          const data = await parseResponseJson(res);
           if (!res.ok) throw new Error(data.error || 'Verification failed');
           setSuccess(data.message || 'Email verified successfully! You can now log in.');
           router.replace('/auth?tab=login');
@@ -199,7 +199,7 @@ function AuthContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Registration failed');
       setSuccess(data.message || 'Verification email sent. Please check your inbox.');
       setUnverifiedEmail(email);
@@ -220,7 +220,7 @@ function AuthContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailOrUsername: email || username, password }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) {
         if (data.unverified) {
           setUnverifiedEmail(data.email);
@@ -250,7 +250,7 @@ function AuthContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Guest login failed');
       localStorage.setItem('gravityx_token', data.token);
       localStorage.setItem('gravityx_user', JSON.stringify({
@@ -284,7 +284,7 @@ function AuthContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to dispatch reset link');
       setForgotSent(true);
       setSuccess(data.message);
@@ -308,7 +308,7 @@ function AuthContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password: newPassword }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to reset password');
       setSuccess(data.message || 'Password reset successfully! You can now log in.');
       router.replace('/auth?tab=login');
@@ -329,7 +329,7 @@ function AuthContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: unverifiedEmail }),
       });
-      const data = await res.json();
+      const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Failed to resend link');
       setSuccess(data.message || 'Verification email resent successfully!');
     } catch (err: any) {

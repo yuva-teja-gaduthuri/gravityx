@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Gamepad2, ShoppingBag, Trophy, User } from 'lucide-react';
+import { LayoutDashboard, Swords, ShoppingBag, Trophy, User } from 'lucide-react';
 
 interface MobileNavProps {
   onOpenSocial?: () => void;
@@ -23,7 +23,7 @@ export default function MobileNav({ onOpenSocial, unreadSocialCount = 0 }: Mobil
     {
       name: 'Lobbies',
       href: '/dashboard',
-      icon: Gamepad2,
+      icon: Swords,
       active: pathname.startsWith('/dashboard') || pathname.startsWith('/room'),
     },
     {

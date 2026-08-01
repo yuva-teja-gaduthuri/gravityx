@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getApiUrl, invalidateCache } from '../utils/api';
+import { getApiUrl, invalidateCache, parseResponseJson } from '../utils/api';
 
 export interface UserProfile {
   id: string;
@@ -91,7 +91,7 @@ export function useAuth(requireAuth = true) {
           },
         });
         if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
+          const refreshData = await parseResponseJson(refreshRes);
           activeToken = refreshData.token;
           localStorage.setItem('gravityx_token', activeToken);
         } else if (refreshRes.status === 401 || refreshRes.status === 403) {
@@ -111,12 +111,12 @@ export function useAuth(requireAuth = true) {
             Authorization: `Bearer ${activeToken}`,
             'Content-Type': 'application/json',
           },
-        }).then((res) => {
+        }).then(async (res) => {
           if (res.status === 401 || res.status === 403) {
             throw { status: res.status, message: 'Unauthorized' };
           }
           if (!res.ok) throw new Error(`Profile fetch failed status: ${res.status}`);
-          return res.json();
+          return parseResponseJson(res);
         }).finally(() => {
           activeProfilePromise = null;
         });
