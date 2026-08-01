@@ -349,9 +349,13 @@ export default function Dashboard() {
 
   if (loading || !user) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Calibrating Gravity Field...</p>
+      <div className="flex-1 flex flex-col items-center justify-center gap-5">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-4 border-primary/15" />
+          <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-cyberblue animate-spin" />
+          <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-cyberpink animate-spin" style={{ animationDirection: 'reverse', animationDuration: '0.75s' }} />
+        </div>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Calibrating Gravity Field...</p>
       </div>
     );
   }
@@ -481,299 +485,338 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col flex-grow">
-      {/* Top Header Navigation */}
-      <nav className="w-full glass-panel py-4 px-6 md:px-12 flex flex-col sm:flex-row items-center justify-between border-b border-white/5 gap-4">
-        {/* Clickable Profile HUD Card */}
-        <div 
+      {/* ═══ COMMAND BAR NAVIGATION ═══ */}
+      <nav className="w-full glass-panel py-3.5 px-6 md:px-10 flex flex-col sm:flex-row items-center justify-between border-b border-white/[0.06] gap-4">
+        
+        {/* Profile HUD */}
+        <div
           onClick={() => router.push('/profile')}
-          className="flex items-center gap-4 cursor-pointer hover:opacity-90 transition-all group"
+          className="flex items-center gap-3.5 cursor-pointer group"
           title="Profile Settings & Configuration"
+          role="button"
+          tabIndex={0}
         >
-          <div className="relative">
-            {/* Equipped Frame Outline */}
-            <div className={`w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center border-2 ${
-              user.profileFrame === 'neon_glow' ? 'border-cyberblue shadow-neon-blue' : 
-              user.profileFrame === 'event_horizon' ? 'border-cyberpink shadow-neon-pink' : 'border-white/10'
+          <div className="relative flex-shrink-0">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all group-hover:scale-105 ${
+              user.profileFrame === 'neon_glow'
+                ? 'border-cyberblue shadow-neon-blue bg-cyberblue/10'
+                : user.profileFrame === 'event_horizon'
+                ? 'border-cyberpink shadow-neon-pink bg-cyberpink/10'
+                : 'border-white/15 bg-primary/10'
             }`}>
-              <div className="w-11 h-11 rounded-full bg-darkbg flex items-center justify-center text-2xl">
+              <div className="w-9 h-9 rounded-full bg-deepspace-800 flex items-center justify-center text-xl">
                 {AVATAR_GRAPHICS[user.avatar] || '👽'}
               </div>
             </div>
-            <span className="absolute -bottom-1.5 -right-1.5 px-2 py-0.5 rounded-full bg-primary text-[10px] font-black border border-darkbg">
+            <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-br from-primary to-cyberblue flex items-center justify-center text-[9px] font-black text-white border-2 border-deepspace-800">
               {user.level}
             </span>
           </div>
 
           <div className="flex flex-col">
-            <span className="font-extrabold text-lg text-white flex items-center gap-1.5 group-hover:text-cyberpink transition-colors">
-              {user.username}
+            <div className="flex items-center gap-2">
+              <span className="font-display font-bold text-base text-white group-hover:text-cyberpink transition-colors">
+                {user.username}
+              </span>
               {user.role === 'ADMIN' && (
-                <span className="text-[9px] font-black bg-cyberpink/20 text-cyberpink border border-cyberpink/30 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                  Admin
-                </span>
+                <span className="badge badge-pink text-[8px]">Admin</span>
               )}
-            </span>
-            {/* XP bar */}
-            <div className="flex items-center gap-2 mt-1 w-48">
-              <div className="flex-grow h-1.5 rounded-full bg-white/5 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary to-cyberblue" style={{ width: `${xpPercent}%` }}></div>
+              {user.rank && (
+                <span className="badge badge-gold text-[8px]">{user.rank}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1 w-44">
+              <div className="progress-track flex-grow h-1.5">
+                <div className="progress-bar h-full xp-bar" style={{ width: `${xpPercent}%` }} />
               </div>
-              <span className="text-[10px] font-semibold text-gray-500">{user.xp}/{nextLevelXp} XP</span>
+              <span className="text-stat text-[9px] text-gray-600">{user.xp}/{nextLevelXp}</span>
             </div>
           </div>
         </div>
 
-        {/* Action HUD Widgets */}
-        <div className="flex items-center gap-5">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/5 shadow-inner">
-            <Coins size={16} className="text-cybergold" />
-            <span className="text-sm font-black text-cybergold">{user.coins}</span>
+        {/* Right Actions */}
+        <div className="flex items-center gap-3">
+          {/* Coins display */}
+          <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl glass-card border-white/[0.06] cursor-default">
+            <Coins size={14} className="text-cybergold" />
+            <span className="text-stat text-sm font-bold text-cybergold">{user.coins.toLocaleString()}</span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <button 
-              onClick={() => router.push('/store')} 
-              className="p-3 rounded-xl glass-card border-white/10 text-gray-400 hover:text-white hover:border-cyberblue transition-all"
-              title="Store"
-            >
-              <ShoppingBag size={18} />
-            </button>
-            <button 
-              onClick={() => setShowSocialDrawer(!showSocialDrawer)} 
-              className={`p-3 rounded-xl glass-card border-white/10 text-gray-400 hover:text-white hover:border-cyberpink transition-all ${showSocialDrawer ? 'border-cyberpink text-white shadow-neon-pink ring-1 ring-cyberpink bg-cyberpink/10' : ''}`}
-              title="Add Friends & Social Console"
-            >
-              <Users size={18} />
-            </button>
-            {user.role === 'ADMIN' && (
-              <button 
-                onClick={() => router.push('/admin')} 
-                className="p-3 rounded-xl bg-cyberpink/10 border border-cyberpink/20 text-cyberpink hover:bg-cyberpink hover:text-white transition-all font-black text-xs uppercase"
-              >
-                Panel
-              </button>
-            )}
-            <button 
-              onClick={() => {
-                logout();
-                router.push('/auth');
-              }} 
-              className="p-3 rounded-xl glass-card border-white/10 text-gray-400 hover:text-cybererror hover:border-cybererror/30 hover:bg-cybererror/10 transition-all"
-              title="Log Out Session"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>      </nav>
+          <ThemeToggle />
 
-      {/* Main Grid: Launcher + Sidebar */}
+          <button
+            id="dashboard-store-btn"
+            onClick={() => router.push('/store')}
+            className="p-2.5 rounded-xl glass-card border-white/[0.06] text-gray-500 hover:text-cyberblue hover:border-cyberblue/30 transition-all"
+            title="Store"
+            aria-label="Open Store"
+          >
+            <ShoppingBag size={17} />
+          </button>
+
+          <button
+            id="dashboard-social-btn"
+            onClick={() => setShowSocialDrawer(!showSocialDrawer)}
+            className={`p-2.5 rounded-xl glass-card border-white/[0.06] text-gray-500 hover:text-cyberpink hover:border-cyberpink/30 transition-all ${showSocialDrawer ? 'border-cyberpink/50 text-cyberpink shadow-neon-pink bg-cyberpink/8' : ''}`}
+            title="Social Console"
+            aria-label="Toggle Social Drawer"
+          >
+            <Users size={17} />
+          </button>
+
+          {user.role === 'ADMIN' && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="px-3 py-2.5 rounded-xl bg-cyberpink/10 border border-cyberpink/25 text-cyberpink hover:bg-cyberpink hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"
+            >
+              Panel
+            </button>
+          )}
+
+          <button
+            id="dashboard-logout-btn"
+            onClick={() => { logout(); router.push('/auth'); }}
+            className="p-2.5 rounded-xl glass-card border-white/[0.06] text-gray-500 hover:text-cybererror hover:border-cybererror/30 hover:bg-cybererror/8 transition-all"
+            title="Log Out"
+            aria-label="Log Out"
+          >
+            <LogOut size={17} />
+          </button>
+        </div>
+      </nav>
+
+      {/* ═══ MAIN CONTENT GRID ═══ */}
       <div className="flex-grow flex flex-col lg:flex-row">
         {/* Main Launcher Feed */}
-        <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto max-h-[calc(100vh-80px)]">
-          {/* Quick Actions Header */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <button 
+        <div className="flex-1 p-5 md:p-7 space-y-7 overflow-y-auto max-h-[calc(100vh-72px)]">
+          
+          {/* Welcome Banner */}
+          <div className="relative rounded-2xl overflow-hidden p-6 border border-white/[0.06]" style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.12) 0%, rgba(0,245,255,0.05) 100%)' }}>
+            <div className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl opacity-40" style={{ background: user.profileFrame === 'event_horizon' ? 'rgba(255,94,223,0.3)' : 'rgba(108,99,255,0.25)' }} />
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary/80 mb-1">Welcome back, Commander</p>
+              <h2 className="font-display text-2xl font-bold text-white">{user.username}</h2>
+              <div className="flex items-center gap-3 mt-2">
+                {user.rank && <span className="badge badge-gold">{user.rank}</span>}
+                <span className="badge badge-primary">Lv. {user.level}</span>
+                <span className="text-[10px] text-gray-500 text-stat">{user.xp.toLocaleString()} XP earned</span>
+                {stats && <span className="text-[10px] text-gray-500">{stats.wins}W · {stats.losses}L</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Action Tiles */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              id="dashboard-create-room-btn"
               onClick={() => setShowCreateModal(true)}
-              className="glass-card rounded-2xl p-5 border-white/5 flex items-center justify-between group hover:border-primary"
+              className="glass-card rounded-2xl p-5 border-white/[0.05] flex items-center gap-4 group hover:border-primary/40 text-left"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-all">
-                  <PlusCircle size={24} />
-                </div>
-                <div className="text-left">
-                  <h4 className="font-bold text-base">{t('createRoomBtn', 'Create Room')}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Spin up a custom lobby</p>
-                </div>
+              <div className="w-11 h-11 rounded-xl bg-primary/12 text-primary flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                <PlusCircle size={22} />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-sm text-white">{t('createRoomBtn', 'Create Room')}</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">Spin up a custom lobby</p>
               </div>
             </button>
 
-            <button 
+            <button
+              id="dashboard-join-room-btn"
               onClick={() => setShowJoinModal(true)}
-              className="glass-card rounded-2xl p-5 border-white/5 flex items-center justify-between group hover:border-cyberblue"
+              className="glass-card rounded-2xl p-5 border-white/[0.05] flex items-center gap-4 group hover:border-cyberblue/40 text-left"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-cyberblue/10 text-cyberblue flex items-center justify-center group-hover:scale-105 transition-all">
-                  <Users size={24} />
-                </div>
-                <div className="text-left">
-                  <h4 className="font-bold text-base">{t('joinRoomBtn', 'Join Room')}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">Enter code to join friends</p>
-                </div>
+              <div className="w-11 h-11 rounded-xl bg-cyberblue/12 text-cyberblue flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                <Users size={22} />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-sm text-white">{t('joinRoomBtn', 'Join Room')}</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">Enter code to join friends</p>
               </div>
             </button>
 
-            <button 
+            <button
+              id="dashboard-leaderboard-btn"
               onClick={() => router.push('/leaderboard')}
-              className="glass-card rounded-2xl p-5 border-white/5 flex items-center justify-between group hover:border-cybergold transition-all text-left w-full"
+              className="glass-card rounded-2xl p-5 border-white/[0.05] flex items-center gap-4 group hover:border-cybergold/40 text-left w-full"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-cybergold/10 text-cybergold flex items-center justify-center group-hover:scale-105 transition-all">
-                  <Trophy size={24} />
-                </div>
-                <div>
-                  <h4 className="font-bold text-base">Leaderboard Terminal</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">View global rankings</p>
-                </div>
+              <div className="w-11 h-11 rounded-xl bg-cybergold/12 text-cybergold flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                <Trophy size={22} />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-sm text-white">Leaderboard</h4>
+                <p className="text-[11px] text-gray-500 mt-0.5">View global rankings</p>
               </div>
             </button>
           </div>
 
-          {/* Game Selection */}
+          {/* Game Selection Portals */}
           <div className="space-y-4">
-            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400">Launch Deck</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-10 max-w-4xl mx-auto w-full">
+            <h3 className="text-[10px] uppercase font-extrabold tracking-widest text-gray-500">Launch Deck</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto w-full">
               
               {/* Ramudu-Seetha Card */}
               <div className="flex flex-col gap-4">
-                <div 
+                <div
                   onClick={() => setExpandedGame(expandedGame === 'RAMUDU_SEETHA' ? null : 'RAMUDU_SEETHA')}
-                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberpink group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-pink duration-300 ${expandedGame === 'RAMUDU_SEETHA' ? 'border-cyberpink shadow-neon-pink ring-1 ring-cyberpink' : ''}`}
-                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🕵️</text></svg>"), auto` }}
+                  id="game-card-ramudu"
+                  className={`game-portal p-5 flex flex-col justify-between h-[320px] transition-all duration-400 cursor-pointer ${
+                    expandedGame === 'RAMUDU_SEETHA'
+                      ? 'border-cyberpink/60 shadow-neon-pink'
+                      : 'hover:border-cyberpink/40 hover:shadow-neon-pink'
+                  }`}
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyberpink/5 rounded-full blur-3xl group-hover:bg-cyberpink/10 transition-all"></div>
-                  
-                  {/* Artwork Top */}
-                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberpink/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                    <span className="text-4xl filter drop-shadow-neon-pink transform group-hover:scale-110 transition-all duration-300">🕵️</span>
-                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberpink/20 border border-cyberpink/30 text-[8px] font-black uppercase text-cyberpink">
-                      deduction
-                    </span>
-                  </div>
-
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ background: 'radial-gradient(circle at top right, rgba(255,94,223,0.08) 0%, transparent 60%)' }} />
                   <div>
-                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberpink transition-colors">Ramudu-Seetha</h4>
-                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Deduce target profiles. Ramudu seeks Seetha. Exclusively built multiplayer deduction room.</p>
+                    <div className="w-full h-28 rounded-xl bg-gradient-to-br from-cyberpink/18 to-primary/8 border border-white/[0.06] flex items-center justify-center relative overflow-hidden mb-4">
+                      <span className="text-4xl hover:scale-110 transition-transform duration-300">🕵️</span>
+                      <span className="absolute top-2 right-2 badge badge-pink text-[8px]">deduction</span>
+                      {expandedGame === 'RAMUDU_SEETHA' && (
+                        <div className="absolute inset-0 border border-cyberpink/40 rounded-xl" />
+                      )}
+                    </div>
+                    <h4 className="font-display font-bold text-base text-white">Ramudu-Seetha</h4>
+                    <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed line-clamp-2">Deduce target profiles. Ramudu seeks Seetha. Multiplayer social deduction.</p>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                    <span>3-10 Players</span>
-                    <span className="text-cyberpink font-black">{expandedGame === 'RAMUDU_SEETHA' ? 'Close Panel' : 'Control Deck'}</span>
+                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="live-dot" style={{ width: '5px', height: '5px' }} />
+                      <span className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">3-10 Players</span>
+                    </div>
+                    <span className="text-[10px] text-cyberpink font-black">{expandedGame === 'RAMUDU_SEETHA' ? 'Close ×' : 'Details →'}</span>
                   </div>
                 </div>
                 {expandedGame === 'RAMUDU_SEETHA' && (
-                  <div className="block md:hidden">
-                    {renderDetailsPanel()}
-                  </div>
+                  <div className="block md:hidden">{renderDetailsPanel()}</div>
                 )}
               </div>
 
               {/* Ludo Card */}
               <div className="flex flex-col gap-4">
-                <div 
+                <div
                   onClick={() => setExpandedGame(expandedGame === 'LUDO' ? null : 'LUDO')}
-                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cyberblue group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-blue duration-300 ${expandedGame === 'LUDO' ? 'border-cyberblue shadow-neon-blue ring-1 ring-cyberblue' : ''}`}
-                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>🎲</text></svg>"), auto` }}
+                  id="game-card-ludo"
+                  className={`game-portal p-5 flex flex-col justify-between h-[320px] transition-all duration-400 cursor-pointer ${
+                    expandedGame === 'LUDO'
+                      ? 'border-cyberblue/60 shadow-neon-blue'
+                      : 'hover:border-cyberblue/40 hover:shadow-neon-blue'
+                  }`}
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-cyberblue/5 rounded-full blur-3xl group-hover:bg-cyberblue/10 transition-all"></div>
-                  
-                  {/* Artwork Top */}
-                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cyberblue/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                    <span className="text-4xl filter drop-shadow-neon-blue transform group-hover:scale-110 transition-all duration-300">🎲</span>
-                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cyberblue/20 border border-cyberblue/30 text-[8px] font-black uppercase text-cyberblue">
-                      classic
-                    </span>
-                  </div>
-
                   <div>
-                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cyberblue transition-colors">Cosmic Ludo</h4>
-                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Roll virtual dice, knock back spaceships, reach home terminal first. Standard board dynamics.</p>
+                    <div className="w-full h-28 rounded-xl bg-gradient-to-br from-cyberblue/18 to-primary/8 border border-white/[0.06] flex items-center justify-center relative overflow-hidden mb-4">
+                      <span className="text-4xl hover:scale-110 transition-transform duration-300">🎲</span>
+                      <span className="absolute top-2 right-2 badge badge-blue text-[8px]">classic</span>
+                      {expandedGame === 'LUDO' && (
+                        <div className="absolute inset-0 border border-cyberblue/40 rounded-xl" />
+                      )}
+                    </div>
+                    <h4 className="font-display font-bold text-base text-white">Cosmic Ludo</h4>
+                    <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed line-clamp-2">Roll 3D dice, knock back spaceships, reach home terminal. Real-time turns.</p>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                    <span>2-6 Players</span>
-                    <span className="text-cyberblue font-black">{expandedGame === 'LUDO' ? 'Close Panel' : 'Control Deck'}</span>
+                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="live-dot" style={{ width: '5px', height: '5px' }} />
+                      <span className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">2-4 Players</span>
+                    </div>
+                    <span className="text-[10px] text-cyberblue font-black">{expandedGame === 'LUDO' ? 'Close ×' : 'Details →'}</span>
                   </div>
                 </div>
                 {expandedGame === 'LUDO' && (
-                  <div className="block md:hidden">
-                    {renderDetailsPanel()}
-                  </div>
+                  <div className="block md:hidden">{renderDetailsPanel()}</div>
                 )}
               </div>
 
               {/* Chess Card */}
               <div className="flex flex-col gap-4">
-                <div 
+                <div
                   onClick={() => setExpandedGame(expandedGame === 'CHESS' ? null : 'CHESS')}
-                  className={`glass-card rounded-3xl p-5 border-white/5 hover:border-cybergold group relative overflow-hidden flex flex-col justify-between h-[340px] transition-all hover:-translate-y-2 hover:shadow-neon-gold duration-300 ${expandedGame === 'CHESS' ? 'border-cybergold shadow-neon-gold ring-1 ring-cybergold' : ''}`}
-                  style={{ cursor: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' style='font-size: 20px;'><text y='20'>♟️</text></svg>"), auto` }}
+                  id="game-card-chess"
+                  className={`game-portal p-5 flex flex-col justify-between h-[320px] transition-all duration-400 cursor-pointer ${
+                    expandedGame === 'CHESS'
+                      ? 'border-cybergold/60 shadow-neon-gold'
+                      : 'hover:border-cybergold/40 hover:shadow-neon-gold'
+                  }`}
                 >
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-cybergold/5 rounded-full blur-3xl group-hover:bg-cybergold/10 transition-all"></div>
-
-                  {/* Artwork Top */}
-                  <div className="w-full h-32 rounded-2xl bg-gradient-to-br from-cybergold/20 to-transparent border border-white/5 flex items-center justify-center relative overflow-hidden">
-                    <span className="text-4xl filter drop-shadow-neon-gold transform group-hover:scale-110 transition-all duration-300">♟️</span>
-                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-cybergold/20 border border-cybergold/30 text-[8px] font-black uppercase text-cybergold">
-                      tactical
-                    </span>
-                  </div>
-
                   <div>
-                    <h4 className="font-extrabold text-lg mt-3 text-white group-hover:text-cybergold transition-colors">Chess Strategy</h4>
-                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed line-clamp-2">Classic grandmaster strategy room. Match wits in real-time cosmic space chess with high contrast pure pieces.</p>
+                    <div className="w-full h-28 rounded-xl bg-gradient-to-br from-cybergold/18 to-primary/8 border border-white/[0.06] flex items-center justify-center relative overflow-hidden mb-4">
+                      <span className="text-4xl hover:scale-110 transition-transform duration-300">♟️</span>
+                      <span className="absolute top-2 right-2 badge badge-gold text-[8px]">tactical</span>
+                      {expandedGame === 'CHESS' && (
+                        <div className="absolute inset-0 border border-cybergold/40 rounded-xl" />
+                      )}
+                    </div>
+                    <h4 className="font-display font-bold text-base text-white">Chess Strategy</h4>
+                    <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed line-clamp-2">Classic grandmaster tactics. FIDE rules, real-time clocks, spectator support.</p>
                   </div>
-
-                  <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                    <span>2 Players</span>
-                    <span className="text-cybergold font-black">{expandedGame === 'CHESS' ? 'Close Panel' : 'Control Deck'}</span>
+                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="live-dot" style={{ width: '5px', height: '5px' }} />
+                      <span className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">2 Players</span>
+                    </div>
+                    <span className="text-[10px] text-cybergold font-black">{expandedGame === 'CHESS' ? 'Close ×' : 'Details →'}</span>
                   </div>
                 </div>
                 {expandedGame === 'CHESS' && (
-                  <div className="block md:hidden">
-                    {renderDetailsPanel()}
-                  </div>
+                  <div className="block md:hidden">{renderDetailsPanel()}</div>
                 )}
               </div>
-
             </div>
 
             {/* Expanded Game Details Panel (Desktop only) */}
             {expandedGame && (
-              <div className="hidden md:block">
-                {renderDetailsPanel()}
-              </div>
+              <div className="hidden md:block">{renderDetailsPanel()}</div>
             )}
 
-            {/* Global Quick-Match Lobby Board */}
-            <div className="space-y-4 pt-6 border-t border-white/5 max-w-4xl mx-auto w-full">
+            {/* Live Public Lobbies Board */}
+            <div className="space-y-4 pt-6 border-t border-white/[0.06] max-w-4xl mx-auto w-full">
               <div className="flex justify-between items-center">
                 <div>
-                  <span className="text-[10px] uppercase font-black tracking-widest text-cyberpink">live multiplayer feeds</span>
-                  <h3 className="text-xl font-black text-white mt-0.5">{t('activeLobbies', 'Active Public Lobbies')}</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="live-dot" />
+                    <span className="text-[10px] uppercase font-extrabold tracking-widest text-cyberpink">Live Feeds</span>
+                  </div>
+                  <h3 className="font-display text-lg font-bold text-white mt-0.5">{t('activeLobbies', 'Active Public Lobbies')}</h3>
                 </div>
-                <button 
+                <button
+                  id="dashboard-refresh-rooms-btn"
                   onClick={fetchPublicRooms}
-                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-[10px] font-extrabold uppercase tracking-wider text-gray-400 hover:text-white transition-all"
+                  className="px-3 py-1.5 rounded-lg glass-card border-white/[0.06] text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-white hover:border-white/15 transition-all"
                 >
-                  Refresh Radar
+                  ↻ Refresh
                 </button>
               </div>
 
               {publicRooms.length === 0 ? (
-                <div className="glass-card rounded-2xl p-8 border-white/5 text-center space-y-2">
-                  <p className="text-xs text-gray-400 font-semibold">{t('noActiveLobbies', 'No open lobbies detected on the matchmaking radar.')}</p>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Host a custom room to start a new transmission!</p>
+                <div className="glass-card rounded-2xl p-8 border-white/[0.05] text-center space-y-2">
+                  <div className="text-3xl mb-3">🛸</div>
+                  <p className="text-sm font-semibold text-gray-400">{t('noActiveLobbies', 'No open lobbies on the radar.')}</p>
+                  <p className="text-[10px] text-gray-600 uppercase tracking-wider">Host a room to start a transmission!</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {publicRooms.map((room) => (
-                    <div 
+                    <div
                       key={room.code}
-                      className="glass-card rounded-2xl p-4 border-white/5 flex items-center justify-between hover:border-cyberblue/40 transition-all group"
+                      className="glass-card rounded-xl p-4 border-white/[0.05] flex items-center justify-between hover:border-primary/30 transition-all"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-white">{room.name}</span>
-                          <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-bold text-cyberblue uppercase">
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-white truncate">{room.name}</span>
+                          <span className={`badge text-[8px] ${
+                            room.gameType === 'LUDO' ? 'badge-blue' :
+                            room.gameType === 'CHESS' ? 'badge-gold' : 'badge-pink'
+                          }`}>
                             {room.gameType === 'LUDO' ? 'Ludo' : room.gameType === 'CHESS' ? 'Chess' : 'RS'}
                           </span>
                         </div>
-                        <p className="text-[10px] text-gray-400">Host: <strong className="text-gray-300">{room.hostName}</strong></p>
+                        <p className="text-[10px] text-gray-500">Host: <strong className="text-gray-400">{room.hostName}</strong></p>
                       </div>
 
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs font-bold text-gray-500">{room.playerCount}/{room.maxPlayers} crew</span>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="text-right">
+                          <span className="text-stat text-xs font-bold text-gray-500">{room.playerCount}/{room.maxPlayers}</span>
+                          <div className="text-[9px] text-gray-700 uppercase">crew</div>
+                        </div>
                         <button
                           onClick={() => {
                             if (!user || !socket) return;
@@ -783,7 +826,7 @@ export default function Dashboard() {
                               username: user.username,
                             });
                           }}
-                          className="px-3.5 py-2 rounded-xl bg-primary hover:opacity-90 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+                          className="px-3.5 py-2 rounded-xl btn-primary text-[10px] font-black uppercase tracking-wider active:scale-95"
                         >
                           Join
                         </button>
@@ -803,11 +846,12 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Create Room Modal */}
+      {/* ═══ CREATE ROOM MODAL ═══ */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-6 border-white/5 relative overflow-y-auto max-h-[90vh]">
-            <h3 className="text-xl font-extrabold text-white mb-6">Create Lobbies</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4">
+          <div className="w-full max-w-md surface-elevated rounded-3xl p-6 relative overflow-y-auto max-h-[90vh] animate-scale-in">
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-primary via-cyberblue to-cyberpink rounded-t-3xl" />
+            <h3 className="font-display text-xl font-bold text-white mb-6">⚡ Create Lobby</h3>
             {createError && (
               <div className="mb-4 p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
                 <ShieldAlert size={16} /> <span>{createError}</span>
@@ -950,18 +994,19 @@ export default function Dashboard() {
               </div>
 
               <div className="flex gap-3 justify-end pt-4">
-                <button 
-                  type="button" 
-                  onClick={() => { setShowCreateModal(false); setCreateError(''); }} 
-                  className="px-4 py-2 rounded-xl glass-card text-sm text-gray-400 hover:text-white"
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateModal(false); setCreateError(''); }}
+                  className="px-4 py-2.5 rounded-xl btn-ghost text-sm"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="px-5 py-2 rounded-xl bg-primary hover:opacity-90 text-sm font-bold shadow-neon-blue"
+                <button
+                  id="create-room-submit-btn"
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl btn-primary text-sm font-bold"
                 >
-                  Generate Room
+                  🚀 Launch Room
                 </button>
               </div>
             </form>
@@ -1124,43 +1169,56 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Join Room Modal */}
+      {/* ═══ JOIN ROOM MODAL ═══ */}
       {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-sm glass-panel rounded-3xl p-6 border-white/5 relative overflow-y-auto max-h-[90vh]">
-            <h3 className="text-xl font-extrabold text-white mb-6">Enter Terminal Code</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4">
+          <div className="w-full max-w-sm surface-elevated rounded-3xl p-7 relative animate-scale-in">
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-cyberblue via-primary to-cyberblue rounded-t-3xl" />
+            
+            <div className="text-center mb-7">
+              <div className="w-14 h-14 rounded-2xl bg-primary/12 flex items-center justify-center mx-auto mb-4">
+                <Users size={24} className="text-cyberblue" />
+              </div>
+              <h3 className="font-display text-xl font-bold text-white">Join Room</h3>
+              <p className="text-xs text-gray-500 mt-1">Enter the 6-character room code</p>
+            </div>
+
             {joinError && (
-              <div className="mb-4 p-3 rounded-lg bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2">
-                <ShieldAlert size={16} /> <span>{joinError}</span>
+              <div className="mb-4 p-3 rounded-xl bg-cybererror/10 border border-cybererror/30 text-cybererror text-xs flex gap-2 animate-shake">
+                <ShieldAlert size={14} /> <span>{joinError}</span>
               </div>
             )}
-            <form onSubmit={handleJoinRoom} className="space-y-4">
+
+            <form onSubmit={handleJoinRoom} className="space-y-5">
               <div>
-                <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Room Code</label>
-                <input 
+                <label className="text-[10px] uppercase font-extrabold text-gray-500 tracking-widest block mb-2">Room Code</label>
+                <input
+                  id="join-room-code-input"
                   type="text"
                   required
                   maxLength={6}
+                  autoComplete="off"
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="E.g., XYZA12"
-                  className="w-full glass-input rounded-xl px-4 py-3 text-center text-lg font-black tracking-widest mt-1 focus:border-cyberblue uppercase"
+                  placeholder="XYZA12"
+                  className="w-full glass-input rounded-2xl px-4 py-4 text-center text-2xl font-black tracking-[0.4em] font-mono focus:border-cyberblue uppercase"
                 />
               </div>
 
-              <div className="flex gap-3 justify-end pt-2">
-                <button 
-                  type="button" 
-                  onClick={() => { setShowJoinModal(false); setJoinError(''); }} 
-                  className="px-4 py-2 rounded-xl glass-card text-sm text-gray-400 hover:text-white"
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowJoinModal(false); setJoinError(''); }}
+                  className="flex-1 py-3 rounded-xl btn-ghost text-sm"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 text-sm font-bold shadow-neon-blue"
+                <button
+                  id="join-room-submit-btn"
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl btn-primary text-sm font-bold"
                 >
-                  Join Lobby
+                  🚀 Join Lobby
                 </button>
               </div>
             </form>
