@@ -177,27 +177,31 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
 
     const token = localStorage.getItem('gravityx_token');
     try {
-      const res = await fetch('http://localhost:3001/api/social/messages/' + activeChatFriend.id, {
+      const res = await fetch(getApiUrl(`/api/social/messages/${activeChatFriend.id}`), {
         method: 'POST',
-        // In this simulation we can post messages, wait, we don't have a POST message route, let's look at api.ts!
-        // In api.ts we registered: `router.get('/social/messages/:friendId', authenticateJWT, getDirectMessages);`
-        // Wait, did we write a POST direct message endpoint?
-        // Ah! Let's check api.ts again: we had:
-        // `router.get('/social/messages/:friendId', authenticateJWT, getDirectMessages);`
-        // Wait! We can either add a POST endpoint for messages in `socialController.ts` and `api.ts`, OR we can send it directly through Socket.IO and save to database inside the socket backend handler, OR we can write a quick post endpoint now.
-        // Let's check what is cleaner. A socket event `direct_message` that saves to database and broadcasts to receiver socket ID is extremely clean and responsive.
-        // Let's implement socket-based message emitting! Let's check if the server listens to it. If not, let's write a fallback API endpoint or adjust backend.
-        // Wait, let's check `backend/src/app.ts`. Inside socket handlers we don't have a social direct_message handler yet, but we can easily add a quick API message poster, or write socket handlers. Let's add a POST endpoint to `socialController` and `api.ts` since it's standard REST and works robustly!
-        // Wait, let's look at `socialController.ts` lines: We only wrote `getDirectMessages`. Let's add `sendDirectMessage` to `socialController.ts` and link it in `api.ts`. That will be highly reliable and keep schema clean!
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: chatInput }),
       });
-    } catch (err) {}
+      if (res.ok) {
+        setChatInput('');
+        fetchMessages(activeChatFriend.id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
-    <div className="w-80 border-l border-white/5 bg-darkbg/80 backdrop-blur-xl flex flex-col h-[calc(100vh-80px)]">
+    <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-white/10 bg-darkbg/95 backdrop-blur-2xl flex flex-col max-h-[85vh] md:h-[calc(100vh-80px)] rounded-t-3xl md:rounded-none z-30 shadow-2xl overflow-hidden">
+      {/* Mobile Swipe Handle Indicator */}
+      <div className="w-12 h-1.5 bg-white/20 rounded-full mx-auto my-2 shrink-0 md:hidden" />
       {activeChatFriend ? (
         // Chat Interface
         <div className="flex-grow flex flex-col justify-between">
+
           {/* Header */}
           <div className="p-4 border-b border-white/5 flex items-center gap-3">
             <button onClick={() => setActiveChatFriend(null)} className="text-gray-400 hover:text-white">

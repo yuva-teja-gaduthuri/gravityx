@@ -15,11 +15,16 @@ export function useSocket() {
     if (!socketInstance) {
       socketInstance = io(getApiUrl(), {
         auth: { token },
-        transports: ['websocket'],
+        transports: ['polling', 'websocket'],
+        extraHeaders: {
+          'Bypass-Tunnel-Reminder': 'true',
+          'ngrok-skip-browser-warning': 'true',
+        },
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
       });
+
 
       socketInstance.on('connect', () => {
         console.log('Socket connected successfully:', socketInstance?.id);

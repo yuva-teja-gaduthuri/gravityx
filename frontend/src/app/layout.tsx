@@ -1,8 +1,9 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Outfit, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import '../styles/globals.css';
 
 import SpaceBackground from '../components/SpaceBackground';
+import MobileNav from '../components/MobileNav';
 import { LanguageProvider } from '../hooks/useTranslation';
 
 const outfit = Outfit({
@@ -25,6 +26,14 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-jetbrains-mono',
   display: 'swap',
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#020B18',
+};
 
 export const metadata: Metadata = {
   title: 'GravityX — Play Together. Anywhere. Anytime.',
@@ -66,7 +75,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-sans antialiased overflow-x-hidden min-h-screen relative">
+      <body className="font-sans antialiased overflow-x-hidden min-h-screen relative pb-16 md:pb-0">
         {/* Cinematic Space Background — multi-layer parallax */}
         <SpaceBackground />
 
@@ -75,8 +84,10 @@ export default function RootLayout({
           <div className="relative z-10 flex flex-col min-h-screen">
             {children}
           </div>
+          <MobileNav />
         </LanguageProvider>
       </body>
     </html>
   );
 }
+

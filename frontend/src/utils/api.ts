@@ -14,6 +14,15 @@ export const getApiUrl = (path: string = '') => {
       return `https://gravityx-api.onrender.com${path}`;
     }
 
+    // Auto-detect Localtunnel or ngrok domain
+    if (hostname.includes('loca.lt') || hostname.includes('ngrok')) {
+      // If frontend is on a localtunnel domain, check if backend API URL is provided via window or query
+      const customApi = (window as any).__GRAVITYX_API_URL__;
+      if (customApi) return `${customApi.replace(/\/$/, '')}${path}`;
+      // Fallback to current protocol & hostname (or default port 3001 if direct HTTP LAN)
+      return `${window.location.protocol}//${hostname}${path}`;
+    }
+
     // Auto-detect production HTTPS protocol
     if (window.location.protocol === 'https:') {
       return `https://${hostname}${path}`;
@@ -49,12 +58,14 @@ export const fetchWithCache = async (path: string, staleTime: number = 60000) =>
     return apiCache[cacheKey].data;
   }
 
-  // 2. Fetch fresh telemetry from server
+  // 2. Fetch fresh telemetry from server with localtunnel bypass headers
   const token = typeof window !== 'undefined' ? localStorage.getItem('gravityx_token') : null;
   const res = await fetch(url, {
     headers: {
       Authorization: token ? `Bearer ${token}` : '',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
+      'ngrok-skip-browser-warning': 'true',
     }
   });
 
@@ -80,3 +91,4 @@ export const invalidateCache = (path: string) => {
   const url = getApiUrl(path);
   delete apiCache[url];
 };
+
