@@ -206,12 +206,12 @@ export default function LandingClient() {
       {/* ══════════════════════════════════════════
           NAVIGATION HEADER
       ══════════════════════════════════════════ */}
-      <header className="sticky top-0 z-50 w-full glass-panel border-b border-white/[0.06] py-3.5 px-6 md:px-12 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group" aria-label="GravityX Home">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-cyberblue flex items-center justify-center shadow-neon-blue group-hover:shadow-neon-purple group-hover:rotate-12 transition-all duration-300">
-            <span className="font-extrabold text-base text-white font-display tracking-tight">GX</span>
+      <header className="sticky top-0 z-50 w-full glass-panel border-b border-white/[0.06] py-2.5 px-3.5 sm:py-3.5 sm:px-6 md:px-12 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group" aria-label="GravityX Home">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary to-cyberblue flex items-center justify-center shadow-neon-blue group-hover:shadow-neon-purple group-hover:rotate-12 transition-all duration-300">
+            <span className="font-extrabold text-sm sm:text-base text-white font-display tracking-tight">GX</span>
           </div>
-          <span className="font-extrabold text-xl tracking-wider font-display">
+          <span className="font-extrabold text-lg sm:text-xl tracking-wider font-display">
             <span className="text-holographic">GRAVITYX</span>
           </span>
         </Link>
@@ -234,7 +234,7 @@ export default function LandingClient() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
           <Link
             href="/auth"
@@ -245,9 +245,10 @@ export default function LandingClient() {
           <Link
             href="/auth?tab=guest"
             id="nav-play-now-btn"
-            className="px-5 py-2 text-sm font-bold rounded-xl btn-primary"
+            className="px-3 py-1.5 text-xs sm:px-5 sm:py-2 sm:text-sm font-extrabold rounded-lg sm:rounded-xl btn-primary whitespace-nowrap inline-flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95 transition-all"
           >
-            {t('playNow', 'Play Now')} ▶
+            <span>{t('playNow', 'Play Now')}</span>
+            <span className="text-[10px] sm:text-xs">▶</span>
           </Link>
         </div>
       </header>
