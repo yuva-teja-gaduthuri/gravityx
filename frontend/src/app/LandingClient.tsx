@@ -243,7 +243,7 @@ export default function LandingClient() {
             {t('login', 'Login')}
           </Link>
           <Link
-            href="/auth?tab=guest"
+            href="/auth?tab=login"
             id="nav-play-now-btn"
             className="px-3 py-1.5 text-xs sm:px-5 sm:py-2 sm:text-sm font-extrabold rounded-lg sm:rounded-xl btn-primary whitespace-nowrap inline-flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95 transition-all"
           >

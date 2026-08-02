@@ -415,11 +415,10 @@ function AuthContent() {
                     key={item.id}
                     onClick={() => switchTab(item.id)}
                     id={`auth-tab-${item.id}`}
-                    className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${
-                      tab === item.id
+                    className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${tab === item.id
                         ? 'bg-gradient-to-r from-primary to-cyberblue text-white shadow-neon-blue'
                         : 'text-gray-500 hover:text-gray-300'
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </button>
@@ -522,7 +521,7 @@ function AuthContent() {
                   className="w-full py-3.5 rounded-xl btn-ghost text-sm font-bold flex items-center justify-center gap-2 group disabled:opacity-50"
                 >
                   <Rocket size={16} className="text-cyberpink group-hover:scale-110 transition-transform" />
-                  <span>{t('startGuest', 'Play as Guest')} — No account needed</span>
+                  <span>{t('startGuest', 'Play as Guest')}</span>
                 </button>
               </form>
             )}
