@@ -140,6 +140,7 @@ function AuthContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -153,10 +154,13 @@ function AuthContent() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const siteKey = process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY;
 
+  const paramTab = searchParams.get('tab');
+
   useEffect(() => {
-    const t = searchParams.get('tab');
-    if (t && t !== tab) { setTab(t); }
-  }, [searchParams, tab]);
+    if (paramTab && paramTab !== tab) {
+      setTab(paramTab);
+    }
+  }, [paramTab]);
 
   useEffect(() => { setTurnstileToken(null); }, [tab]);
 
@@ -192,7 +196,12 @@ function AuthContent() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(''); setSuccess(''); setLoading(true);
+    setError(''); setSuccess('');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match. Please re-enter your password.');
+      return;
+    }
+    setLoading(true);
     try {
       const res = await fetch(getApiUrl('/api/auth/register'), {
         method: 'POST',
@@ -201,9 +210,11 @@ function AuthContent() {
       });
       const data = await parseResponseJson(res);
       if (!res.ok) throw new Error(data.error || 'Registration failed');
-      setSuccess(data.message || 'Verification email sent. Please check your inbox.');
+      setSuccess('Registration successful! Redirecting to login page in 3 seconds...');
       setUnverifiedEmail(email);
-      setTab('verify-pending');
+      setTimeout(() => {
+        switchTab('login');
+      }, 3000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -340,7 +351,10 @@ function AuthContent() {
   };
 
   const switchTab = (newTab: string) => {
-    setTab(newTab); setError(''); setSuccess('');
+    setTab(newTab);
+    setError('');
+    setSuccess('');
+    router.replace(`/auth?tab=${newTab}`, { scroll: false });
   };
 
   const showHeaderTabs = tab === 'login' || tab === 'register';
@@ -523,6 +537,19 @@ function AuthContent() {
                   <Rocket size={16} className="text-cyberpink group-hover:scale-110 transition-transform" />
                   <span>{t('startGuest', 'Play as Guest')}</span>
                 </button>
+
+                {/* Create Account Link */}
+                <p className="text-center text-xs text-gray-500 pt-2">
+                  {t('noAccount', "Don't have an account?")}{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchTab('register')}
+                    id="login-switch-to-register-btn"
+                    className="text-cyberblue font-bold hover:underline"
+                  >
+                    {t('createAccount', 'Register')}
+                  </button>
+                </p>
               </form>
             )}
 
@@ -600,6 +627,39 @@ function AuthContent() {
                   <PasswordStrength password={password} />
                 </div>
 
+                {/* Confirm Password */}
+                <div>
+                  <label className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest block mb-2">
+                    {t('confirmPassword', 'Confirm Password')}
+                  </label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input
+                      id="register-confirm-password-input"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      autoComplete="new-password"
+                      placeholder="Re-enter your password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full pl-11 pr-12 py-3.5 rounded-xl glass-input text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="text-[11px] text-cybererror mt-1.5 font-medium flex items-center gap-1">
+                      <span>⚠️ Passwords do not match</span>
+                    </p>
+                  )}
+                </div>
+
                 {/* Turnstile */}
                 {siteKey && (
                   <div className="flex justify-center my-2">
@@ -623,6 +683,19 @@ function AuthContent() {
                   <a href="#" className="text-cyberblue hover:underline">Terms of Use</a>{' '}
                   and{' '}
                   <a href="#" className="text-cyberblue hover:underline">Privacy Policy</a>
+                </p>
+
+                {/* Sign In Link */}
+                <p className="text-center text-xs text-gray-500 pt-2">
+                  {t('alreadyHaveAccount', 'Already have an account?')}{' '}
+                  <button
+                    type="button"
+                    onClick={() => switchTab('login')}
+                    id="register-switch-to-login-btn"
+                    className="text-cyberblue font-bold hover:underline"
+                  >
+                    {t('login', 'Sign In')}
+                  </button>
                 </p>
               </form>
             )}
