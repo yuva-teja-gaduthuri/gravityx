@@ -116,7 +116,7 @@ export const getLeaderboard = async (req: Request, res: Response) => {
         },
       });
 
-      // Enrich users with game stats (gamesPlayed, gamesWon, gamesLost)
+      // Enrich users with game stats (gamesPlayed, gamesWon, gamesLost, likesCount)
       const enrichedUsers = await Promise.all(
         users.map(async (u) => {
           const gamesPlayed = await prisma.matchPlayer.count({
@@ -126,6 +126,9 @@ export const getLeaderboard = async (req: Request, res: Response) => {
             where: { winnerId: u.id },
           });
           const gamesLost = Math.max(0, gamesPlayed - gamesWon);
+          const likesCount = await prisma.userLike.count({
+            where: { targetUsername: u.username },
+          }).catch(() => 0);
 
           return {
             ...u,
@@ -133,6 +136,7 @@ export const getLeaderboard = async (req: Request, res: Response) => {
             gamesPlayed,
             gamesWon,
             gamesLost,
+            likesCount,
           };
         })
       );

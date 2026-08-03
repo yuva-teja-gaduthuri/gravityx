@@ -41,6 +41,7 @@ model User {
   matchPlayers    MatchPlayer[]
   achievements    UserAchievement[]
   inventory       UserInventory[]
+  notifications   Notification[]
 }
 
 model Friend {
@@ -173,5 +174,20 @@ model DivisionRank {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  senderId   String?
+  senderName String?
+  type       String   // 'LIKE', 'FRIEND_REQUEST', 'FRIEND_ACCEPT'
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 
 

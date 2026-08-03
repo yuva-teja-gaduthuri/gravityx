@@ -12,6 +12,10 @@ import {
   reviewPlayer,
   getPlayerReviews,
   getPlayerLikes,
+  getUserSocialStatus,
+  getNotifications,
+  markNotificationsRead,
+  clearNotifications,
 } from '../controllers/socialController';
 import { getItems, buyItem, equipItem } from '../controllers/storeController';
 import { getLeaderboard } from '../controllers/leaderboardController';
@@ -52,6 +56,10 @@ router.post('/social/like', authenticateJWT, likePlayer);
 router.post('/social/review', authenticateJWT, reviewPlayer);
 router.get('/social/reviews/:username', authenticateJWT, getPlayerReviews);
 router.get('/social/likes/:username', authenticateJWT, getPlayerLikes);
+router.get('/social/card-status/:targetUsername', authenticateJWT, getUserSocialStatus);
+router.get('/social/notifications', authenticateJWT, getNotifications);
+router.post('/social/notifications/read', authenticateJWT, markNotificationsRead);
+router.post('/social/notifications/clear', authenticateJWT, clearNotifications);
 
 // Store Routes
 router.get('/store/items', authenticateJWT, getItems);

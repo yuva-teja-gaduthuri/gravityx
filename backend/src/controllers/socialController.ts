@@ -108,6 +108,18 @@ export const sendFriendRequest = async (req: AuthenticatedRequest, res: Response
       },
     });
 
+    // Create notification for recipient
+    await (prisma as any).notification.create({
+      data: {
+        userId: friend.id,
+        senderId: userId,
+        senderName: req.user?.username || 'Pilot',
+        type: 'FRIEND_REQUEST',
+        title: 'Friend Request 👥',
+        message: `${req.user?.username || 'A player'} sent you a friend request!`,
+      },
+    });
+
     res.status(201).json({ message: 'Friend request sent', request });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -133,6 +145,18 @@ export const acceptFriendRequest = async (req: AuthenticatedRequest, res: Respon
     const updated = await prisma.friend.update({
       where: { id: requestId },
       data: { status: 'ACCEPTED' },
+    });
+
+    // Create notification for original requester
+    await (prisma as any).notification.create({
+      data: {
+        userId: request.userId,
+        senderId: userId,
+        senderName: req.user?.username || 'Pilot',
+        type: 'FRIEND_ACCEPT',
+        title: 'Friend Request Accepted 🎉',
+        message: `${req.user?.username || 'A player'} accepted your friend request!`,
+      },
     });
 
     res.json({ message: 'Friend request accepted', request: updated });
@@ -217,17 +241,59 @@ export const sendDirectMessage = async (req: AuthenticatedRequest, res: Response
 
 export const likePlayer = async (req: AuthenticatedRequest, res: Response) => {
   try {
+    const likerId = req.user?.id;
     const likerUsername = req.user?.username;
     const { targetUsername } = req.body;
 
-    if (!likerUsername) return res.status(401).json({ error: 'Unauthorized' });
+    if (!likerId || !likerUsername) return res.status(401).json({ error: 'Unauthorized' });
     if (!targetUsername) return res.status(400).json({ error: 'Target username is required' });
 
-    const { addLike, getLikesCount } = require('../utils/likesReviewsStore');
-    await addLike(targetUsername, likerUsername);
-    const count = await getLikesCount(targetUsername);
+    if (targetUsername === likerUsername) {
+      return res.status(400).json({ error: 'You cannot like yourself' });
+    }
 
-    res.json({ message: 'Player liked successfully', likesCount: count });
+    const existingLike = await prisma.userLike.findUnique({
+      where: {
+        targetUsername_likerUsername: { targetUsername, likerUsername },
+      },
+    });
+
+    let isLiked = false;
+    if (existingLike) {
+      await prisma.userLike.delete({
+        where: { id: existingLike.id },
+      });
+      isLiked = false;
+    } else {
+      await prisma.userLike.create({
+        data: { targetUsername, likerUsername },
+      });
+      isLiked = true;
+
+      // Find target user to send notification
+      const targetUser = await prisma.user.findUnique({
+        where: { username: targetUsername },
+      });
+
+      if (targetUser && targetUser.id !== likerId) {
+        await (prisma as any).notification.create({
+          data: {
+            userId: targetUser.id,
+            senderId: likerId,
+            senderName: likerUsername,
+            type: 'LIKE',
+            title: 'New Like! ❤️',
+            message: `${likerUsername} liked your profile!`,
+          },
+        });
+      }
+    }
+
+    const likesCount = await prisma.userLike.count({
+      where: { targetUsername },
+    });
+
+    res.json({ message: isLiked ? 'Player liked successfully' : 'Player unliked', likesCount, isLiked });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -276,3 +342,120 @@ export const getPlayerLikes = async (req: AuthenticatedRequest, res: Response) =
     res.status(500).json({ error: error.message });
   }
 };
+
+export const getUserSocialStatus = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const currentUserId = req.user?.id;
+    const currentUsername = req.user?.username;
+    const { targetUsername } = req.params;
+
+    if (!currentUserId || !currentUsername) return res.status(401).json({ error: 'Unauthorized' });
+    if (!targetUsername) return res.status(400).json({ error: 'Target username is required' });
+
+    const targetUser = await prisma.user.findUnique({
+      where: { username: targetUsername },
+    });
+
+    const likesCount = await prisma.userLike.count({
+      where: { targetUsername },
+    });
+
+    const existingLike = await prisma.userLike.findUnique({
+      where: {
+        targetUsername_likerUsername: { targetUsername, likerUsername: currentUsername },
+      },
+    });
+    const isLikedByMe = !!existingLike;
+
+    let friendshipStatus: 'SELF' | 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS' = 'NONE';
+    let requestId: string | undefined = undefined;
+
+    if (targetUser && targetUser.id === currentUserId) {
+      friendshipStatus = 'SELF';
+    } else if (targetUser) {
+      const relation = await prisma.friend.findFirst({
+        where: {
+          OR: [
+            { userId: currentUserId, friendId: targetUser.id },
+            { userId: targetUser.id, friendId: currentUserId },
+          ],
+        },
+      });
+
+      if (relation) {
+        if (relation.status === 'ACCEPTED') {
+          friendshipStatus = 'FRIENDS';
+        } else if (relation.status === 'PENDING') {
+          if (relation.userId === currentUserId) {
+            friendshipStatus = 'PENDING_SENT';
+          } else {
+            friendshipStatus = 'PENDING_RECEIVED';
+            requestId = relation.id;
+          }
+        }
+      }
+    }
+
+    res.json({
+      targetUserId: targetUser?.id || null,
+      targetUsername,
+      likesCount,
+      isLikedByMe,
+      friendshipStatus,
+      requestId,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getNotifications = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const notifications = await (prisma as any).notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+
+    const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+
+    res.json({ notifications, unreadCount });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const markNotificationsRead = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    await (prisma as any).notification.updateMany({
+      where: { userId, isRead: false },
+      data: { isRead: true },
+    });
+
+    res.json({ message: 'Notifications marked as read' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const clearNotifications = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    await (prisma as any).notification.deleteMany({
+      where: { userId },
+    });
+
+    res.json({ message: 'Notifications cleared' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+

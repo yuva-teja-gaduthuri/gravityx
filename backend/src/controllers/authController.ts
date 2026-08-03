@@ -582,6 +582,9 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
     const wins = uniqueMatchPlayers.filter((mp: any) => mp.placement === 1).length;
     const losses = matchesPlayed - wins;
     const winRate = matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : 0;
+    const likesCount = await prisma.userLike.count({
+      where: { targetUsername: user.username },
+    }).catch(() => 0);
 
     res.json({
       user: {
@@ -601,6 +604,7 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response) => {
         role: user.role,
         bio: user.bio,
         language: user.language,
+        likesCount,
         createdAt: user.createdAt,
       },
       stats: {

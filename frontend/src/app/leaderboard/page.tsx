@@ -17,9 +17,13 @@ import {
   ShieldCheck, 
   User, 
   UserCheck, 
+  UserPlus,
+  Clock,
   UserX,
   Target,
-  Sparkles
+  Sparkles,
+  Heart,
+  MessageSquare
 } from 'lucide-react';
 import { useTranslation } from '../../hooks/useTranslation';
 
@@ -34,6 +38,16 @@ export default function LeaderboardPage() {
   const [fetching, setFetching] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Social interaction state for profile card
+  const [socialStatus, setSocialStatus] = useState<{
+    likesCount: number;
+    isLikedByMe: boolean;
+    friendshipStatus: 'SELF' | 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'FRIENDS';
+    requestId?: string;
+  } | null>(null);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [actionMsg, setActionMsg] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -60,6 +74,159 @@ export default function LeaderboardPage() {
 
     fetchRankings();
   }, [user, boardType]);
+
+  // Fetch target user card status when selected
+  useEffect(() => {
+    if (!selectedUser || !user) {
+      setSocialStatus(null);
+      setActionMsg('');
+      return;
+    }
+
+    const fetchSocialStatus = async () => {
+      setSocialLoading(true);
+      setActionMsg('');
+      try {
+        const token = localStorage.getItem('gravityx_token');
+        if (!token) return;
+        const res = await fetch(getApiUrl(`/api/social/card-status/${selectedUser.username}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSocialStatus({
+            likesCount: data.likesCount ?? (selectedUser.likesCount || 0),
+            isLikedByMe: !!data.isLikedByMe,
+            friendshipStatus: data.friendshipStatus || 'NONE',
+            requestId: data.requestId
+          });
+        } else {
+          setSocialStatus({
+            likesCount: selectedUser.likesCount || 0,
+            isLikedByMe: false,
+            friendshipStatus: selectedUser.id === user.id ? 'SELF' : 'NONE'
+          });
+        }
+      } catch (e) {
+        setSocialStatus({
+          likesCount: selectedUser.likesCount || 0,
+          isLikedByMe: false,
+          friendshipStatus: selectedUser.id === user.id ? 'SELF' : 'NONE'
+        });
+      } finally {
+        setSocialLoading(false);
+      }
+    };
+
+    fetchSocialStatus();
+  }, [selectedUser, user]);
+
+  const handleLikeUser = async () => {
+    if (!selectedUser || !user || socialLoading) return;
+    if (selectedUser.id === user.id || selectedUser.username === user.username) {
+      setActionMsg('You cannot like yourself!');
+      return;
+    }
+    const token = localStorage.getItem('gravityx_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(getApiUrl('/api/social/like'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetUsername: selectedUser.username })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSocialStatus(prev => prev ? {
+          ...prev,
+          likesCount: data.likesCount,
+          isLikedByMe: data.isLiked
+        } : null);
+        setActionMsg(data.isLiked ? 'Liked user profile! ❤️' : 'Unliked profile');
+      } else {
+        const errData = await res.json();
+        setActionMsg(errData.error || 'Failed to update like');
+      }
+    } catch (e: any) {
+      setActionMsg('Error linking with server');
+    }
+  };
+
+  const handleSendFriendRequest = async () => {
+    if (!selectedUser || !user || socialLoading) return;
+    const token = localStorage.getItem('gravityx_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(getApiUrl('/api/social/request'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ friendUsername: selectedUser.username })
+      });
+      if (res.ok) {
+        setSocialStatus(prev => prev ? { ...prev, friendshipStatus: 'PENDING_SENT' } : null);
+        setActionMsg('Friend request sent! 👥');
+      } else {
+        const errData = await res.json();
+        setActionMsg(errData.error || 'Could not send friend request');
+      }
+    } catch (e: any) {
+      setActionMsg('Failed to send friend request');
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    if (!socialStatus?.requestId || socialLoading) return;
+    const token = localStorage.getItem('gravityx_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(getApiUrl('/api/social/accept'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ requestId: socialStatus.requestId })
+      });
+      if (res.ok) {
+        setSocialStatus(prev => prev ? { ...prev, friendshipStatus: 'FRIENDS' } : null);
+        setActionMsg('Friend request accepted! 🎉');
+      }
+    } catch (e) {
+      setActionMsg('Failed to accept request');
+    }
+  };
+
+  const handleRejectFriendRequest = async () => {
+    if (!socialStatus?.requestId || socialLoading) return;
+    const token = localStorage.getItem('gravityx_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(getApiUrl('/api/social/reject'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ requestId: socialStatus.requestId })
+      });
+      if (res.ok) {
+        setSocialStatus(prev => prev ? { ...prev, friendshipStatus: 'NONE', requestId: undefined } : null);
+        setActionMsg('Friend request declined');
+      }
+    } catch (e) {
+      setActionMsg('Failed to reject request');
+    }
+  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -212,73 +379,84 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Player Details Card Modal */}
+      {/* Player Details Card Modal - Redesigned UI */}
       {selectedUser && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl transition-all animate-in fade-in duration-300"
           onClick={() => setSelectedUser(null)}
         >
           <div 
-            className="w-[92vw] max-w-sm sm:max-w-md glass-panel bg-slate-950/90 border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl shadow-cyberblue/15 relative overflow-hidden text-white backdrop-blur-xl animate-in zoom-in-95 duration-200"
+            className="w-[94vw] max-w-sm sm:max-w-md bg-gradient-to-b from-slate-900/95 via-slate-950/98 to-slate-950 border border-cyan-500/30 rounded-3xl p-5 sm:p-7 shadow-[0_0_50px_rgba(6,182,212,0.2)] relative overflow-hidden text-white backdrop-blur-2xl animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Background Glow Accents */}
-            <div className="absolute -top-16 -right-16 w-36 h-36 bg-cyberblue/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-cyberpink/20 rounded-full blur-3xl pointer-events-none"></div>
+            {/* Ambient Background Glow Orbs */}
+            <div className="absolute -top-20 -right-20 w-44 h-44 bg-cyberblue/25 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+            <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-cyberpink/25 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
 
             {/* Header & Close Button */}
-            <div className="flex items-center justify-between relative z-10 mb-2">
+            <div className="flex items-center justify-between relative z-10 mb-4 pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-cybergold" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Operator Dossier</span>
+                <div className="p-1.5 rounded-lg bg-cyberblue/10 border border-cyberblue/30 text-cyberblue">
+                  <Sparkles className="w-4 h-4 text-cybergold" />
+                </div>
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-cyberblue block">Galaxy Matrix Dossier</span>
+                  <span className="text-xs font-bold text-gray-300">Operator Specification</span>
+                </div>
               </div>
               <button 
                 onClick={() => setSelectedUser(null)}
-                className="p-2 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-gray-400 hover:text-white transition-all"
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-gray-400 hover:text-white transition-all active:scale-95"
                 aria-label="Close modal"
               >
                 <X size={16} />
               </button>
             </div>
 
-            {/* User Avatar & Identity Header */}
-            <div className="flex flex-col items-center text-center relative z-10 mt-1 mb-4">
-              <div className="relative mb-3">
-                <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-b from-slate-800 to-slate-900 flex items-center justify-center text-3xl font-black uppercase border-2 shadow-xl ${
-                  selectedUser.profileFrame === 'neon_glow' ? 'border-cyberblue shadow-neon-blue' : 
-                  selectedUser.profileFrame === 'event_horizon' ? 'border-cyberpink shadow-neon-pink' : 'border-cyan-400/40'
+            {/* Avatar & Operator Identity Card */}
+            <div className="flex flex-col items-center text-center relative z-10 mb-4">
+              <div className="relative mb-3 group">
+                <div className={`w-22 h-22 sm:w-26 sm:h-26 rounded-3xl bg-gradient-to-b from-slate-800 via-slate-900 to-black flex items-center justify-center text-3xl sm:text-4xl font-black uppercase border-2 shadow-2xl transition-transform duration-300 group-hover:scale-105 ${
+                  selectedUser.profileFrame === 'neon_glow' ? 'border-cyberblue shadow-[0_0_25px_rgba(6,182,212,0.5)]' : 
+                  selectedUser.profileFrame === 'event_horizon' ? 'border-cyberpink shadow-[0_0_25px_rgba(236,72,153,0.5)]' : 'border-cyan-400/40 shadow-cyan-900/30'
                 }`}>
-                  {selectedUser.username?.[0] || 'U'}
+                  <span className="bg-gradient-to-b from-white via-cyan-200 to-cyberblue bg-clip-text text-transparent">
+                    {selectedUser.username?.[0] || 'U'}
+                  </span>
                 </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2">
-                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-900 border border-cyan-500/40 text-cyan-300 shadow-md whitespace-nowrap">
+
+                {/* Rank Badge Floating Overlay */}
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 shadow-lg">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-slate-950 border border-cyan-400/50 text-cyan-300 tracking-wider shadow-md whitespace-nowrap flex items-center gap-1">
+                    <Trophy className="w-3 h-3 text-cybergold" />
                     {selectedUser.rank || 'Bronze V'}
                   </span>
                 </div>
               </div>
 
-              <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide mt-1">
+              <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide mt-2">
                 {selectedUser.username}
               </h3>
 
-              {/* Status Badge: Registered vs Guest */}
-              <div className="mt-2 flex items-center gap-2">
+              {/* Status Badge */}
+              <div className="mt-2 flex items-center justify-center gap-2">
                 {selectedUser.isGuest ? (
-                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow-sm">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
                     <UserX size={12} /> Guest Operator
                   </span>
                 ) : (
-                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
-                    <ShieldCheck size={12} /> Registered Pilot
+                  <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm">
+                    <ShieldCheck size={12} /> Verified Commander
                   </span>
                 )}
               </div>
 
-              {/* Player ID (ONLY rendered for registered users, NOT for guests) */}
+              {/* Player ID Bar */}
               {!selectedUser.isGuest && selectedUser.id && (
                 <div className="mt-3 w-full px-3.5 py-2 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs font-mono text-cyan-300">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-wider">Player ID:</span>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">ID:</span>
                     <span className="truncate max-w-[170px] xs:max-w-[210px] font-bold text-white">{selectedUser.id}</span>
                   </div>
                   <button
@@ -292,14 +470,80 @@ export default function LeaderboardPage() {
               )}
             </div>
 
-            {/* Performance Telemetry Stats Grid */}
+            {/* Social Actions Row (LIKE & FRIEND REQUEST) */}
+            <div className="relative z-10 mb-4 p-3 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+              <div className="grid grid-cols-2 gap-2.5">
+                {/* LIKE USER BUTTON */}
+                <button
+                  onClick={handleLikeUser}
+                  disabled={socialStatus?.friendshipStatus === 'SELF' || socialLoading}
+                  className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-200 active:scale-95 ${
+                    socialStatus?.isLikedByMe
+                      ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                      : 'bg-white/5 border border-white/10 hover:border-rose-400/40 text-gray-300 hover:text-rose-400'
+                  } ${socialStatus?.friendshipStatus === 'SELF' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <Heart className={`w-4 h-4 transition-transform duration-300 ${socialStatus?.isLikedByMe ? 'fill-rose-500 text-rose-500 scale-110' : ''}`} />
+                  <span>
+                    {socialStatus?.isLikedByMe ? 'Liked' : 'Like'} ({socialStatus?.likesCount ?? selectedUser.likesCount ?? 0})
+                  </span>
+                </button>
+
+                {/* FRIEND REQUEST / STATUS BUTTON */}
+                {socialStatus?.friendshipStatus === 'SELF' ? (
+                  <div className="w-full py-2.5 px-3 rounded-xl bg-white/5 border border-white/10 text-gray-400 text-xs font-bold flex items-center justify-center gap-1.5">
+                    <User size={14} /> That's You
+                  </div>
+                ) : socialStatus?.friendshipStatus === 'FRIENDS' ? (
+                  <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                    <UserCheck size={14} /> Friends ✓
+                  </div>
+                ) : socialStatus?.friendshipStatus === 'PENDING_SENT' ? (
+                  <div className="w-full py-2.5 px-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5">
+                    <Clock size={14} /> Request Sent
+                  </div>
+                ) : socialStatus?.friendshipStatus === 'PENDING_RECEIVED' ? (
+                  <div className="flex gap-1.5 w-full">
+                    <button
+                      onClick={handleAcceptFriendRequest}
+                      className="flex-1 py-2 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow-sm transition-all"
+                    >
+                      <Check size={13} /> Accept
+                    </button>
+                    <button
+                      onClick={handleRejectFriendRequest}
+                      className="py-2 px-2.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 text-[11px] font-bold flex items-center justify-center transition-all hover:bg-rose-500/30"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSendFriendRequest}
+                    disabled={socialLoading}
+                    className="w-full py-2.5 px-3 rounded-xl bg-cyberblue hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all active:scale-95"
+                  >
+                    <UserPlus size={14} /> Add Friend
+                  </button>
+                )}
+              </div>
+
+              {/* Action Message Feedback */}
+              {actionMsg && (
+                <p className="text-[11px] font-black text-center text-cyberpink animate-pulse mt-1">
+                  {actionMsg}
+                </p>
+              )}
+            </div>
+
+            {/* Performance Telemetry Grid */}
             <div className="relative z-10 space-y-3">
               <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-gray-400 px-1">
                 <span>Battle Performance</span>
                 <span>Win Rate: {selectedUser.gamesPlayed > 0 ? Math.round(((selectedUser.gamesWon || 0) / selectedUser.gamesPlayed) * 100) : 0}%</span>
               </div>
 
-              {/* Win Rate Progress Bar */}
+              {/* Win Rate Bar */}
               <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden p-0.5 border border-white/5">
                 <div 
                   className="h-full rounded-full bg-gradient-to-r from-cyberblue via-emerald-400 to-cyberpink transition-all duration-500"
@@ -309,27 +553,24 @@ export default function LeaderboardPage() {
                 ></div>
               </div>
 
-              {/* 3 Stat Cards: Total Played, Won, Lost */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-1">
-                {/* Total Games */}
+              {/* 3 Stat Cards */}
+              <div className="grid grid-cols-3 gap-2 pt-1">
                 <div className="p-3 rounded-2xl bg-cyberblue/10 border border-cyberblue/25 flex flex-col items-center justify-center text-center">
                   <Gamepad2 className="w-5 h-5 text-cyberblue mb-1" />
                   <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Total</span>
-                  <span className="text-lg sm:text-xl font-black text-white mt-0.5">{selectedUser.gamesPlayed || 0}</span>
+                  <span className="text-lg font-black text-white mt-0.5">{selectedUser.gamesPlayed || 0}</span>
                 </div>
 
-                {/* Games Won */}
                 <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col items-center justify-center text-center">
                   <Trophy className="w-5 h-5 text-emerald-400 mb-1" />
                   <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Won</span>
-                  <span className="text-lg sm:text-xl font-black text-emerald-400 mt-0.5">{selectedUser.gamesWon || 0}</span>
+                  <span className="text-lg font-black text-emerald-400 mt-0.5">{selectedUser.gamesWon || 0}</span>
                 </div>
 
-                {/* Games Lost */}
                 <div className="p-3 rounded-2xl bg-cyberpink/10 border border-cyberpink/25 flex flex-col items-center justify-center text-center">
                   <Skull className="w-5 h-5 text-cyberpink mb-1" />
                   <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider">Lost</span>
-                  <span className="text-lg sm:text-xl font-black text-cyberpink mt-0.5">{selectedUser.gamesLost || 0}</span>
+                  <span className="text-lg font-black text-cyberpink mt-0.5">{selectedUser.gamesLost || 0}</span>
                 </div>
               </div>
             </div>
@@ -343,7 +584,7 @@ export default function LeaderboardPage() {
             {/* Close Button */}
             <button
               onClick={() => setSelectedUser(null)}
-              className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-cyberblue hover:from-primary/90 hover:to-cyberblue/90 font-black text-xs uppercase tracking-wider text-white shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+              className="mt-4 w-full py-3 rounded-2xl bg-gradient-to-r from-primary via-indigo-600 to-cyberblue hover:from-primary/90 hover:to-cyberblue/90 font-black text-xs uppercase tracking-wider text-white shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
             >
               Close Dossier
             </button>

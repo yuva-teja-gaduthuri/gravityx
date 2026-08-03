@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { getApiUrl } from '../utils/api';
-import { User, MessageSquare, Plus, Check, X, ArrowLeft, Send } from 'lucide-react';
+import { User, MessageSquare, Plus, Check, X, ArrowLeft, Send, Bell, Heart, UserPlus, Sparkles } from 'lucide-react';
 
 interface Friend {
   id: string;
@@ -30,12 +30,27 @@ interface DirectMessage {
   createdAt: string;
 }
 
+interface NotificationItem {
+  id: string;
+  userId: string;
+  senderId?: string;
+  senderName?: string;
+  type: string; // 'LIKE', 'FRIEND_REQUEST', 'FRIEND_ACCEPT'
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export default function SocialDrawer({ currentUserId }: { currentUserId: string }) {
   const socket = useSocket();
   const t = (key: string, fallback: string) => fallback;
 
+  const [activeTab, setActiveTab] = useState<'FRIENDS' | 'NOTIFICATIONS'>('FRIENDS');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [pending, setPending] = useState<PendingRequest[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [searchUsername, setSearchUsername] = useState('');
   const [activeChatFriend, setActiveChatFriend] = useState<Friend | null>(null);
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -55,7 +70,6 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
       });
       if (res1.ok) {
         const friendsData = await res1.json();
-        // Give friends a mock ONLINE status for simulation if sockets aren't broadcasting, making it responsive
         setFriends(friendsData.map((f: Friend) => ({ ...f, status: Math.random() > 0.4 ? 'ONLINE' : 'OFFLINE' })));
       }
 
@@ -67,6 +81,30 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
         const pendingData = await res2.json();
         setPending(pendingData);
       }
+
+      // Notifications
+      const res3 = await fetch(getApiUrl('/api/social/notifications'), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res3.ok) {
+        const notifData = await res3.json();
+        setNotifications(notifData.notifications || []);
+        setUnreadCount(notifData.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const markNotificationsRead = async () => {
+    const token = localStorage.getItem('gravityx_token');
+    if (!token) return;
+    try {
+      await fetch(getApiUrl('/api/social/notifications/read'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setUnreadCount(0);
     } catch (err) {
       console.error(err);
     }
@@ -274,84 +312,175 @@ export default function SocialDrawer({ currentUserId }: { currentUserId: string 
       ) : (
         // Friends & Requests Lists
         <div className="flex flex-col h-full">
-          {/* Add Friend Form */}
-          <div className="p-4 border-b border-white/5">
-            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('addFriend', 'Add Friend')}</h3>
-            <form onSubmit={sendRequest} className="flex gap-2">
-              <input
-                type="text"
-                placeholder={t('usernamePlaceholder', 'Username...')}
-                value={searchUsername}
-                onChange={(e) => setSearchUsername(e.target.value)}
-                className="flex-grow glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberpink"
-              />
-              <button type="submit" className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-white">
-                <Plus size={16} />
-              </button>
-            </form>
-            {error && <p className="text-[10px] text-cybererror mt-2 font-semibold">{error}</p>}
-            {success && <p className="text-[10px] text-cybersuccess mt-2 font-semibold">{success}</p>}
+          {/* Tab Selector Header */}
+          <div className="flex items-center border-b border-white/10 p-1 bg-white/5 shrink-0">
+            <button
+              onClick={() => setActiveTab('FRIENDS')}
+              className={`flex-1 py-2 text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'FRIENDS' ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <UserPlus size={13} /> Crew
+              {pending.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-cyberpink text-white font-black text-[9px] rounded-full">
+                  {pending.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('NOTIFICATIONS');
+                markNotificationsRead();
+              }}
+              className={`flex-1 py-2 text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 relative ${
+                activeTab === 'NOTIFICATIONS' ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Bell size={13} /> Alerts
+              {unreadCount > 0 && (
+                <span className="px-1.5 py-0.2 bg-rose-500 text-white font-black text-[9px] rounded-full animate-pulse">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
           </div>
 
-          {/* Pending Requests */}
-          {pending.length > 0 && (
-            <div className="p-4 border-b border-white/5 bg-primary/5 max-h-48 overflow-y-auto">
-              <h3 className="text-xs uppercase font-extrabold tracking-widest text-cyberpink mb-3">{t('requests', 'Requests')} ({pending.length})</h3>
-              <div className="space-y-3">
-                {pending.map((req) => (
-                  <div key={req.requestId} className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center font-bold text-[10px] uppercase">
-                        {req.username[0]}
-                      </div>
-                      <span className="text-xs font-semibold text-gray-200">{req.username}</span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button onClick={() => acceptRequest(req.requestId)} className="w-6 h-6 rounded-lg bg-cybersuccess/20 border border-cybersuccess/30 text-cybersuccess flex items-center justify-center hover:bg-cybersuccess/40">
-                        <Check size={12} />
-                      </button>
-                      <button onClick={() => rejectRequest(req.requestId)} className="w-6 h-6 rounded-lg bg-cybererror/20 border border-cybererror/30 text-cybererror flex items-center justify-center hover:bg-cybererror/40">
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+          {activeTab === 'NOTIFICATIONS' ? (
+            /* Notifications List */
+            <div className="flex-1 p-4 overflow-y-auto space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[10px] uppercase font-black tracking-widest text-cyberblue">Notifications Log</h3>
+                <button
+                  onClick={async () => {
+                    const token = localStorage.getItem('gravityx_token');
+                    if (!token) return;
+                    await fetch(getApiUrl('/api/social/notifications/clear'), {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setNotifications([]);
+                  }}
+                  className="text-[9px] text-gray-500 hover:text-cyberpink font-bold uppercase transition-colors"
+                >
+                  Clear All
+                </button>
               </div>
+
+              {notifications.length === 0 ? (
+                <div className="text-center text-xs text-gray-500 py-12">No notifications yet. Orbit is silent.</div>
+              ) : (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`p-3 rounded-2xl border text-xs transition-all ${
+                      n.type === 'LIKE'
+                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-200'
+                        : n.type === 'FRIEND_REQUEST'
+                        ? 'bg-cyberblue/10 border-cyberblue/20 text-cyan-200'
+                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      {n.type === 'LIKE' ? (
+                        <Heart className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
+                      ) : n.type === 'FRIEND_REQUEST' ? (
+                        <UserPlus className="w-3.5 h-3.5 text-cyberblue" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                      )}
+                      <span className="font-extrabold uppercase text-[10px] tracking-wider">{n.title}</span>
+                      <span className="ml-auto text-[9px] text-gray-400 font-mono">
+                        {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-300 font-medium">{n.message}</p>
+                  </div>
+                ))
+              )}
             </div>
-          )}
-
-          {/* Friends List */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('friends', 'Friends')}</h3>
-            {friends.length === 0 ? (
-              <div className="text-center text-xs text-gray-500 py-10">{t('lonesomeOrbit', 'Lonesome orbit... Search for crew.')}</div>
-            ) : (
-              <div className="space-y-3">
-                {friends.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between group p-1 hover:bg-white/5 rounded-xl transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs uppercase border border-white/10">
-                          {f.username[0]}
-                        </div>
-                        <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-darkbg ${f.status === 'ONLINE' ? 'bg-cybersuccess' : f.status === 'IN_GAME' ? 'bg-cyberblue' : 'bg-gray-600'}`}></span>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-gray-200">{f.username}</div>
-                        <div className="text-[10px] text-gray-500">{t('level', 'Level')} {f.level} &bull; {f.rank}</div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setActiveChatFriend(f)}
-                      className="opacity-0 group-hover:opacity-100 p-2 rounded-lg bg-white/5 text-gray-400 hover:text-white hover:bg-primary transition-all"
-                    >
-                      <MessageSquare size={14} />
-                    </button>
-                  </div>
-                ))}
+          ) : (
+            /* Friends & Add Friend List */
+            <>
+              {/* Add Friend Form */}
+              <div className="p-4 border-b border-white/5">
+                <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('addFriend', 'Add Friend')}</h3>
+                <form onSubmit={sendRequest} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={t('usernamePlaceholder', 'Username...')}
+                    value={searchUsername}
+                    onChange={(e) => setSearchUsername(e.target.value)}
+                    className="flex-grow glass-input rounded-xl px-3 py-1.5 text-xs focus:border-cyberpink"
+                  />
+                  <button type="submit" className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center text-white">
+                    <Plus size={16} />
+                  </button>
+                </form>
+                {error && <p className="text-[10px] text-cybererror mt-2 font-semibold">{error}</p>}
+                {success && <p className="text-[10px] text-cybersuccess mt-2 font-semibold">{success}</p>}
               </div>
-            )}
-          </div>
+
+              {/* Pending Requests */}
+              {pending.length > 0 && (
+                <div className="p-4 border-b border-white/5 bg-primary/5 max-h-48 overflow-y-auto">
+                  <h3 className="text-xs uppercase font-extrabold tracking-widest text-cyberpink mb-3">{t('requests', 'Requests')} ({pending.length})</h3>
+                  <div className="space-y-3">
+                    {pending.map((req) => (
+                      <div key={req.requestId} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center font-bold text-[10px] uppercase">
+                            {req.username[0]}
+                          </div>
+                          <span className="text-xs font-semibold text-gray-200">{req.username}</span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => acceptRequest(req.requestId)} className="w-6 h-6 rounded-lg bg-cybersuccess/20 border border-cybersuccess/30 text-cybersuccess flex items-center justify-center hover:bg-cybersuccess/40">
+                            <Check size={12} />
+                          </button>
+                          <button onClick={() => rejectRequest(req.requestId)} className="w-6 h-6 rounded-lg bg-cybererror/20 border border-cybererror/30 text-cybererror flex items-center justify-center hover:bg-cybererror/40">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Friends List */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                <h3 className="text-xs uppercase font-extrabold tracking-widest text-gray-400 mb-3">{t('friends', 'Friends')}</h3>
+                {friends.length === 0 ? (
+                  <div className="text-center text-xs text-gray-500 py-10">{t('lonesomeOrbit', 'Lonesome orbit... Search for crew.')}</div>
+                ) : (
+                  <div className="space-y-3">
+                    {friends.map((f) => (
+                      <div key={f.id} className="flex items-center justify-between group p-1 hover:bg-white/5 rounded-xl transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs uppercase border border-white/10">
+                              {f.username[0]}
+                            </div>
+                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-darkbg ${f.status === 'ONLINE' ? 'bg-cybersuccess' : f.status === 'IN_GAME' ? 'bg-cyberblue' : 'bg-gray-600'}`}></span>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-gray-200">{f.username}</div>
+                            <div className="text-[10px] text-gray-500">{t('level', 'Level')} {f.level} &bull; {f.rank}</div>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setActiveChatFriend(f)}
+                          className="opacity-0 group-hover:opacity-100 p-2 rounded-lg bg-white/5 text-gray-400 hover:text-white hover:bg-primary transition-all"
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
