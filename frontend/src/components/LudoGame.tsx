@@ -38,7 +38,7 @@ interface LudoState {
 
 interface LudoGameProps {
   roomCode: string;
-  user: { id: string; username: string; isGuest?: boolean };
+  user: { id: string; username: string; isGuest?: boolean; boardTheme?: string; diceSkin?: string; profileFrame?: string };
   socket: Socket;
   isHost: boolean;
   matchEndedData?: any;
@@ -994,6 +994,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     if (activePlayer.id !== user.id) return;
     if (gameState.hasRolled || isRolling) return;
 
+    setIsRolling(true);
+    audioRef.current?.playRoll();
     socket.emit('ludo_roll_dice', roomCode);
   };
 
@@ -1053,12 +1055,16 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     });
 
     socket.on('ludo_dice_rolled', (data: any) => {
-      // Immediately stop any rolling state and lock displayed value directly to authoritative backend result
-      setIsRolling(false);
-      setRollingValue(data.diceValue);
-      audioRef.current?.playRoll();
+      setIsRolling(true);
 
-      // Immediately synchronize dice value and hasRolled state for real-time responsiveness
+      // Smooth tumble animation before landing on the final face
+      setTimeout(() => {
+        setIsRolling(false);
+        setRollingValue(data.diceValue);
+        audioRef.current?.playImpact();
+      }, 400);
+
+      // Immediately synchronize dice value and hasRolled state
       setGameState(prev => prev ? { 
         ...prev, 
         activePlayerIndex: data.activePlayerIndex !== undefined ? data.activePlayerIndex : prev.activePlayerIndex,
@@ -1073,9 +1079,6 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         updateValidTokens(data.validTokens);
       }
 
-      // Dice thud sound
-      audioRef.current?.playImpact();
-
       // Rule: Lucky 6 visual alert
       if (data.diceValue === 6) {
         setLuckySix(true);
@@ -1083,12 +1086,12 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
         triggerFireworks(12, 12);
       }
 
-      // ONLY AFTER dice value is locked to data.diceValue on screen, initiate single valid move option
+      // initiate single valid move option after dice lands
       if (isMyTurnNow && data.validTokens && data.validTokens.length === 1) {
         const autoMoveTokenId = data.validTokens[0];
         setTimeout(() => {
           handleMoveToken(autoMoveTokenId);
-        }, 150);
+        }, 500);
       }
     });
 
@@ -1345,12 +1348,38 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       else if (color === 'yellow') positionClass = 'absolute top-2 left-2';
     }
 
-    // Dice colors matching the team
+    // Dice colors matching the team or equipped custom diceSkin
     let diceFaceBg = 'bg-white border border-gray-200 shadow-md';
     let dotBg = 'bg-[#E53935]';
     if (color === 'green') { dotBg = 'bg-[#43A047]'; }
     else if (color === 'yellow') { dotBg = 'bg-[#F57F17]'; }
     else if (color === 'blue') { dotBg = 'bg-[#1E88E5]'; }
+
+    if (isMyDice && user?.diceSkin) {
+      const skin = user.diceSkin;
+      if (skin === 'ludo_king_red') {
+        diceFaceBg = 'bg-gradient-to-br from-red-600 via-red-700 to-red-900 border-2 border-yellow-400 shadow-lg';
+        dotBg = 'bg-amber-300';
+      } else if (skin === 'plasma_core') {
+        diceFaceBg = 'bg-gradient-to-br from-fuchsia-600 to-purple-900 border-2 border-cyan-400';
+        dotBg = 'bg-cyan-300';
+      } else if (skin === 'quantum_roll') {
+        diceFaceBg = 'bg-gradient-to-br from-blue-600 to-indigo-900 border-2 border-cyberblue';
+        dotBg = 'bg-white';
+      } else if (skin === 'chesscom_emerald') {
+        diceFaceBg = 'bg-gradient-to-br from-emerald-600 to-green-900 border-2 border-emerald-300';
+        dotBg = 'bg-amber-200';
+      } else if (skin === 'gold_gravity') {
+        diceFaceBg = 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-700 border-2 border-yellow-200';
+        dotBg = 'bg-slate-950';
+      } else if (skin === 'diamond_crystal') {
+        diceFaceBg = 'bg-gradient-to-br from-sky-300 via-cyan-400 to-blue-600 border-2 border-white';
+        dotBg = 'bg-white';
+      } else if (skin === 'dragon_flame') {
+        diceFaceBg = 'bg-gradient-to-br from-orange-600 via-red-700 to-slate-950 border-2 border-orange-400';
+        dotBg = 'bg-amber-300';
+      }
+    }
 
     const displayRollValue = isPlayerActive && isRolling ? rollingValue : (gameState.diceValue || 1);
 
@@ -1383,7 +1412,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           }}
         >
           <div 
-            className={`dice-cube ${isRolling && isPlayerActive ? 'animate-spin-slow' : ''}`}
+            className={`dice-cube ${isRolling && isPlayerActive ? 'is-rolling' : ''}`}
             data-roll={displayRollValue}
           >
             {/* Face 1 */}
@@ -1515,12 +1544,24 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           height: var(--dice-size);
         }
 
+        @keyframes diceTumble {
+          0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
+          25% { transform: rotateX(180deg) rotateY(90deg) rotateZ(45deg); }
+          50% { transform: rotateX(360deg) rotateY(180deg) rotateZ(90deg); }
+          75% { transform: rotateX(540deg) rotateY(270deg) rotateZ(135deg); }
+          100% { transform: rotateX(720deg) rotateY(360deg) rotateZ(180deg); }
+        }
+
         .dice-cube {
           width: 100%;
           height: 100%;
           position: relative;
           transform-style: preserve-3d;
-          transition: transform 1s cubic-bezier(0.2, 0.8, 0.3, 1);
+          transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .dice-cube.is-rolling {
+          animation: diceTumble 0.35s linear infinite !important;
         }
 
         .dice-face {
@@ -1537,7 +1578,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         /* Roll positions using responsive variable calc */
         .dice-cube[data-roll="1"] { transform: rotateX(0deg) rotateY(0deg); }
-        .dice-cube[data-roll="6"] { transform: rotateX(180deg) rotateY(0deg); }
+        .dice-cube[data-roll="6"] { transform: rotateX(0deg) rotateY(180deg); }
         .dice-cube[data-roll="2"] { transform: rotateX(0deg) rotateY(-90deg); }
         .dice-cube[data-roll="5"] { transform: rotateX(0deg) rotateY(90deg); }
         .dice-cube[data-roll="3"] { transform: rotateX(-90deg) rotateY(0deg); }
@@ -2096,25 +2137,44 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       </div>
 
       {/* Main Ludo Board Container (Fits all screen sizes: min(90vw, 70vh, 620px)) */}
-      <div 
-        className="wood-board-frame relative shrink-0 transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)]"
-        style={{
-          width: 'min(90vw, 70vh, 620px)',
-          height: 'min(90vw, 70vh, 620px)',
-          aspectRatio: '1 / 1',
-          transform: `scale(${camZoom}) translate(${camX}px, ${camY}px)`,
-        }}
-      >
-        
-        {/* Render 15x15 Ludo Grid Layout with CSS Grid */}
-        <div 
-          className="w-full h-full relative bg-white rounded-2xl border-4 sm:border-8 border-[#2f1c0c]"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
-            gridTemplateRows: 'repeat(15, minmax(0, 1fr))'
-          }}
-        >
+      {(() => {
+        let frameClass = "wood-board-frame";
+        let innerGridBorder = "border-[#2f1c0c]";
+
+        if (user?.boardTheme === 'ludo_king_royal') {
+          frameClass = "bg-amber-950 border-4 border-amber-400 rounded-3xl p-1 shadow-neon-gold";
+          innerGridBorder = "border-amber-500";
+        } else if (user?.boardTheme === 'ludo_club_star') {
+          frameClass = "bg-slate-900 border-4 border-pink-500 rounded-3xl p-1 shadow-neon-pink";
+          innerGridBorder = "border-pink-400";
+        } else if (user?.boardTheme === 'mpl_pro_cyber') {
+          frameClass = "bg-slate-950 border-4 border-cyan-500 rounded-3xl p-1 shadow-neon-blue";
+          innerGridBorder = "border-cyan-400";
+        } else if (user?.boardTheme === 'neon_abyss' || user?.boardTheme === 'neon_abyss_board') {
+          frameClass = "bg-black border-4 border-purple-500 rounded-3xl p-1 shadow-neon-pink";
+          innerGridBorder = "border-purple-400";
+        }
+
+        return (
+          <div 
+            className={`${frameClass} relative shrink-0 transition-transform duration-[800ms] ease-[cubic-bezier(0.25,1,0.5,1)]`}
+            style={{
+              width: 'min(90vw, 70vh, 620px)',
+              height: 'min(90vw, 70vh, 620px)',
+              aspectRatio: '1 / 1',
+              transform: `scale(${camZoom}) translate(${camX}px, ${camY}px)`,
+            }}
+          >
+            
+            {/* Render 15x15 Ludo Grid Layout with CSS Grid */}
+            <div 
+              className={`w-full h-full relative bg-white rounded-2xl border-4 sm:border-8 ${innerGridBorder}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(15, minmax(0, 1fr))',
+                gridTemplateRows: 'repeat(15, minmax(0, 1fr))'
+              }}
+            >
           
           {/* Top-Left Red Base Yard */}
           <div 
@@ -2490,6 +2550,8 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
         </div>
       </div>
+    );
+  })()}
 
       {/* 4 Player Consoles - Bottom Row (Blue & Yellow) */}
       <div className="w-full max-w-[620px] flex items-center justify-between gap-2 mt-2 px-1 z-20">

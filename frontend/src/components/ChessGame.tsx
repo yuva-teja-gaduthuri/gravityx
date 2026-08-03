@@ -13,7 +13,7 @@ import { ChessPromotionModal } from './chess/ChessPromotionModal';
 
 interface ChessGameProps {
   roomCode: string;
-  user: { id: string; username: string; isGuest?: boolean };
+  user: { id: string; username: string; isGuest?: boolean; boardTheme?: string; profileFrame?: string };
   socket: Socket;
   isHost: boolean;
   matchEndedData?: any;
@@ -446,6 +446,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           lastMove={gameState.lastMove}
           isMyTurn={isMyTurn}
           onSquareClick={handleSquareClick}
+          boardTheme={user?.boardTheme}
         />
 
         {/* 4. BOTTOM PLAYER PANEL (White/You) & Captured Pieces */}
@@ -458,6 +459,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           capturedPieces={gameState.capturedPieces}
           rating={1200}
           isSelf={bottomIsSelf}
+          profileFrame={user?.profileFrame}
         />
 
         {/* Return to Lobby / Host controls footer */}

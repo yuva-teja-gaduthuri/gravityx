@@ -77,79 +77,12 @@ export function handleChess(io: Server, socket: Socket) {
       }
 
       const myId = socket.data.user?.id || room.players.find(p => p.socketId === socket.id)?.id;
-      const isWhite = myId === gameState.whitePlayerId;
-      const isBlack = myId === gameState.blackPlayerId;
-
-      if (!isWhite && !isBlack) {
-        return socket.emit('error', 'You are not a player in this game');
+      if (!myId) {
+        return socket.emit('error', 'Player identity not found');
       }
 
-      if ((gameState.turn === 'w' && !isWhite) || (gameState.turn === 'b' && !isBlack)) {
-        return socket.emit('error', 'It is not your turn');
-      }
-
-      const chess = new Chess(gameState.fen);
-      try {
-        const move = chess.move({
-          from,
-          to,
-          promotion: promotion || 'q',
-        });
-
-        gameState.fen = chess.fen();
-        gameState.turn = chess.turn();
-        gameState.moveHistory.push(move.san);
-        gameState.lastMove = { from: move.from, to: move.to, piece: move.piece, san: move.san };
-        gameState.lastMoveTimestamp = Date.now();
-        gameState.isCheck = chess.inCheck();
-
-        // Track captured pieces sequence chronologically
-        if (move.captured) {
-          gameState.capturedPieces.push({
-            piece: move.captured,
-            color: move.color === 'w' ? 'b' : 'w',
-            capturedBy: myId,
-            sequence: gameState.capturedPieces.length + 1,
-          });
-        }
-
-        // Start timer countdown loop upon first move of the match (if timeControl is not UNLIMITED)
-        if (!gameState.timerStarted) {
-          gameState.timerStarted = true;
-        }
-
-        if (gameState.timeControl !== 'UNLIMITED' && !activeChessTimers[upperCode]) {
-          startChessTurnTimer(io, upperCode);
-        }
-
-        if (chess.isGameOver()) {
-          gameState.isGameOver = true;
-          if (chess.isCheckmate()) {
-            gameState.isCheckmate = true;
-            gameState.winnerId = chess.turn() === 'w' ? gameState.blackPlayerId : gameState.whitePlayerId;
-          } else {
-            if (chess.isStalemate()) {
-              gameState.isStalemate = true;
-              gameState.drawReason = 'Stalemate';
-            } else if (chess.isThreefoldRepetition()) {
-              gameState.drawReason = 'Threefold Repetition';
-            } else if (chess.isInsufficientMaterial()) {
-              gameState.drawReason = 'Insufficient Material';
-            } else {
-              gameState.drawReason = 'Draw';
-            }
-          }
-
-          if (activeChessTimers[upperCode]) {
-            clearInterval(activeChessTimers[upperCode]);
-            delete activeChessTimers[upperCode];
-          }
-
-          triggerChessMatchEnd(io, upperCode, room, gameState);
-        } else {
-          io.to(upperCode).emit('chess_state_sync', gameState);
-        }
-      } catch (moveErr) {
+      const success = makeChessMoveInternal(io, room, from, to, promotion || 'q', myId);
+      if (!success) {
         socket.emit('error', 'Invalid chess move');
       }
     } catch (err: any) {
@@ -186,8 +119,219 @@ export function handleChess(io: Server, socket: Socket) {
   });
 }
 
+export function makeChessMoveInternal(
+  io: Server,
+  room: any,
+  from: string,
+  to: string,
+  promotion: string = 'q',
+  playerId: string
+): boolean {
+  const gameState = room.gameState as ChessState;
+  if (!gameState || gameState.isGameOver) return false;
+
+  const isWhite = playerId === gameState.whitePlayerId;
+  const isBlack = playerId === gameState.blackPlayerId;
+
+  if (!isWhite && !isBlack) return false;
+  if ((gameState.turn === 'w' && !isWhite) || (gameState.turn === 'b' && !isBlack)) return false;
+
+  const chess = new Chess(gameState.fen);
+  try {
+    const move = chess.move({
+      from,
+      to,
+      promotion: promotion || 'q',
+    });
+
+    gameState.fen = chess.fen();
+    gameState.turn = chess.turn();
+    gameState.moveHistory.push(move.san);
+    gameState.lastMove = { from: move.from, to: move.to, piece: move.piece, san: move.san };
+    gameState.lastMoveTimestamp = Date.now();
+    gameState.isCheck = chess.inCheck();
+
+    // Track captured pieces sequence chronologically
+    if (move.captured) {
+      gameState.capturedPieces.push({
+        piece: move.captured,
+        color: move.color === 'w' ? 'b' : 'w',
+        capturedBy: playerId,
+        sequence: gameState.capturedPieces.length + 1,
+      });
+    }
+
+    // Start timer countdown loop upon first move of the match (if timeControl is not UNLIMITED)
+    if (!gameState.timerStarted) {
+      gameState.timerStarted = true;
+    }
+
+    if (gameState.timeControl !== 'UNLIMITED' && !activeChessTimers[room.code]) {
+      startChessTurnTimer(io, room.code);
+    }
+
+    if (chess.isGameOver()) {
+      gameState.isGameOver = true;
+      if (chess.isCheckmate()) {
+        gameState.isCheckmate = true;
+        gameState.winnerId = chess.turn() === 'w' ? gameState.blackPlayerId : gameState.whitePlayerId;
+      } else {
+        if (chess.isStalemate()) {
+          gameState.isStalemate = true;
+          gameState.drawReason = 'Stalemate';
+        } else if (chess.isThreefoldRepetition()) {
+          gameState.drawReason = 'Threefold Repetition';
+        } else if (chess.isInsufficientMaterial()) {
+          gameState.drawReason = 'Insufficient Material';
+        } else {
+          gameState.drawReason = 'Draw';
+        }
+      }
+
+      if (activeChessTimers[room.code]) {
+        clearInterval(activeChessTimers[room.code]);
+        delete activeChessTimers[room.code];
+      }
+
+      triggerChessMatchEnd(io, room.code, room, gameState);
+    } else {
+      io.to(room.code).emit('chess_state_sync', gameState);
+      // Trigger bot turn if next turn belongs to a bot
+      checkAndTriggerChessBotTurn(io, room.code);
+    }
+    return true;
+  } catch (moveErr) {
+    return false;
+  }
+}
+
+function checkAndTriggerChessBotTurn(io: Server, roomCode: string) {
+  const room = roomStore.getRoom(roomCode);
+  if (!room || room.status !== 'PLAYING' || !room.gameState) return;
+
+  const gameState = room.gameState as ChessState;
+  if (gameState.isGameOver) return;
+
+  const activePlayerId = gameState.turn === 'w' ? gameState.whitePlayerId : gameState.blackPlayerId;
+  const activePlayer = room.players.find((p) => p.id === activePlayerId);
+  if (!activePlayer || !activePlayer.isBot) return;
+
+  // Natural thinking delay between 800ms and 1200ms
+  const delay = Math.floor(Math.random() * 400) + 800;
+
+  setTimeout(() => {
+    const currentRoom = roomStore.getRoom(roomCode);
+    if (!currentRoom || currentRoom.status !== 'PLAYING' || !currentRoom.gameState) return;
+
+    const currentState = currentRoom.gameState as ChessState;
+    if (currentState.isGameOver) return;
+
+    const currentActiveId = currentState.turn === 'w' ? currentState.whitePlayerId : currentState.blackPlayerId;
+    if (currentActiveId !== activePlayer.id) return;
+
+    const chess = new Chess(currentState.fen);
+    const legalMoves = chess.moves({ verbose: true });
+    if (legalMoves.length === 0) return;
+
+    const bestMove = selectBestBotMove(chess, legalMoves);
+    if (bestMove) {
+      makeChessMoveInternal(
+        io,
+        currentRoom,
+        bestMove.from,
+        bestMove.to,
+        bestMove.promotion || 'q',
+        activePlayer.id
+      );
+    }
+  }, delay);
+}
+
+function selectBestBotMove(chess: Chess, legalMoves: any[]): any {
+  if (legalMoves.length === 0) return null;
+  if (legalMoves.length === 1) return legalMoves[0];
+
+  const pieceValues: { [key: string]: number } = {
+    p: 10,
+    n: 30,
+    b: 30,
+    r: 50,
+    q: 90,
+    k: 900,
+  };
+
+  const centerSquares = new Set(['e4', 'e5', 'd4', 'd5', 'c4', 'c5', 'f4', 'f5']);
+
+  const scoredMoves = legalMoves.map((move) => {
+    let score = 0;
+
+    // Simulate move
+    const tempChess = new Chess(chess.fen());
+    tempChess.move({ from: move.from, to: move.to, promotion: move.promotion || 'q' });
+
+    // 1. Checkmate (highest priority)
+    if (tempChess.isCheckmate()) {
+      return { move, score: 10000 };
+    }
+
+    // 2. Captures
+    if (move.captured) {
+      const victimVal = pieceValues[move.captured.toLowerCase()] || 10;
+      const attackerVal = pieceValues[move.piece.toLowerCase()] || 10;
+      score += victimVal * 10 - attackerVal;
+    }
+
+    // 3. Promotion
+    if (move.promotion === 'q' || (move.flags && move.flags.includes('p'))) {
+      score += 80;
+    }
+
+    // 4. Giving Check
+    if (tempChess.inCheck()) {
+      score += 15;
+    }
+
+    // 5. Center Control
+    if (centerSquares.has(move.to)) {
+      score += 5;
+    }
+
+    // 6. Check if target square is attacked by opponent (avoid hanging pieces)
+    const opponentMoves = tempChess.moves({ verbose: true });
+    const isAttacked = opponentMoves.some((oppMove) => oppMove.to === move.to);
+    if (isAttacked) {
+      const movingPieceVal = pieceValues[move.piece.toLowerCase()] || 10;
+      score -= movingPieceVal * 5;
+    }
+
+    // 7. Small random variation
+    score += Math.random() * 8;
+
+    return { move, score };
+  });
+
+  // Sort descending by score
+  scoredMoves.sort((a, b) => b.score - a.score);
+
+  return scoredMoves[0].move;
+}
+
 // Function to trigger Chess Match Start from Room handler
 export function startChessGame(io: Server, room: any) {
+  // If room has only 1 player, auto-add AI bot for single-player practice
+  if (room.players.length < 2) {
+    const botPlayer = {
+      id: `bot_${Math.random().toString(36).substring(2, 9)}`,
+      username: 'AlphaBot',
+      socketId: 'BOT_SOCKET',
+      avatar: 'cyborg',
+      profileFrame: 'default_frame',
+      ready: true,
+      isBot: true,
+    };
+    roomStore.addPlayer(room.code, botPlayer);
+  }
+
   const chess = new Chess();
   const whitePlayer = room.players[0];
   const blackPlayer = room.players[1];
@@ -225,6 +369,9 @@ export function startChessGame(io: Server, room: any) {
 
   io.to(room.code).emit('room_state_updated', room);
   io.to(room.code).emit('chess_state_sync', gameState);
+
+  // Check if first player (White) is bot
+  checkAndTriggerChessBotTurn(io, room.code);
 }
 
 function startChessTurnTimer(io: Server, roomCode: string) {

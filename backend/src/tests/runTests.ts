@@ -59,6 +59,12 @@ async function runTests() {
         throw new Error('Duplicate registration check failed');
       }
 
+      // Mark test users as verified for integration testing
+      await prisma.user.updateMany({
+        where: { username: { in: ['test_user_alpha', 'test_user_beta'] } },
+        data: { emailVerified: true },
+      });
+
       // 3. Login Tests
       console.log('\n--- 3. LOGIN TESTS ---');
       const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -275,6 +281,88 @@ async function runTests() {
       }
 
       console.log('Verified Ludo & Chess state sync contracts successfully.');
+
+      // 12. CHESS GAME WITH AI BOT TEST
+      console.log('\n--- 12. CHESS GAME WITH AI BOT VERIFICATION ---');
+      // Create a Chess room
+      const chessRoomRes = await fetch(`${BASE_URL}/api/rooms/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: 'Chess Bot Test Room',
+          gameType: 'CHESS',
+          maxPlayers: 2,
+        }),
+      });
+      const chessRoomData = await chessRoomRes.json() as any;
+      const chessRoomCode = chessRoomData.room.code;
+
+      const chessSocket = clientIo(BASE_URL, {
+        auth: { token },
+        transports: ['websocket'],
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        chessSocket.on('connect', () => {
+          chessSocket.emit('join_room', {
+            roomCode: chessRoomCode,
+            userId: userAlpha.id,
+            username: userAlpha.username,
+          });
+        });
+
+        chessSocket.once('room_state_updated', () => {
+          resolve();
+        });
+        setTimeout(() => reject(new Error('Chess room join timed out')), 3000);
+      });
+
+      // Add AI Bot to Chess room
+      chessSocket.emit('add_bot', { roomCode: chessRoomCode });
+      await new Promise<void>((r) => setTimeout(r, 300));
+
+      // Start Chess game
+      chessSocket.emit('chess_start_game', chessRoomCode);
+
+      await new Promise<void>((resolve, reject) => {
+        chessSocket.once('chess_state_sync', (state: any) => {
+          console.log('Chess Game started. White player:', state.whiteUsername, 'Black player:', state.blackUsername);
+          if (state.turn !== 'w') return reject(new Error('Chess initial turn should be White'));
+          resolve();
+        });
+        setTimeout(() => reject(new Error('Chess start game timed out')), 3000);
+      });
+
+      // Human (White) makes move: e2 -> e4
+      chessSocket.emit('chess_move', {
+        roomCode: chessRoomCode,
+        from: 'e2',
+        to: 'e4',
+      });
+
+      // Wait for server to process human move and bot to respond automatically
+      await new Promise<void>((resolve, reject) => {
+        let syncCount = 0;
+        const handleSync = (state: any) => {
+          syncCount++;
+          console.log(`Chess state sync #${syncCount}: moveHistory=${JSON.stringify(state.moveHistory)}, turn=${state.turn}`);
+
+          // When bot has played, move history will have 2 moves and turn will be 'w' again
+          if (state.moveHistory.length >= 2 && state.turn === 'w') {
+            console.log('✅ Chess Bot executed turn successfully! Bot move:', state.lastMove);
+            chessSocket.off('chess_state_sync', handleSync);
+            resolve();
+          }
+        };
+
+        chessSocket.on('chess_state_sync', handleSync);
+        setTimeout(() => reject(new Error('Chess Bot failed to make a move within 3 seconds')), 4000);
+      });
+
+      chessSocket.disconnect();
 
       // Disconnect Sockets
       socket1.disconnect();

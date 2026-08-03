@@ -408,29 +408,34 @@ export const refreshToken = async (req: Request, res: Response) => {
         return res.status(403).json({ error: 'Invalid token' });
       }
 
-      const payload = decoded as { id: string; username: string; role: string; exp?: number };
+      try {
+        const payload = decoded as { id: string; username: string; role: string; exp?: number };
 
-      if (payload.exp) {
-        const now = Math.floor(Date.now() / 1000);
-        const expiredSince = now - payload.exp;
-        const gracePeriod = 7 * 24 * 3600; // 7 days grace period
-        if (expiredSince > gracePeriod) {
-          return res.status(401).json({ error: 'Session expired. Please log in again.' });
+        if (payload.exp) {
+          const now = Math.floor(Date.now() / 1000);
+          const expiredSince = now - payload.exp;
+          const gracePeriod = 7 * 24 * 3600; // 7 days grace period
+          if (expiredSince > gracePeriod) {
+            return res.status(401).json({ error: 'Session expired. Please log in again.' });
+          }
         }
+
+        const user = await prisma.user.findUnique({ where: { id: payload.id } });
+        if (!user || user.isBanned) {
+          return res.status(401).json({ error: user?.isBanned ? 'Your account has been banned' : 'User not found' });
+        }
+
+        const newToken = jwt.sign(
+          { id: user.id, username: user.username, role: user.role },
+          JWT_SECRET,
+          { expiresIn: user.isGuest ? '24h' : '7d' }
+        );
+
+        res.json({ token: newToken });
+      } catch (innerErr: any) {
+        console.error('Refresh token DB error:', innerErr);
+        res.status(500).json({ error: 'Database connection issue. Please retry.' });
       }
-
-      const user = await prisma.user.findUnique({ where: { id: payload.id } });
-      if (!user || user.isBanned) {
-        return res.status(401).json({ error: user?.isBanned ? 'Your account has been banned' : 'User not found' });
-      }
-
-      const newToken = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        JWT_SECRET,
-        { expiresIn: user.isGuest ? '24h' : '7d' }
-      );
-
-      res.json({ token: newToken });
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

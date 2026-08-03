@@ -18,6 +18,7 @@ interface ChessPlayerPanelProps {
   capturedPieces: CapturedPiece[];
   rating?: number;
   isSelf: boolean;
+  profileFrame?: string;
 }
 
 export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
@@ -29,6 +30,7 @@ export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
   capturedPieces,
   rating = 1200,
   isSelf,
+  profileFrame,
 }) => {
   const isWhite = color === 'w';
 
@@ -55,6 +57,23 @@ export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
   // Filter captured pieces taken by THIS player (i.e. opponent pieces captured by this player)
   const myCapturedPieces = capturedPieces.filter((cp) => cp.color !== color);
 
+  // Frame styles
+  let frameBorder = isWhite
+    ? 'bg-gradient-to-br from-gray-100 to-gray-300 text-slate-950 border-white'
+    : 'bg-gradient-to-br from-slate-800 to-slate-950 text-white border-slate-700';
+
+  if (profileFrame === 'ludo_king_crown') {
+    frameBorder = 'bg-amber-950 text-amber-300 border-2 border-amber-400 ring-2 ring-yellow-500/50 shadow-neon-gold';
+  } else if (profileFrame === 'chesscom_laurel') {
+    frameBorder = 'bg-emerald-950 text-emerald-300 border-2 border-emerald-400 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-500/50';
+  } else if (profileFrame === 'neon_glow') {
+    frameBorder = 'bg-cyberblue/20 text-cyberblue border-2 border-cyberblue ring-2 ring-cyberblue/40 shadow-neon-blue';
+  } else if (profileFrame === 'event_horizon') {
+    frameBorder = 'bg-cyberpink/20 text-cyberpink border-2 border-cyberpink ring-2 ring-cyberpink/40 shadow-neon-pink';
+  } else if (profileFrame === 'diamond_crest') {
+    frameBorder = 'bg-sky-950 text-sky-200 border-2 border-sky-300 ring-2 ring-cyan-400/50 shadow-lg shadow-sky-400/60';
+  }
+
   return (
     <div
       className={`w-full max-w-[560px] mx-auto rounded-2xl p-3 sm:p-4 transition-all border backdrop-blur-xl ${
@@ -66,14 +85,18 @@ export const ChessPlayerPanel: React.FC<ChessPlayerPanelProps> = ({
       <div className="flex items-center justify-between gap-3">
         {/* Left: Avatar & Name */}
         <div className="flex items-center gap-3 min-w-0">
-          <div
-            className={`w-10 h-10 rounded-xl border flex items-center justify-center text-sm font-black uppercase shrink-0 shadow-md ${
-              isWhite
-                ? 'bg-gradient-to-br from-gray-100 to-gray-300 text-slate-950 border-white'
-                : 'bg-gradient-to-br from-slate-800 to-slate-950 text-white border-slate-700'
-            }`}
-          >
-            {username ? username[0] : isWhite ? 'W' : 'B'}
+          <div className="relative">
+            <div
+              className={`w-10 h-10 rounded-xl border flex items-center justify-center text-sm font-black uppercase shrink-0 shadow-md ${frameBorder}`}
+            >
+              {username ? username[0] : isWhite ? 'W' : 'B'}
+            </div>
+            {profileFrame === 'ludo_king_crown' && (
+              <span className="absolute -top-2.5 -right-1 text-sm filter drop-shadow">👑</span>
+            )}
+            {profileFrame === 'chesscom_laurel' && (
+              <span className="absolute -top-2 -right-1 text-sm filter drop-shadow">🌿</span>
+            )}
           </div>
 
           <div className="flex flex-col min-w-0">

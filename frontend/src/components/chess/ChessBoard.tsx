@@ -10,6 +10,7 @@ interface ChessBoardProps {
   lastMove: { from: string; to: string; piece?: string; san?: string } | null;
   isMyTurn: boolean;
   onSquareClick: (square: string) => void;
+  boardTheme?: string;
 }
 
 interface VisualPiece {
@@ -44,6 +45,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
   lastMove,
   isMyTurn,
   onSquareClick,
+  boardTheme,
 }) => {
   const board = chessInstance.board();
   const isCheck = chessInstance.inCheck();
@@ -232,10 +234,27 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
 
       // Base square theme styling
       let bgStyle = isDark ? 'bg-[#a67c52]' : 'bg-[#ebd7b2]';
+      if (boardTheme === 'chesscom_green') {
+        bgStyle = isDark ? 'bg-[#769656]' : 'bg-[#eeeed2]';
+      } else if (boardTheme === 'chesscom_walnut') {
+        bgStyle = isDark ? 'bg-[#b58863]' : 'bg-[#f0d9b5]';
+      } else if (boardTheme === 'lichess_blue') {
+        bgStyle = isDark ? 'bg-[#5b8bb0]' : 'bg-[#dee3e6]';
+      } else if (boardTheme === 'chess24_synth') {
+        bgStyle = isDark ? 'bg-[#2d124d]' : 'bg-[#182e54]';
+      } else if (boardTheme === 'royal_marble') {
+        bgStyle = isDark ? 'bg-[#1a1a24]' : 'bg-[#e2e8f0]';
+      }
       
       // Last move soft yellow highlight
       if (isLastMoveOrigin || isLastMoveTarget) {
-        bgStyle = isDark ? 'bg-[#baca2b]' : 'bg-[#f7ec59]';
+        if (boardTheme === 'chesscom_green') {
+          bgStyle = isDark ? 'bg-[#bbcb2b]' : 'bg-[#f7ec59]';
+        } else if (boardTheme === 'chess24_synth') {
+          bgStyle = isDark ? 'bg-fuchsia-700' : 'bg-cyan-400/80';
+        } else {
+          bgStyle = isDark ? 'bg-[#baca2b]' : 'bg-[#f7ec59]';
+        }
       }
 
       squares.push(
@@ -326,7 +345,15 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 }}
                 className="w-[85%] h-[85%] transition-transform duration-150 active:scale-95 hover:scale-105 pointer-events-auto cursor-pointer"
               >
-                <ChessSVG type={piece.type} color={piece.color} />
+                <ChessSVG 
+                  type={piece.type} 
+                  color={piece.color} 
+                  pieceSet={
+                    boardTheme === 'chess24_synth' || boardTheme === 'royal_marble' || boardTheme === 'wizard_chess' 
+                      ? 'wizard' 
+                      : 'staunton'
+                  } 
+                />
               </div>
             </div>
           );
