@@ -106,7 +106,7 @@ export default function StorePage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-12 h-12 rounded-full border-4 border-primary/20 border-t-cyberblue animate-spin mb-4"></div>
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest font-black">{t('decryptingShop', 'Decrypting Shop Matrix...')}</p>
+        <p className="text-xs text-gray-500 uppercase tracking-widest font-black">{t('decryptingShop', 'Decrypting Shop Matrix...')}</p>
       </div>
     );
   }
