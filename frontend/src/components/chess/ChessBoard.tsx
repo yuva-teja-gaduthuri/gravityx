@@ -12,6 +12,7 @@ interface ChessBoardProps {
   onSquareClick: (square: string) => void;
   boardTheme?: string;
   abandonedSquare?: string | null;
+  checkmateSquare?: string | null;
 }
 
 interface VisualPiece {
@@ -48,6 +49,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
   onSquareClick,
   boardTheme,
   abandonedSquare,
+  checkmateSquare,
 }) => {
   const board = chessInstance.board();
   const isCheck = chessInstance.inCheck();
@@ -350,6 +352,11 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                 {abandonedSquare && piece.square === abandonedSquare && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-40 px-1.5 py-0.5 bg-gradient-to-r from-red-600 to-rose-700 border border-red-400 text-white font-black text-[8px] sm:text-[10px] uppercase tracking-wider rounded-md shadow-2xl animate-bounce pointer-events-none whitespace-nowrap">
                     ABANDONED
+                  </div>
+                )}
+                {checkmateSquare && piece.square === checkmateSquare && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-40 px-1.5 py-0.5 bg-gradient-to-r from-amber-500 to-red-600 border border-amber-300 text-white font-black text-[8px] sm:text-[10px] uppercase tracking-wider rounded-md shadow-[0_0_15px_rgba(255,215,0,0.8)] animate-bounce pointer-events-none whitespace-nowrap">
+                    CHECKMATE
                   </div>
                 )}
                 <ChessSVG 

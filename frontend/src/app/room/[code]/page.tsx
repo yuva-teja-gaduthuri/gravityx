@@ -759,11 +759,13 @@ export default function RoomPage() {
                       <option value="false" className="bg-[#0b0f19] text-white">Disabled</option>
                     </select>
                   </div>
-                  {room.gameType === 'CHESS' && (
+                  {(room.gameType === 'CHESS' || room.gameType === 'RAMUDU_SEETHA' || room.gameType === 'LUDO') && (
                     <div>
-                      <label className="text-[10px] uppercase font-bold text-cybergold tracking-wider">Chess Clock</label>
+                      <label className="text-[10px] uppercase font-bold text-cybergold tracking-wider">
+                        {room.gameType === 'CHESS' ? 'Chess Clock' : room.gameType === 'RAMUDU_SEETHA' ? 'Guess Time Limit' : 'Turn Timer'}
+                      </label>
                       <select
-                        value={(room as any).timeControl !== undefined ? (room as any).timeControl : 'UNLIMITED'}
+                        value={(room as any).timeControl !== undefined ? (room as any).timeControl : (room.gameType === 'CHESS' ? 'UNLIMITED' : 30)}
                         onChange={(e) => socket.emit('edit_room_settings', {
                           roomCode: room.code,
                           type: room.type,
@@ -774,13 +776,23 @@ export default function RoomPage() {
                         })}
                         className="w-full glass-input rounded-xl px-3 py-2 text-xs focus:border-cybergold mt-1 bg-white/5 text-white"
                       >
-                        <option value="UNLIMITED" className="bg-[#0b0f19] text-white">∞ Unlimited (No Timer)</option>
-                        <option value={60} className="bg-[#0b0f19] text-white">⚡ 1 Min (Bullet)</option>
-                        <option value={180} className="bg-[#0b0f19] text-white">🔥 3 Min (Blitz)</option>
-                        <option value={300} className="bg-[#0b0f19] text-white">🎯 5 Min (Blitz)</option>
-                        <option value={600} className="bg-[#0b0f19] text-white">⏳ 10 Min (Rapid)</option>
-                        <option value={900} className="bg-[#0b0f19] text-white">🏆 15 Min</option>
-                        <option value={1800} className="bg-[#0b0f19] text-white">👑 30 Min</option>
+                        {room.gameType === 'CHESS' ? (
+                          <>
+                            <option value="UNLIMITED" className="bg-[#0b0f19] text-white">∞ Unlimited (No Timer)</option>
+                            <option value={60} className="bg-[#0b0f19] text-white">⚡ 1 Min (Bullet)</option>
+                            <option value={180} className="bg-[#0b0f19] text-white">🔥 3 Min (Blitz)</option>
+                            <option value={300} className="bg-[#0b0f19] text-white">🎯 5 Min (Blitz)</option>
+                            <option value={600} className="bg-[#0b0f19] text-white">⏳ 10 Min (Rapid)</option>
+                            <option value={900} className="bg-[#0b0f19] text-white">🏆 15 Min</option>
+                            <option value={1800} className="bg-[#0b0f19] text-white">👑 30 Min</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value={15} className="bg-[#0b0f19] text-white">15s (Blitz)</option>
+                            <option value={30} className="bg-[#0b0f19] text-white">30s (Normal)</option>
+                            <option value={60} className="bg-[#0b0f19] text-white">60s (Slow)</option>
+                          </>
+                        )}
                       </select>
                     </div>
                   )}

@@ -277,60 +277,21 @@ export default function StorePage() {
                       // AVATAR PREVIEWS
                       if (type === 'AVATAR') {
                         const avatarEmojis: { [key: string]: string } = {
-                          cyber_pilot: '👨‍🚀',
-                          nebula_ghost: '👾',
-                          cosmic_emperor: '👑',
-                          grandmaster_knight: '🐴',
-                          alien_warlord: '👽',
-                          supernova_titan: '💥',
-                          android_vanguard: '🤖',
-                          galactic_ranger: '🌌',
-                          starship_captain: '🚀',
-                          void_stalker: '🕳️',
-                          solar_sentinel: '☀️',
-                          archmage_merlin: '🧙‍♂️',
-                          enchantress_sorceress: '🧙‍♀️',
-                          spellbound_scholar: '📜',
-                          phoenix_summoner: '🦅',
-                          crystal_alchemist: '🔮',
-                          shadow_necromancer: '💀',
-                          celestial_astrologer: '✨',
-                          mystic_druid: '🌿',
-                          arcane_illusionist: '🎭',
-                          rune_warden: '🛡️',
-                          sovereign_chess_king: '♔',
-                          imperial_chess_queen: '♕',
-                          iron_fortress_rook: '♖',
-                          battle_bishop: '♗',
-                          brave_vanguard_pawn: '♙',
-                          wizard_chess_golem: '🗿',
-                          chess_strategist: '🧠',
-                          speed_blitz_master: '⚡',
-                          checkmate_champion: '🏆',
-                          ludo_king_monarch: '🤴',
-                          ludo_queen_empress: '👸',
-                          golden_dice_roller: '🎲',
-                          lucky_six_legend: '🍀',
-                          crimson_general: '🔴',
-                          emerald_pathfinder: '🟢',
-                          sapphire_voyager: '🔵',
-                          amber_conqueror: '🟡',
-                          royal_court_jester: '🃏',
-                          champion_realm: '🥇',
-                          infernal_dragon: '🐉',
-                          royal_lion_heart: '🦁',
-                          shadow_ninja: '🥷',
-                          cyberpunk_samurai: '⚔️',
-                          golden_eagle: '🦅',
-                          frost_wolf: '🐺',
-                          thunder_falcon: '⚡',
-                          cyber_panther: '🐆',
-                          cosmic_valkyrie: '🛡️',
-                          omega_overlord: '🔱',
-                          quantum_hacker: '💻',
-                          master_tactician: '🎯'
+                          cyber_pilot: '👨‍🚀', nebula_ghost: '👾', cosmic_emperor: '👑', grandmaster_knight: '🐴', alien_warlord: '👽', supernova_titan: '💥', android_vanguard: '🤖', galactic_ranger: '🌌', starship_captain: '🚀', void_stalker: '🕳️', solar_sentinel: '☀️', archmage_merlin: '🧙‍♂️', enchantress_sorceress: '🧙‍♀️', spellbound_scholar: '📜', phoenix_summoner: '🦅', crystal_alchemist: '🔮', shadow_necromancer: '💀', celestial_astrologer: '✨', mystic_druid: '🌿', arcane_illusionist: '🎭', rune_warden: '🛡️', sovereign_chess_king: '♔', imperial_chess_queen: '♕', iron_fortress_rook: '♖', battle_bishop: '♗', brave_vanguard_pawn: '♙', wizard_chess_golem: '🗿', chess_strategist: '🧠', speed_blitz_master: '⚡', checkmate_champion: '🏆', ludo_king_monarch: '🤴', ludo_queen_empress: '👸', golden_dice_roller: '🎲', lucky_six_legend: '🍀', crimson_general: '🔴', emerald_pathfinder: '🟢', sapphire_voyager: '🔵', amber_conqueror: '🟡', royal_court_jester: '🃏', champion_realm: '🥇', infernal_dragon: '🐉', royal_lion_heart: '🦁', shadow_ninja: '🥷', cyberpunk_samurai: '⚔️', golden_eagle: '🦅', frost_wolf: '🐺', thunder_falcon: '⚡', cyber_panther: '🐆', cosmic_valkyrie: '🛡️', omega_overlord: '🔱', quantum_hacker: '💻', master_tactician: '🎯'
                         };
-                        const emoji = avatarEmojis[id] || '🛸';
+                        let emoji = avatarEmojis[id];
+                        if (!emoji) {
+                          if (id.includes('dragon')) emoji = '🐉';
+                          else if (id.includes('phoenix')) emoji = '🦅';
+                          else if (id.includes('samurai') || id.includes('striker')) emoji = '⚔️';
+                          else if (id.includes('warlock') || id.includes('archon')) emoji = '🧙‍♂️';
+                          else if (id.includes('phantom') || id.includes('assassin')) emoji = '🥷';
+                          else if (id.includes('titan') || id.includes('templar')) emoji = '🛡️';
+                          else if (id.includes('guardian') || id.includes('vanguard')) emoji = '🤖';
+                          else if (id.includes('starlight') || id.includes('astra')) emoji = '✨';
+                          else if (id.includes('cosmo') || id.includes('nebula')) emoji = '🌌';
+                          else emoji = '🛸';
+                        }
                         return (
                           <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-primary/20 border-2 border-cyberpink flex items-center justify-center text-3xl sm:text-4xl shadow-neon-pink transform group-hover:scale-110 transition-transform">
                             {emoji}
@@ -340,57 +301,21 @@ export default function StorePage() {
 
                       // DICE PREVIEWS
                       if (type === 'DICE') {
-                        if (id === 'ludo_king_red') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-red-600 via-red-700 to-red-900 border-2 border-yellow-400 flex items-center justify-center text-yellow-300 text-3xl font-black shadow-lg shadow-red-900/60 transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
+                        let bgGrad = 'bg-gradient-to-br from-blue-600 via-indigo-700 to-slate-900 border-cyberblue text-white shadow-neon-blue';
+                        if (id.includes('red') || id.includes('ruby') || id.includes('fire') || id.includes('inferno')) {
+                          bgGrad = 'bg-gradient-to-br from-red-600 via-red-700 to-red-950 border-amber-400 text-yellow-300 shadow-lg shadow-red-900/60';
+                        } else if (id.includes('emerald') || id.includes('green') || id.includes('blitz')) {
+                          bgGrad = 'bg-gradient-to-br from-emerald-600 via-green-700 to-green-950 border-emerald-300 text-amber-200 shadow-lg shadow-emerald-900/50';
+                        } else if (id.includes('gold') || id.includes('titan') || id.includes('solar')) {
+                          bgGrad = 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-800 border-yellow-200 text-slate-950 shadow-neon-gold';
+                        } else if (id.includes('purple') || id.includes('amethyst') || id.includes('plasma') || id.includes('void')) {
+                          bgGrad = 'bg-gradient-to-br from-fuchsia-600 via-purple-700 to-slate-950 border-cyan-400 text-cyan-300 shadow-neon-pink';
+                        } else if (id.includes('diamond') || id.includes('crystal') || id.includes('frost') || id.includes('lunar')) {
+                          bgGrad = 'bg-gradient-to-br from-sky-300 via-cyan-400 to-blue-700 border-white text-white shadow-lg shadow-sky-500/50';
                         }
-                        if (id === 'plasma_core') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-fuchsia-600 to-purple-900 border-2 border-cyan-400 flex items-center justify-center text-cyan-300 text-3xl font-black shadow-neon-pink transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
-                        if (id === 'quantum_roll') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-900 border-2 border-cyberblue flex items-center justify-center text-white text-3xl font-black shadow-neon-blue transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
-                        if (id === 'chesscom_emerald') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-emerald-600 to-green-900 border-2 border-emerald-300 flex items-center justify-center text-amber-200 text-3xl font-black shadow-lg shadow-emerald-900/50 transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
-                        if (id === 'gold_gravity') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-700 border-2 border-yellow-200 flex items-center justify-center text-slate-950 text-3xl font-black shadow-neon-gold transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
-                        if (id === 'diamond_crystal') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-sky-300 via-cyan-400 to-blue-600 border-2 border-white flex items-center justify-center text-white text-3xl font-black shadow-lg shadow-sky-500/50 transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
-                        if (id === 'dragon_flame') {
-                          return (
-                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-orange-600 via-red-700 to-slate-950 border-2 border-orange-400 flex items-center justify-center text-amber-300 text-3xl font-black shadow-lg shadow-orange-700/50 transform group-hover:rotate-6 transition-transform">
-                              ⚅
-                            </div>
-                          );
-                        }
+
                         return (
-                          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white border-2 border-slate-300 flex items-center justify-center text-slate-900 text-3xl font-black shadow-md">
+                          <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 flex items-center justify-center text-3xl font-black transform group-hover:rotate-6 transition-transform ${bgGrad}`}>
                             ⚅
                           </div>
                         );
@@ -398,10 +323,10 @@ export default function StorePage() {
 
                       // BOARD PREVIEWS (Ludo & Chess)
                       if (type === 'BOARD') {
-                        // LUDO BOARDS
-                        if (id === 'ludo_king_royal') {
+                        const isLudoStyle = id.includes('ludo') || id.includes('cyber') || id.includes('abyss') || id.includes('star') || id.includes('lava') || id.includes('frost');
+                        if (isLudoStyle) {
                           return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-amber-900/60 border-2 border-amber-400 p-1.5 grid grid-cols-2 gap-1.5 shadow-neon-gold">
+                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-950 border-2 border-amber-400 p-1.5 grid grid-cols-2 gap-1.5 shadow-neon-gold">
                               <div className="bg-red-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black border border-amber-300/40">🔴</div>
                               <div className="bg-green-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black border border-amber-300/40">🟢</div>
                               <div className="bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black border border-amber-300/40">🔵</div>
@@ -409,215 +334,72 @@ export default function StorePage() {
                             </div>
                           );
                         }
-                        if (id === 'ludo_club_star') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-900 border-2 border-pink-400 p-1.5 grid grid-cols-2 gap-1.5 shadow-neon-pink">
-                              <div className="bg-rose-500 rounded-lg flex items-center justify-center text-white text-[10px] font-black">⭐</div>
-                              <div className="bg-emerald-500 rounded-lg flex items-center justify-center text-white text-[10px] font-black">⭐</div>
-                              <div className="bg-sky-500 rounded-lg flex items-center justify-center text-white text-[10px] font-black">⭐</div>
-                              <div className="bg-amber-400 rounded-lg flex items-center justify-center text-white text-[10px] font-black">⭐</div>
-                            </div>
-                          );
-                        }
-                        if (id === 'mpl_pro_cyber') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-950 border-2 border-cyan-500 p-1.5 grid grid-cols-2 gap-1.5 shadow-neon-blue">
-                              <div className="bg-red-600/90 rounded-lg border border-cyan-400/50 flex items-center justify-center text-[10px]">⚡</div>
-                              <div className="bg-emerald-600/90 rounded-lg border border-cyan-400/50 flex items-center justify-center text-[10px]">⚡</div>
-                              <div className="bg-blue-600/90 rounded-lg border border-cyan-400/50 flex items-center justify-center text-[10px]">⚡</div>
-                              <div className="bg-amber-500/90 rounded-lg border border-cyan-400/50 flex items-center justify-center text-[10px]">⚡</div>
-                            </div>
-                          );
-                        }
-                        if (id === 'neon_abyss' || id === 'neon_abyss_board') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-black border-2 border-purple-500 p-1.5 grid grid-cols-2 gap-1.5 shadow-neon-pink">
-                              <div className="bg-fuchsia-600/60 rounded-lg border border-fuchsia-400"></div>
-                              <div className="bg-cyan-600/60 rounded-lg border border-cyan-400"></div>
-                              <div className="bg-blue-600/60 rounded-lg border border-blue-400"></div>
-                              <div className="bg-amber-600/60 rounded-lg border border-amber-400"></div>
-                            </div>
-                          );
-                        }
-                        if (id === 'mahogany_vintage') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-amber-950 border-2 border-amber-700 p-1.5 grid grid-cols-2 gap-1.5 shadow-lg">
-                              <div className="bg-red-900 rounded-lg border border-amber-600"></div>
-                              <div className="bg-emerald-900 rounded-lg border border-amber-600"></div>
-                              <div className="bg-blue-900 rounded-lg border border-amber-600"></div>
-                              <div className="bg-yellow-800 rounded-lg border border-amber-600"></div>
-                            </div>
-                          );
+
+                        let darkColor = 'bg-[#769656]';
+                        let lightColor = 'bg-[#eeeed2]';
+                        let boardBorder = 'border-emerald-500 shadow-emerald-950/60';
+
+                        if (id.includes('walnut') || id.includes('wood') || id.includes('mahogany')) {
+                          darkColor = 'bg-[#b58863]';
+                          lightColor = 'bg-[#f0d9b5]';
+                          boardBorder = 'border-amber-700 shadow-amber-950/60';
+                        } else if (id.includes('blue') || id.includes('slate') || id.includes('sky')) {
+                          darkColor = 'bg-[#5b8bb0]';
+                          lightColor = 'bg-[#dee3e6]';
+                          boardBorder = 'border-sky-400 shadow-sky-950/60';
+                        } else if (id.includes('synth') || id.includes('neon') || id.includes('violet')) {
+                          darkColor = 'bg-[#2d124d]';
+                          lightColor = 'bg-[#00f0ff]/30';
+                          boardBorder = 'border-cyan-400 shadow-neon-pink';
+                        } else if (id.includes('marble') || id.includes('gold') || id.includes('royal')) {
+                          darkColor = 'bg-[#1a1a24] text-amber-300';
+                          lightColor = 'bg-[#e2e8f0] text-slate-900';
+                          boardBorder = 'border-amber-300 shadow-neon-gold';
                         }
 
-                        // CHESS BOARDS
-                        if (id === 'chesscom_green') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-emerald-500 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-lg shadow-emerald-950/60">
-                              {[...Array(16)].map((_, i) => {
-                                const row = Math.floor(i / 4);
-                                const col = i % 4;
-                                const isDark = (row + col) % 2 === 1;
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={`w-full h-full flex items-center justify-center text-[10px] ${
-                                      isDark ? 'bg-[#769656]' : 'bg-[#eeeed2]'
-                                    }`}
-                                  >
-                                    {i === 5 ? '♟' : i === 10 ? '♞' : ''}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-                        if (id === 'chesscom_walnut') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-amber-800 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-lg">
-                              {[...Array(16)].map((_, i) => {
-                                const row = Math.floor(i / 4);
-                                const col = i % 4;
-                                const isDark = (row + col) % 2 === 1;
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={`w-full h-full flex items-center justify-center text-[10px] ${
-                                      isDark ? 'bg-[#b58863]' : 'bg-[#f0d9b5]'
-                                    }`}
-                                  >
-                                    {i === 2 ? '♜' : i === 13 ? '♝' : ''}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-                        if (id === 'lichess_blue') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-sky-400 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-lg shadow-sky-950/60">
-                              {[...Array(16)].map((_, i) => {
-                                const row = Math.floor(i / 4);
-                                const col = i % 4;
-                                const isDark = (row + col) % 2 === 1;
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={`w-full h-full flex items-center justify-center text-[10px] ${
-                                      isDark ? 'bg-[#5b8bb0]' : 'bg-[#dee3e6]'
-                                    }`}
-                                  >
-                                    {i === 1 ? '♛' : i === 14 ? '♚' : ''}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-                        if (id === 'chess24_synth') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-cyan-400 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-neon-pink">
-                              {[...Array(16)].map((_, i) => {
-                                const row = Math.floor(i / 4);
-                                const col = i % 4;
-                                const isDark = (row + col) % 2 === 1;
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={`w-full h-full flex items-center justify-center text-[10px] ${
-                                      isDark ? 'bg-[#2d124d]' : 'bg-[#00f0ff]/20'
-                                    }`}
-                                  >
-                                    {i === 3 ? '♞' : i === 12 ? '♟' : ''}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-                        if (id === 'royal_marble') {
-                          return (
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-amber-300 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-neon-gold">
-                              {[...Array(16)].map((_, i) => {
-                                const row = Math.floor(i / 4);
-                                const col = i % 4;
-                                const isDark = (row + col) % 2 === 1;
-                                return (
-                                  <div 
-                                    key={i} 
-                                    className={`w-full h-full flex items-center justify-center text-[10px] ${
-                                      isDark ? 'bg-[#1a1a24] text-amber-300' : 'bg-[#e2e8f0] text-slate-900'
-                                    }`}
-                                  >
-                                    {i === 0 ? '♛' : i === 15 ? '♚' : ''}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-
-                        // Default board fallback
                         return (
-                          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#050816] to-[#0b0f19] border border-cyberblue/40 p-1 grid grid-cols-2 gap-1">
-                            <div className="bg-[#ff3b30] rounded-sm opacity-80"></div>
-                            <div className="bg-[#34c759] rounded-sm opacity-80"></div>
-                            <div className="bg-[#007aff] rounded-sm opacity-80"></div>
-                            <div className="bg-[#ffcc00] rounded-sm opacity-80"></div>
+                          <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 grid grid-cols-4 grid-rows-4 overflow-hidden shadow-lg ${boardBorder}`}>
+                            {[...Array(16)].map((_, i) => {
+                              const row = Math.floor(i / 4);
+                              const col = i % 4;
+                              const isDark = (row + col) % 2 === 1;
+                              return (
+                                <div key={i} className={`w-full h-full flex items-center justify-center text-[10px] ${isDark ? darkColor : lightColor}`}>
+                                  {i === 2 ? '♟' : i === 13 ? '♞' : ''}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       }
 
                       // FRAME PREVIEWS
                       if (type === 'FRAME') {
-                        if (id === 'ludo_king_crown') {
-                          return (
-                            <div className="relative flex items-center justify-center">
-                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-amber-400 ring-4 ring-yellow-500/30 flex items-center justify-center bg-amber-950/40 shadow-neon-gold">
-                                <User className="text-amber-300 w-6 h-6 sm:w-8 sm:h-8" />
-                              </div>
-                              <div className="absolute -top-3.5 text-2xl text-amber-300 filter drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]">
-                                👑
-                              </div>
-                            </div>
-                          );
+                        let frameBorder = 'border-cyberblue ring-cyberblue/40 bg-cyberblue/10 shadow-neon-blue';
+                        let badgeIcon = '✨';
+
+                        if (id.includes('crown') || id.includes('laurel') || id.includes('gold') || id.includes('sovereign')) {
+                          frameBorder = 'border-amber-400 ring-yellow-500/40 bg-amber-950/40 shadow-neon-gold';
+                          badgeIcon = '👑';
+                        } else if (id.includes('pink') || id.includes('event') || id.includes('dragon') || id.includes('burst')) {
+                          frameBorder = 'border-cyberpink ring-cyberpink/40 bg-cyberpink/10 shadow-neon-pink';
+                          badgeIcon = '🔥';
+                        } else if (id.includes('diamond') || id.includes('crest') || id.includes('shield')) {
+                          frameBorder = 'border-sky-300 ring-cyan-400/50 bg-sky-950/40 shadow-lg shadow-sky-400/60';
+                          badgeIcon = '💎';
+                        } else if (id.includes('emerald') || id.includes('phoenix') || id.includes('star')) {
+                          frameBorder = 'border-emerald-400 ring-emerald-500/40 bg-emerald-950/40 shadow-lg shadow-emerald-500/50';
+                          badgeIcon = '🌿';
                         }
-                        if (id === 'chesscom_laurel') {
-                          return (
-                            <div className="relative flex items-center justify-center">
-                              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-emerald-400 ring-4 ring-emerald-500/40 flex items-center justify-center bg-emerald-950/40 shadow-lg shadow-emerald-500/50">
-                                <User className="text-emerald-300 w-6 h-6 sm:w-8 sm:h-8" />
-                              </div>
-                              <div className="absolute -top-3 text-xl text-emerald-400 filter drop-shadow-md">
-                                🌿
-                              </div>
-                            </div>
-                          );
-                        }
-                        if (id === 'neon_glow') {
-                          return (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-cyberblue ring-4 ring-cyberblue/40 flex items-center justify-center bg-cyberblue/10 shadow-neon-blue animate-pulse">
-                              <User className="text-cyberblue w-6 h-6 sm:w-8 sm:h-8" />
-                            </div>
-                          );
-                        }
-                        if (id === 'event_horizon') {
-                          return (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-cyberpink ring-4 ring-cyberpink/40 flex items-center justify-center bg-cyberpink/10 shadow-neon-pink animate-pulse">
-                              <User className="text-cyberpink w-6 h-6 sm:w-8 sm:h-8" />
-                            </div>
-                          );
-                        }
-                        if (id === 'diamond_crest') {
-                          return (
-                            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-sky-300 ring-4 ring-cyan-400/50 flex items-center justify-center bg-sky-950/40 shadow-lg shadow-sky-400/60">
-                              <User className="text-sky-200 w-6 h-6 sm:w-8 sm:h-8" />
-                            </div>
-                          );
-                        }
+
                         return (
-                          <div className="w-16 h-16 rounded-full border-4 border-white/20 flex items-center justify-center bg-white/5">
-                            <User className="text-gray-400 w-6 h-6" />
+                          <div className="relative flex items-center justify-center">
+                            <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 ring-4 flex items-center justify-center ${frameBorder}`}>
+                              <User className="text-white w-6 h-6 sm:w-8 sm:h-8" />
+                            </div>
+                            <div className="absolute -top-3.5 text-2xl filter drop-shadow-md">
+                              {badgeIcon}
+                            </div>
                           </div>
                         );
                       }

@@ -34,6 +34,7 @@ interface ChessReviewModalProps {
   } | null;
   whiteUsername: string;
   blackUsername: string;
+  userColor?: 'w' | 'b' | 'spectator';
 }
 
 export const ChessReviewModal: React.FC<ChessReviewModalProps> = ({
@@ -42,6 +43,7 @@ export const ChessReviewModal: React.FC<ChessReviewModalProps> = ({
   reviewData,
   whiteUsername,
   blackUsername,
+  userColor,
 }) => {
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
 
@@ -187,7 +189,7 @@ export const ChessReviewModal: React.FC<ChessReviewModalProps> = ({
 
           {/* Critical Moments */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {summary.criticalMoments.biggestBlunder && (
+            {summary.criticalMoments.biggestBlunder && (!userColor || userColor === 'spectator' || summary.criticalMoments.biggestBlunder.color === userColor) && (
               <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                 <div>

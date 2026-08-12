@@ -16,6 +16,7 @@ import {
 import { PuzzleModal } from '../../components/chess/PuzzleModal';
 import ChessGame from '../../components/ChessGame';
 import LudoGame from '../../components/LudoGame';
+import RamuduSeethaGame from '../../components/RamuduSeethaGame';
 
 const AVATAR_GRAPHICS: { [key: string]: string } = {
   astronaut: '👨‍🚀',
@@ -42,7 +43,7 @@ export default function Dashboard() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSocialDrawer, setShowSocialDrawer] = useState(false);
   const [showPuzzleModal, setShowPuzzleModal] = useState(false);
-  const [localGameMode, setLocalGameMode] = useState<'NONE' | 'CHESS_PASS' | 'LUDO_PASS'>('NONE');
+  const [localGameMode, setLocalGameMode] = useState<'NONE' | 'CHESS_PASS' | 'LUDO_PASS' | 'RS_PASS'>('NONE');
 
   // Form states
   const [roomName, setRoomName] = useState('');
@@ -323,7 +324,7 @@ export default function Dashboard() {
       maxPlayers: finalMaxPlayers,
       voiceChat,
       allowSpectators,
-      timeControl: selectedGame === 'CHESS' ? chessTimeControl : undefined,
+      timeControl: selectedGame === 'CHESS' ? chessTimeControl : turnTimer,
     });
   };
 
@@ -393,14 +394,12 @@ export default function Dashboard() {
               </button>
             )}
 
-            {(expandedGame === 'CHESS' || expandedGame === 'LUDO') && (
-              <button
-                onClick={() => setLocalGameMode(expandedGame === 'CHESS' ? 'CHESS_PASS' : 'LUDO_PASS')}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
-              >
-                <Play className="w-4 h-4 fill-white" /> Pass & Play Mode
-              </button>
-            )}
+            <button
+              onClick={() => setLocalGameMode(expandedGame === 'CHESS' ? 'CHESS_PASS' : expandedGame === 'LUDO' ? 'LUDO_PASS' : 'RS_PASS')}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+            >
+              <Play className="w-4 h-4 fill-white" /> Pass & Play Mode
+            </button>
 
             <button
               onClick={() => { setSelectedGame(expandedGame); setShowCreateModal(true); }}
@@ -518,6 +517,12 @@ export default function Dashboard() {
       {localGameMode === 'LUDO_PASS' && (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
           <LudoGame roomCode="PASS_PLAY" user={user} isPassAndPlay={true} onReturnToLobby={() => setLocalGameMode('NONE')} />
+        </div>
+      )}
+
+      {localGameMode === 'RS_PASS' && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          <RamuduSeethaGame roomCode="PASS_PLAY" user={user} isPassAndPlay={true} onReturnToLobby={() => setLocalGameMode('NONE')} />
         </div>
       )}
 
@@ -967,41 +972,41 @@ export default function Dashboard() {
                   <select 
                     value={coinStake}
                     onChange={(e) => setCoinStake(Number(e.target.value))}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue bg-[#0b0f19] text-white font-bold"
                   >
-                    <option value={0}>0 (Free Play)</option>
-                    <option value={50}>50 Coins</option>
-                    <option value={100}>100 Coins</option>
-                    <option value={500}>500 Coins</option>
+                    <option value={0} className="bg-[#0b0f19] text-white">0 (Free Play)</option>
+                    <option value={50} className="bg-[#0b0f19] text-white">50 Coins</option>
+                    <option value={100} className="bg-[#0b0f19] text-white">100 Coins</option>
+                    <option value={500} className="bg-[#0b0f19] text-white">500 Coins</option>
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
-                    {selectedGame === 'CHESS' ? 'Chess Time Control' : 'Turn Timer Speed'}
+                    {selectedGame === 'CHESS' ? 'Chess Time Control' : selectedGame === 'RAMUDU_SEETHA' ? 'Guess Time Limit' : 'Turn Timer Speed'}
                   </label>
                   {selectedGame === 'CHESS' ? (
                     <select
                       value={chessTimeControl}
                       onChange={(e) => setChessTimeControl(e.target.value === 'UNLIMITED' ? 'UNLIMITED' : Number(e.target.value))}
-                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cybergold font-bold text-white bg-slate-900"
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cybergold font-bold text-white bg-[#0b0f19]"
                     >
-                      <option value="UNLIMITED">∞ Unlimited (No Timer)</option>
-                      <option value={60}>⚡ 1 Min (Bullet)</option>
-                      <option value={180}>🔥 3 Min (Blitz)</option>
-                      <option value={300}>🎯 5 Min (Blitz)</option>
-                      <option value={600}>⏳ 10 Min (Rapid)</option>
-                      <option value={900}>🏆 15 Min</option>
-                      <option value={1800}>👑 30 Min</option>
+                      <option value="UNLIMITED" className="bg-[#0b0f19] text-white">∞ Unlimited (No Timer)</option>
+                      <option value={60} className="bg-[#0b0f19] text-white">⚡ 1 Min (Bullet)</option>
+                      <option value={180} className="bg-[#0b0f19] text-white">🔥 3 Min (Blitz)</option>
+                      <option value={300} className="bg-[#0b0f19] text-white">🎯 5 Min (Blitz)</option>
+                      <option value={600} className="bg-[#0b0f19] text-white">⏳ 10 Min (Rapid)</option>
+                      <option value={900} className="bg-[#0b0f19] text-white">🏆 15 Min</option>
+                      <option value={1800} className="bg-[#0b0f19] text-white">👑 30 Min</option>
                     </select>
                   ) : (
                     <select 
                       value={turnTimer}
                       onChange={(e) => setTurnTimer(Number(e.target.value))}
-                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                      className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue bg-[#0b0f19] text-white font-bold"
                     >
-                      <option value={15}>15s (Blitz)</option>
-                      <option value={30}>30s (Normal)</option>
-                      <option value={60}>60s (Slow)</option>
+                      <option value={15} className="bg-[#0b0f19] text-white">15s (Blitz)</option>
+                      <option value={30} className="bg-[#0b0f19] text-white">30s (Normal)</option>
+                      <option value={60} className="bg-[#0b0f19] text-white">60s (Slow)</option>
                     </select>
                   )}
                 </div>
@@ -1013,10 +1018,10 @@ export default function Dashboard() {
                   <select 
                     value={roomType}
                     onChange={(e) => setRoomType(e.target.value as any)}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue bg-[#0b0f19] text-white font-bold"
                   >
-                    <option value="PUBLIC">Public</option>
-                    <option value="PRIVATE">Private</option>
+                    <option value="PUBLIC" className="bg-[#0b0f19] text-white">Public</option>
+                    <option value="PRIVATE" className="bg-[#0b0f19] text-white">Private</option>
                   </select>
                 </div>
                 <div>
@@ -1024,10 +1029,10 @@ export default function Dashboard() {
                   <select 
                     value={voiceChat ? 'ON' : 'OFF'}
                     onChange={(e) => setVoiceChat(e.target.value === 'ON')}
-                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue"
+                    className="w-full glass-input rounded-xl px-4 py-2.5 text-sm mt-1 focus:border-cyberblue bg-[#0b0f19] text-white font-bold"
                   >
-                    <option value="OFF">OFF</option>
-                    <option value="ON">ON</option>
+                    <option value="OFF" className="bg-[#0b0f19] text-white">OFF</option>
+                    <option value="ON" className="bg-[#0b0f19] text-white">ON</option>
                   </select>
                 </div>
               </div>

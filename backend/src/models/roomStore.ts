@@ -31,6 +31,7 @@ export interface Room {
   sessionScoreboard?: { [userId: string]: { username: string; score: number } };
   previousRoles?: { [userId: string]: string };
   timeControl?: number | 'UNLIMITED';
+  turnTimer?: number;
 }
 
 class RoomStore {

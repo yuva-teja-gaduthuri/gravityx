@@ -315,6 +315,8 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
 
     room.status = 'PLAYING';
 
+    const roundTimerSecs = typeof room.timeControl === 'number' ? room.timeControl : (room.turnTimer || 30);
+
     // Emit game started to all, but only send their OWN role privatised
     room.players.forEach((p: any) => {
       const payload = {
@@ -324,6 +326,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         currentRound: room.currentRound || 1,
         maxRounds: room.maxRounds || 3,
         sessionScoreboard: room.sessionScoreboard,
+        roundTimer: roundTimerSecs,
         players: room.players.map((pl: any) => ({
           id: pl.id,
           username: pl.username,
@@ -344,7 +347,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       players: room.players.map((p: any) => ({ ...p, role: undefined })), // hide roles
     });
 
-    // Start 15-second timer for this round
+    // Start timer for this round
     const timeout = setTimeout(() => {
       try {
         const r = roomStore.getRoom(room.code);
@@ -354,7 +357,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
       } catch (e) {
         console.error('Error in round timer:', e);
       }
-    }, 15000);
+    }, roundTimerSecs * 1000);
     gameplayTimeouts.set(room.code, timeout);
 
     // Check if Ramudu is a bot
@@ -633,6 +636,8 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         player.socketId = socket.id;
       }
 
+      const roundTimerSecs = typeof room.timeControl === 'number' ? room.timeControl : (room.turnTimer || 30);
+
       socket.emit('rs_game_started', {
         roomCode: upperCode,
         myRole: room.gameState.roles[player.id],
@@ -640,6 +645,7 @@ export function handleRamuduSeetha(io: Server, socket: Socket) {
         currentRound: room.currentRound || 1,
         maxRounds: room.maxRounds || 3,
         sessionScoreboard: room.sessionScoreboard || {},
+        roundTimer: roundTimerSecs,
         players: room.players.map((pl) => ({
           id: pl.id,
           username: pl.username,

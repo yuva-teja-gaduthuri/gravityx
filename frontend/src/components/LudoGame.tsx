@@ -200,26 +200,24 @@ class LudoAudioEngine {
     
     osc.start(now);
     osc.stop(now + 0.45);
-    
-    const bufferSize = this.ctx.sampleRate * 0.4;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-    
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-    
-    const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.2, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-    
-    noise.connect(noiseGain);
-    noiseGain.connect(this.ctx.destination);
-    
-    noise.start(now);
-    noise.stop(now + 0.4);
+  }
+
+  playVictory() {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.5);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.5);
   }
 
   playHome() {
@@ -357,7 +355,7 @@ function getTokenCoords(playerColor: string, tokenId: number, position: number):
   return [7, 7];
 }
 
-export default function LudoGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: LudoGameProps) {
+export default function LudoGame({ roomCode, user, socket, isHost, isPassAndPlay = false, matchEndedData, onReturnToLobby }: LudoGameProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<LudoState | null>(null);
   const [validTokens, setValidTokens] = useState<number[]>([]);
@@ -989,31 +987,197 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     }
   };
 
+  // Pass & Play States
+  const [passPlayerCount, setPassPlayerCount] = useState<number>(4);
+  const [passPlayerNames, setPassPlayerNames] = useState<string[]>(['Player 1 (Red)', 'Player 2 (Green)', 'Player 3 (Yellow)', 'Player 4 (Blue)']);
+  const [passSetupOpen, setPassSetupOpen] = useState<boolean>(true);
+
+  const startPassAndPlayMatch = (count?: number, names?: string[]) => {
+    const pCount = count || passPlayerCount;
+    const pNames = names || passPlayerNames;
+    const colors: ('red' | 'green' | 'yellow' | 'blue')[] = pCount === 2 ? ['red', 'yellow'] : pCount === 3 ? ['red', 'green', 'yellow'] : ['red', 'green', 'yellow', 'blue'];
+    const initialPlayers: LudoPlayer[] = colors.map((color, i) => ({
+      id: `local_player_${color}`,
+      username: pNames[i] || `Player ${i + 1}`,
+      displayName: pNames[i] || `Player ${i + 1}`,
+      socketId: `socket_${i + 1}`,
+      color,
+      tokens: [
+        { id: 0, position: -1 },
+        { id: 1, position: -1 },
+        { id: 2, position: -1 },
+        { id: 3, position: -1 },
+      ],
+      isWinner: false,
+    }));
+
+    setGameState({
+      players: initialPlayers,
+      activePlayerIndex: 0,
+      diceValue: null,
+      hasRolled: false,
+      turnTimeLeft: 30,
+    });
+    setPassSetupOpen(false);
+  };
+
+  const advancePassAndPlayTurn = (playersOverride?: LudoPlayer[]) => {
+    setGameState(prev => {
+      if (!prev) return null;
+      const currentPlayers = playersOverride || prev.players;
+      let nextIdx = (prev.activePlayerIndex + 1) % currentPlayers.length;
+      let attempts = 0;
+      while (currentPlayers[nextIdx].isWinner && attempts < currentPlayers.length) {
+        nextIdx = (nextIdx + 1) % currentPlayers.length;
+        attempts++;
+      }
+      return {
+        ...prev,
+        players: currentPlayers,
+        activePlayerIndex: nextIdx,
+        diceValue: null,
+        hasRolled: false,
+        turnTimeLeft: 30
+      };
+    });
+    updateValidTokens([]);
+  };
+
   const handleRollDice = () => {
     if (!gameState) return;
     const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id) return;
+    if (!isPassAndPlay && activePlayer.id !== user.id) return;
     if (gameState.hasRolled || isRolling) return;
 
     setIsRolling(true);
     audioRef.current?.playRoll();
-    if (socket) socket.emit('ludo_roll_dice', roomCode);
+
+    if (socket && !isPassAndPlay) {
+      socket.emit('ludo_roll_dice', roomCode);
+    } else {
+      // Local Pass & Play rolling
+      const rolledVal = Math.floor(Math.random() * 6) + 1;
+      setTimeout(() => {
+        setIsRolling(false);
+        setRollingValue(rolledVal);
+        audioRef.current?.playImpact();
+
+        const config = COLOR_CONFIGS[activePlayer.color];
+        const valid = getValidTokensToMove(activePlayer.color, activePlayer.tokens, config.lastCell, config.stretchStart, rolledVal);
+
+        setGameState(prev => prev ? {
+          ...prev,
+          diceValue: rolledVal,
+          hasRolled: true
+        } : null);
+
+        updateValidTokens(valid);
+
+        if (rolledVal === 6) {
+          setLuckySix(true);
+          setTimeout(() => setLuckySix(false), 1500);
+        }
+
+        if (valid.length === 0) {
+          setTimeout(() => {
+            advancePassAndPlayTurn();
+          }, 1000);
+        } else if (valid.length === 1) {
+          setTimeout(() => {
+            handleMoveToken(valid[0], rolledVal);
+          }, 400);
+        }
+      }, 400);
+    }
   };
 
-  const handleMoveToken = (tokenId: number) => {
+  const handleMoveToken = (tokenId: number, overrideDiceVal?: number) => {
     if (!gameState) return;
     const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id) return;
+    if (!isPassAndPlay && activePlayer.id !== user.id) return;
     if (!validTokensRef.current.includes(tokenId)) return;
 
     audioRef.current?.playSelect();
-    if (socket) socket.emit('ludo_move_token', { roomCode, tokenId });
+
+    if (socket && !isPassAndPlay) {
+      socket.emit('ludo_move_token', { roomCode, tokenId });
+    } else {
+      // Local Pass & Play movement
+      const token = activePlayer.tokens.find(t => t.id === tokenId);
+      if (!token) return;
+
+      const diceVal = overrideDiceVal || gameState.diceValue || 1;
+      const config = COLOR_CONFIGS[activePlayer.color];
+      const startPos = token.position;
+
+      let currentPos = startPos;
+      const pathSteps: number[] = [];
+
+      if (startPos === -1) {
+        currentPos = config.startCell;
+        pathSteps.push(currentPos);
+      } else {
+        for (let step = 0; step < diceVal; step++) {
+          if (currentPos >= 52 && currentPos < 57) {
+            currentPos += 1;
+          } else if (currentPos === config.lastCell) {
+            currentPos = config.stretchStart;
+          } else if (currentPos < 52) {
+            currentPos = (currentPos + 1) % 52;
+          }
+          pathSteps.push(currentPos);
+        }
+      }
+
+      const finalPos = pathSteps[pathSteps.length - 1];
+
+      let captured = false;
+      let capturedInfo: { color: string; tokenId: number } | null = null;
+
+      const updatedPlayers = gameState.players.map(p => {
+        if (p.color === activePlayer.color) {
+          return {
+            ...p,
+            tokens: p.tokens.map(t => t.id === tokenId ? { ...t, position: finalPos } : t)
+          };
+        } else if (!SAFE_CELLS.includes(finalPos) && finalPos < 52) {
+          const collidedTokens = p.tokens.filter(t => t.position === finalPos);
+          if (collidedTokens.length > 0) {
+            captured = true;
+            capturedInfo = { color: p.color, tokenId: collidedTokens[0].id };
+            return {
+              ...p,
+              tokens: p.tokens.map(t => t.position === finalPos ? { ...t, position: -1 } : t)
+            };
+          }
+        }
+        return p;
+      });
+
+      const updatedActivePlayer = updatedPlayers.find(p => p.color === activePlayer.color);
+      const allHome = updatedActivePlayer?.tokens.every(t => t.position === 57);
+
+      if (allHome && !updatedActivePlayer?.isWinner) {
+        updatedActivePlayer!.isWinner = true;
+        audioRef.current?.playVictory();
+        confetti({ particleCount: 150, spread: 80 });
+      }
+
+      animatePawnPath(activePlayer.color, tokenId, startPos, pathSteps, captured, capturedInfo, updatedPlayers, finalPos);
+
+      const getExtraTurn = diceVal === 6 || captured || finalPos === 57;
+      if (!getExtraTurn) {
+        setTimeout(() => {
+          advancePassAndPlayTurn(updatedPlayers);
+        }, (pathSteps.length + 3) * (isSpeedUp ? FAST_STEP_DURATION : NORMAL_STEP_DURATION));
+      }
+    }
   };
 
   const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
     if (!gameState) return;
     const activePlayer = gameState.players[gameState.activePlayerIndex];
-    if (activePlayer.id !== user.id || activePlayer.color !== color) return;
+    if (!isPassAndPlay && (activePlayer.id !== user.id || activePlayer.color !== color)) return;
 
     const eligibleYardToken = activePlayer.tokens.find(t => t.position === -1 && validTokensRef.current.includes(t.id));
     if (eligibleYardToken) {
@@ -1316,6 +1480,84 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
       setFriendStatus(prev => ({ ...prev, [friendUsername]: 'error' }));
     }
   };
+
+  if (isPassAndPlay && (passSetupOpen || !gameState)) {
+    return (
+      <div className="flex-grow flex items-center justify-center p-4 bg-slate-950">
+        <div className="w-full max-w-md glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold uppercase tracking-wider">
+              Pass & Play Mode
+            </span>
+            <h2 className="text-2xl font-black text-white">Local Multiplayer Ludo</h2>
+            <p className="text-xs text-gray-400">Play on a single device with 2, 3, or 4 players</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">Number of Players</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[2, 3, 4].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => {
+                      setPassPlayerCount(num);
+                      const defaultNames = num === 2 
+                        ? ['Player 1 (Red)', 'Player 2 (Yellow)']
+                        : num === 3 
+                        ? ['Player 1 (Red)', 'Player 2 (Green)', 'Player 3 (Yellow)']
+                        : ['Player 1 (Red)', 'Player 2 (Green)', 'Player 3 (Yellow)', 'Player 4 (Blue)'];
+                      setPassPlayerNames(defaultNames);
+                    }}
+                    className={`py-2.5 rounded-xl text-xs font-black border transition-all ${
+                      passPlayerCount === num 
+                        ? 'border-emerald-400 bg-emerald-500/20 text-emerald-300 shadow-neon-blue'
+                        : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/20'
+                    }`}
+                  >
+                    {num} Players
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-gray-300">Player Names</label>
+              {Array.from({ length: passPlayerCount }).map((_, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  value={passPlayerNames[idx] || `Player ${idx + 1}`}
+                  onChange={(e) => {
+                    const nextNames = [...passPlayerNames];
+                    nextNames[idx] = e.target.value;
+                    setPassPlayerNames(nextNames);
+                  }}
+                  className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-400"
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => startPassAndPlayMatch()}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all"
+            >
+              🚀 Start Pass & Play Match
+            </button>
+
+            {onReturnToLobby && (
+              <button
+                onClick={onReturnToLobby}
+                className="w-full py-2 rounded-xl glass-card text-xs font-bold text-gray-400 hover:text-white"
+              >
+                Return to Dashboard
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!gameState) {
     return (
@@ -2090,7 +2332,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'red') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
+          const canRoll = isPlayerActive && (isPassAndPlay || player?.id === user.id) && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Red';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2116,7 +2358,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'green') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
+          const canRoll = isPlayerActive && (isPassAndPlay || player?.id === user.id) && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Green';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2562,7 +2804,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'blue') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
+          const canRoll = isPlayerActive && (isPassAndPlay || player?.id === user.id) && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Blue';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${
@@ -2588,7 +2830,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
           const pIdx = gameState?.players.findIndex(p => p.color === 'yellow') ?? -1;
           const player = pIdx !== -1 ? gameState?.players[pIdx] : null;
           const isPlayerActive = gameState?.activePlayerIndex === pIdx;
-          const canRoll = isPlayerActive && player?.id === user.id && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
+          const canRoll = isPlayerActive && (isPassAndPlay || player?.id === user.id) && !gameState?.hasRolled && !isRolling && !player?.isEliminated;
           const pName = player ? (player.displayName || player.username) : 'Yellow';
           return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border backdrop-blur-md transition-all duration-300 ${

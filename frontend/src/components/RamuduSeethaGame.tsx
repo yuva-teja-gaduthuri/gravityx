@@ -29,8 +29,9 @@ interface ScoreboardRow {
 interface RSGameProps {
   roomCode: string;
   user: { id: string; username: string; isGuest?: boolean };
-  socket: Socket;
-  isHost: boolean;
+  socket?: Socket;
+  isHost?: boolean;
+  isPassAndPlay?: boolean;
   matchEndedData?: any;
   onReturnToLobby?: () => void;
 }
@@ -149,7 +150,7 @@ const CHARACTER_STYLES: { [role: string]: CharacterStyle } = {
   },
 };
 
-export default function RamuduSeethaGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: RSGameProps) {
+export default function RamuduSeethaGame({ roomCode, user, socket, isHost, isPassAndPlay = false, matchEndedData, onReturnToLobby }: RSGameProps) {
   const { t } = useTranslation();
   const [myRole, setMyRole] = useState<string>('');
   const [ramuduId, setRamuduId] = useState<string>('');
@@ -184,6 +185,16 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
   // Match ended state
   const [matchEnded, setMatchEnded] = useState(false);
   const [speakingPlayers, setSpeakingPlayers] = useState<Set<string>>(new Set());
+
+  // Pass & Play States
+  const [passSetupOpen, setPassSetupOpen] = useState<boolean>(true);
+  const [passPlayerCount, setPassPlayerCount] = useState<number>(4);
+  const [passPlayerNames, setPassPlayerNames] = useState<string[]>(['Player 1', 'Player 2', 'Player 3', 'Player 4']);
+  const [passPhase, setPassPhase] = useState<'SETUP' | 'REVEAL_PASS' | 'PLAYING'>('SETUP');
+  const [passRevealIndex, setPassRevealIndex] = useState<number>(0);
+  const [passRoleRevealed, setPassRoleRevealed] = useState<boolean>(false);
+  const [passRolesMap, setPassRolesMap] = useState<{ [userId: string]: string }>({});
+  const [passSeethaId, setPassSeethaId] = useState<string>('');
 
   useEffect(() => {
     const handleSpeaking = (e: any) => {
@@ -269,6 +280,8 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
   }, [matchEnded, matchResults]);
 
   useEffect(() => {
+    if (!socket || isPassAndPlay) return;
+
     socket.on('rs_game_started', (data: any) => {
       setMyRole(data.myRole);
       setRamuduId(data.ramuduId);
@@ -282,7 +295,7 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       setHasGuessed(false);
       setRoundScores({});
       setCountdown(null);
-      setRoundTimer(15);
+      setRoundTimer(data.roundTimer || 30);
       setShowFailureAnimation(false);
       setCurrentRound(data.currentRound || 1);
       setMaxRounds(data.maxRounds || 3);
@@ -384,19 +397,136 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
       socket.off('rs_round_ended');
       socket.off('rs_match_ended');
     };
-  }, [socket, roomCode]);
+  }, [socket, roomCode, isPassAndPlay]);
+
+  const startPassAndPlayMatch = (namesOverride?: string[]) => {
+    const names = namesOverride || passPlayerNames;
+    const count = names.length;
+    const ROSTER_ITEMS = ['Ramudu', 'Seetha', 'Lakshmana', 'Hanumanthudu', 'Bharathudu', 'Shatrugnudu', 'Jambavanthudu', 'Sugrivudu', 'Vibhishana', 'Angadudu'];
+    const activeRoles = ROSTER_ITEMS.slice(0, count);
+
+    // Shuffle roles
+    const shuffled = [...activeRoles];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    const assignedRoles: { [userId: string]: string } = {};
+    let rId = '';
+    let sId = '';
+    const localPlayersList: Player[] = names.map((name, idx) => {
+      const id = `local_rs_${idx + 1}`;
+      const role = shuffled[idx];
+      assignedRoles[id] = role;
+      if (role === 'Ramudu') rId = id;
+      if (role === 'Seetha') sId = id;
+      return {
+        id,
+        username: name || `Player ${idx + 1}`,
+        avatar: 'default_avatar',
+        profileFrame: 'default_frame',
+        socketId: `socket_${idx + 1}`,
+        isRevealed: false
+      };
+    });
+
+    setPlayers(localPlayersList);
+    setRamuduId(rId);
+    setPassSeethaId(sId);
+    setPassRolesMap(assignedRoles);
+    setRevealedIds([]);
+    setGuesses(0);
+    setHasGuessed(false);
+    setMatchEnded(false);
+    setRoundEnded(false);
+    setPassPhase('REVEAL_PASS');
+    setPassRevealIndex(0);
+    setPassRoleRevealed(false);
+    setPassSetupOpen(false);
+
+    const initialScoreboard: { [userId: string]: { username: string; score: number } } = {};
+    localPlayersList.forEach(p => {
+      initialScoreboard[p.id] = { username: p.username, score: 0 };
+    });
+    setSessionScoreboard(initialScoreboard);
+  };
 
   const handleCardClick = (targetPlayerId: string) => {
     if (matchEnded || roundEnded || hasGuessed || guesses > 0) return;
-    if (user.id !== ramuduId) return;
-    if (targetPlayerId === user.id || revealedIds.includes(targetPlayerId)) return;
+    if (!isPassAndPlay && user.id !== ramuduId) return;
+    if (targetPlayerId === ramuduId || revealedIds.includes(targetPlayerId)) return;
 
     setHasGuessed(true);
     setGuesses(1);
-    socket.emit('rs_guess', {
-      roomCode,
-      targetUserId: targetPlayerId
-    });
+
+    if (socket && !isPassAndPlay) {
+      socket.emit('rs_guess', {
+        roomCode,
+        targetUserId: targetPlayerId
+      });
+    } else {
+      // Pass & Play Local Guess Resolution
+      const isSeethaFound = targetPlayerId === passSeethaId;
+      const targetRole = passRolesMap[targetPlayerId];
+      const targetUser = players.find(p => p.id === targetPlayerId);
+
+      setGuessResult({
+        username: targetUser?.username || 'Player',
+        role: targetRole,
+        isCorrect: isSeethaFound
+      });
+
+      const updatedRevealed = [...revealedIds, targetPlayerId];
+      setRevealedIds(updatedRevealed);
+
+      const roundScoresCalc: { [userId: string]: number } = {};
+      const updatedScoreboard = { ...sessionScoreboard };
+
+      const CHARACTER_SCORES: { [role: string]: number } = {
+        'Ramudu': 1000, 'Seetha': 0, 'Lakshmana': 900, 'Hanumanthudu': 800,
+        'Bharathudu': 700, 'Shatrugnudu': 600, 'Jambavanthudu': 500,
+        'Sugrivudu': 400, 'Vibhishana': 300, 'Angadudu': 200
+      };
+
+      players.forEach(p => {
+        const role = passRolesMap[p.id];
+        let score = 0;
+        if (isSeethaFound) {
+          score = role === 'Ramudu' ? 1000 : role === 'Seetha' ? 0 : CHARACTER_SCORES[role] || 0;
+        } else {
+          score = role === 'Ramudu' ? 0 : role === 'Seetha' ? 1000 : CHARACTER_SCORES[role] || 0;
+        }
+        roundScoresCalc[p.id] = score;
+        if (updatedScoreboard[p.id]) {
+          updatedScoreboard[p.id].score += score;
+        }
+      });
+
+      setRoundScores(roundScoresCalc);
+      setSessionScoreboard(updatedScoreboard);
+
+      setTimeout(() => {
+        setRoundEnded(true);
+        setRoundData({
+          currentRound,
+          maxRounds,
+          winnerId: isSeethaFound ? ramuduId : null,
+          seethaId: passSeethaId,
+          guessCount: 1,
+          roundScores: roundScoresCalc,
+          sessionScoreboard: updatedScoreboard,
+          roles: passRolesMap,
+          won: isSeethaFound
+        });
+        if (isSeethaFound) {
+          confetti({ particleCount: 120, spread: 75 });
+        } else {
+          setShowFailureAnimation(true);
+          setTimeout(() => setShowFailureAnimation(false), 2000);
+        }
+      }, 1500);
+    }
   };
 
   const handleLike = async (username: string) => {
@@ -490,6 +620,131 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
 
   // Get active style details for user role
   const myRoleStyle = myRole ? CHARACTER_STYLES[myRole] : null;
+
+  if (isPassAndPlay && passPhase === 'SETUP') {
+    return (
+      <div className="flex-grow flex items-center justify-center p-4 bg-slate-950">
+        <div className="w-full max-w-md glass-panel rounded-3xl p-6 sm:p-8 border border-cybergold/30 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <span className="px-3 py-1 rounded-full bg-cybergold/20 text-cybergold border border-cybergold/30 text-xs font-bold uppercase tracking-wider">
+              Ramudu Seetha Pass & Play
+            </span>
+            <h2 className="text-2xl font-black text-white">Local Hidden Identity Arena</h2>
+            <p className="text-xs text-gray-400">Play with 3 to 10 players on a single device</p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">Number of Players</label>
+              <select
+                value={passPlayerCount}
+                onChange={(e) => {
+                  const count = Number(e.target.value);
+                  setPassPlayerCount(count);
+                  const names = Array.from({ length: count }, (_, i) => passPlayerNames[i] || `Player ${i + 1}`);
+                  setPassPlayerNames(names);
+                }}
+                className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cybergold font-bold"
+              >
+                {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                  <option key={num} value={num} className="bg-[#0b0f19] text-white">{num} Players</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <label className="block text-xs font-bold text-gray-300">Player Names</label>
+              {Array.from({ length: passPlayerCount }).map((_, idx) => (
+                <input
+                  key={idx}
+                  type="text"
+                  value={passPlayerNames[idx] || `Player ${idx + 1}`}
+                  onChange={(e) => {
+                    const nextNames = [...passPlayerNames];
+                    nextNames[idx] = e.target.value;
+                    setPassPlayerNames(nextNames);
+                  }}
+                  className="w-full bg-[#0b0f19] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-cybergold"
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => startPassAndPlayMatch()}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:opacity-90 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all"
+            >
+              🏹 Start Pass & Play Match
+            </button>
+
+            {onReturnToLobby && (
+              <button
+                onClick={onReturnToLobby}
+                className="w-full py-2 rounded-xl glass-card text-xs font-bold text-gray-400 hover:text-white"
+              >
+                Return to Dashboard
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPassAndPlay && passPhase === 'REVEAL_PASS') {
+    const currentPlayer = players[passRevealIndex];
+    const playerRole = currentPlayer ? passRolesMap[currentPlayer.id] : '';
+    const style = CHARACTER_STYLES[playerRole];
+
+    return (
+      <div className="flex-grow flex items-center justify-center p-4 bg-slate-950">
+        <div className="w-full max-w-md glass-panel rounded-3xl p-6 sm:p-8 border border-cybergold/30 shadow-2xl text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-cybergold/10 text-cybergold flex items-center justify-center mx-auto text-3xl border border-cybergold/30 animate-pulse">
+            🤫
+          </div>
+
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full bg-cybergold/20 text-cybergold text-xs font-black uppercase tracking-wider">
+              Secret Role Assignment ({passRevealIndex + 1} / {players.length})
+            </span>
+            <h2 className="text-2xl font-black text-white">Pass Device to <span className="text-cybergold">{currentPlayer?.username}</span></h2>
+            <p className="text-xs text-gray-400">Ensure no other player is looking at the screen!</p>
+          </div>
+
+          {!passRoleRevealed ? (
+            <button
+              onClick={() => setPassRoleRevealed(true)}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:opacity-90 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+            >
+              👁️ I am {currentPlayer?.username} — Reveal My Role
+            </button>
+          ) : (
+            <div className="space-y-4 animate-fade-in">
+              <div className={`p-6 rounded-2xl border text-center space-y-3 bg-gradient-to-b ${style?.bgClass} ${style?.borderClass} ${style?.glowClass}`}>
+                <div className="text-5xl">{style?.badge}</div>
+                <div className="text-xl font-black text-white">{style?.title}</div>
+                <div className="text-xs text-gray-300 italic">{style?.desc}</div>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (passRevealIndex + 1 < players.length) {
+                    setPassRevealIndex(prev => prev + 1);
+                    setPassRoleRevealed(false);
+                  } else {
+                    setPassPhase('PLAYING');
+                    setMyRole('Ramudu');
+                  }
+                }}
+                className="w-full py-3.5 rounded-xl bg-cybersuccess hover:bg-cybersuccess/80 text-black font-black text-xs uppercase tracking-wider shadow-neon-success transition-all active:scale-95"
+              >
+                🔒 Done — Hide Role & {passRevealIndex + 1 < players.length ? 'Pass to Next Player' : 'Begin Match'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-6 w-full max-w-7xl mx-auto items-stretch min-h-0 relative">
@@ -885,14 +1140,43 @@ export default function RamuduSeethaGame({ roomCode, user, socket, isHost, match
               </div>
             </div>
 
-            {isHost ? (
+            {isHost || isPassAndPlay ? (
               <button
                 onClick={() => {
                   const isLastRound = currentRound >= maxRounds;
-                  if (isLastRound) {
-                    socket.emit('rs_show_final_scorecard', roomCode);
-                  } else {
-                    socket.emit('rs_next_round', roomCode);
+                  if (isPassAndPlay) {
+                    if (isLastRound) {
+                      setMatchEnded(true);
+                      const scoreboardList: ScoreboardRow[] = Object.entries(sessionScoreboard)
+                        .map(([userId, pData]) => ({
+                          userId,
+                          username: pData.username,
+                          score: pData.score,
+                          xpEarned: 100,
+                          coinsEarned: 50,
+                          placement: 1,
+                        }))
+                        .sort((a, b) => b.score - a.score)
+                        .map((row, idx) => ({ ...row, placement: idx + 1 }));
+
+                      setMatchResults({
+                        winnerId: scoreboardList[0]?.userId || '',
+                        seethaId: passSeethaId,
+                        guessCount: 1,
+                        scoreboard: scoreboardList,
+                        roles: passRolesMap,
+                        isCorrect: true
+                      });
+                    } else {
+                      setCurrentRound(prev => prev + 1);
+                      startPassAndPlayMatch();
+                    }
+                  } else if (socket) {
+                    if (isLastRound) {
+                      socket.emit('rs_show_final_scorecard', roomCode);
+                    } else {
+                      socket.emit('rs_next_round', roomCode);
+                    }
                   }
                 }}
                 className="w-full py-4 rounded-xl btn-mythic-gold font-extrabold uppercase text-xs tracking-wider text-center"

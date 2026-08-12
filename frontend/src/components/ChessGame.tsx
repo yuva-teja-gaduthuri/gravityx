@@ -469,6 +469,12 @@ export default function ChessGame({ roomCode, user, socket, isHost, isPassAndPla
     abandonedSquare = getKingSquare(resignedColor);
   }
 
+  let checkmateSquare: string | null = null;
+  if (gameState.resultType === 'CHECKMATE' || gameState.isCheckmate) {
+    const checkmatedColor = gameState.winnerId === gameState.whitePlayerId ? 'b' : 'w';
+    checkmateSquare = getKingSquare(checkmatedColor);
+  }
+
   // Handle Square Selection & Moves
   const handleSquareClick = (squareName: string) => {
     if (matchEnded || gameState.isGameOver) return;
@@ -705,6 +711,7 @@ export default function ChessGame({ roomCode, user, socket, isHost, isPassAndPla
           onSquareClick={handleSquareClick}
           boardTheme={user?.boardTheme}
           abandonedSquare={abandonedSquare}
+          checkmateSquare={checkmateSquare}
         />
 
         {/* 4. BOTTOM PLAYER PANEL */}
@@ -794,7 +801,9 @@ export default function ChessGame({ roomCode, user, socket, isHost, isPassAndPla
                         <div className="text-[8px] uppercase">Best</div>
                       </div>
                       <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded p-1">
-                        <div className="font-bold">{reviewResultData.summary.classificationsCount.white.Blunder || 0}</div>
+                        <div className="font-bold">
+                          {isPassMode || myColor === 'w' ? (reviewResultData.summary.classificationsCount.white.Blunder || 0) : '🔒 Private'}
+                        </div>
                         <div className="text-[8px] uppercase">Blunder</div>
                       </div>
                     </div>
@@ -816,7 +825,9 @@ export default function ChessGame({ roomCode, user, socket, isHost, isPassAndPla
                         <div className="text-[8px] uppercase">Best</div>
                       </div>
                       <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded p-1">
-                        <div className="font-bold">{reviewResultData.summary.classificationsCount.black.Blunder || 0}</div>
+                        <div className="font-bold">
+                          {isPassMode || myColor === 'b' ? (reviewResultData.summary.classificationsCount.black.Blunder || 0) : '🔒 Private'}
+                        </div>
                         <div className="text-[8px] uppercase">Blunder</div>
                       </div>
                     </div>
