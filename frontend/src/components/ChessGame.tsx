@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
 import { Chess, Square } from 'chess.js';
 import confetti from 'canvas-confetti';
-import { Trophy, Maximize, Minimize, Heart, UserPlus, MessageSquare, X, RefreshCw, LogOut } from 'lucide-react';
+import { Trophy, Maximize, Minimize, Heart, UserPlus, MessageSquare, X, RefreshCw, LogOut, Flag, Play, Sparkles, Zap, Award, AlertTriangle } from 'lucide-react';
 import { getApiUrl } from '../utils/api';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -10,12 +10,15 @@ import { ChessBoard } from './chess/ChessBoard';
 import { ChessPlayerPanel, CapturedPiece } from './chess/ChessPlayerPanel';
 import { ChessMoveHistory } from './chess/ChessMoveHistory';
 import { ChessPromotionModal } from './chess/ChessPromotionModal';
+import { ChessReviewModal } from './chess/ChessReviewModal';
+import { ChessReviewAgent } from '../utils/chessReviewAgent';
 
 interface ChessGameProps {
-  roomCode: string;
+  roomCode?: string;
   user: { id: string; username: string; isGuest?: boolean; boardTheme?: string; profileFrame?: string };
-  socket: Socket;
-  isHost: boolean;
+  socket?: Socket;
+  isHost?: boolean;
+  isPassAndPlay?: boolean;
   matchEndedData?: any;
   onReturnToLobby?: () => void;
 }
@@ -41,9 +44,10 @@ interface ChessState {
   isCheck: boolean;
   isCheckmate: boolean;
   isStalemate: boolean;
+  resultType?: string;
 }
 
-export default function ChessGame({ roomCode, user, socket, isHost, matchEndedData, onReturnToLobby }: ChessGameProps) {
+export default function ChessGame({ roomCode, user, socket, isHost, isPassAndPlay, matchEndedData, onReturnToLobby }: ChessGameProps) {
   const { t } = useTranslation();
   const [gameState, setGameState] = useState<ChessState | null>(null);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
@@ -52,6 +56,21 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
 
   const [matchEnded, setMatchEnded] = useState(false);
   const [scoreboard, setScoreboard] = useState<any[]>([]);
+
+  // Pass & Play States
+  const [isPassMode] = useState<boolean>(!!isPassAndPlay || !socket);
+  const [passSetupOpen, setPassSetupOpen] = useState<boolean>(!!isPassAndPlay || !socket);
+  const [p1Name, setP1Name] = useState<string>('Player 1');
+  const [p2Name, setP2Name] = useState<string>('Player 2');
+  const [colorSelection, setColorSelection] = useState<'WHITE' | 'BLACK' | 'RANDOM'>('RANDOM');
+  const [timerSelection, setTimerSelection] = useState<number | 'UNLIMITED'>('UNLIMITED');
+
+  // Resignation Confirm Modal
+  const [showResignConfirmModal, setShowResignConfirmModal] = useState(false);
+
+  // AI Game Review Modal State
+  const [showAiReviewModal, setShowAiReviewModal] = useState(false);
+  const [reviewResultData, setReviewResultData] = useState<any>(null);
 
   // Social States
   const [likesMap, setLikesMap] = useState<{ [username: string]: number }>({});
@@ -103,12 +122,22 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
         osc.stop(audioCtx.currentTime + 0.4);
       }
     } catch (e) {
-      // Audio context might be restricted before user gesture
+      // Audio context error fallback
     }
   };
 
-  // Sync state on socket connection
+  // Automatically compute move review as soon as game ends if not provided by server
   useEffect(() => {
+    if (matchEnded && gameState && gameState.moveHistory && gameState.moveHistory.length > 0 && !reviewResultData) {
+      const result = ChessReviewAgent.reviewGame(gameState.moveHistory);
+      setReviewResultData(result);
+    }
+  }, [matchEnded, gameState, reviewResultData]);
+
+  // Sync state on socket connection for online multiplayer
+  useEffect(() => {
+    if (isPassMode || !socket || !roomCode) return;
+
     socket.emit('chess_sync_state', roomCode);
 
     const handleSync = (state: ChessState) => {
@@ -138,6 +167,9 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
     const handleMatchEnded = (data: any) => {
       setMatchEnded(true);
       setScoreboard(data.scoreboard || []);
+      if (data.reviewResult) {
+        setReviewResultData(data.reviewResult);
+      }
 
       playAudioEffect('gameover');
 
@@ -160,134 +192,238 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
       socket.off('chess_timer_tick', handleTimerTick);
       socket.off('chess_match_ended', handleMatchEnded);
     };
-  }, [socket, roomCode, user.id]);
+  }, [socket, roomCode, user.id, isPassMode]);
 
-  // Sync match ended data if passed from room wrapper
+  // Local turn timer for Pass & Play Mode
   useEffect(() => {
-    if (matchEndedData) {
-      setMatchEnded(true);
-      setScoreboard(matchEndedData.scoreboard || []);
-    }
-  }, [matchEndedData]);
+    if (!isPassMode || !gameState || gameState.isGameOver || gameState.timeControl === 'UNLIMITED') return;
 
-  // Load social likes when scoreboard is shown
-  useEffect(() => {
-    if (matchEnded && scoreboard.length > 0) {
-      const fetchLikes = async () => {
-        const token = localStorage.getItem('gravityx_token');
-        const initialLikes: { [username: string]: number } = {};
-        for (const row of scoreboard) {
-          try {
-            const res = await fetch(getApiUrl(`/api/social/likes/${row.username}`), {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              initialLikes[row.username] = data.likesCount;
-            } else {
-              initialLikes[row.username] = 15;
-            }
-          } catch (e) {
-            initialLikes[row.username] = 15;
-          }
+    const timerInterval = setInterval(() => {
+      setGameState((prev) => {
+        if (!prev || prev.isGameOver) return prev;
+        const isWhiteTurn = prev.turn === 'w';
+
+        let newWhiteTime = prev.whiteTimeLeft;
+        let newBlackTime = prev.blackTimeLeft;
+
+        if (isWhiteTurn && typeof newWhiteTime === 'number') {
+          newWhiteTime = Math.max(0, newWhiteTime - 1);
+        } else if (!isWhiteTurn && typeof newBlackTime === 'number') {
+          newBlackTime = Math.max(0, newBlackTime - 1);
         }
-        setLikesMap(initialLikes);
-      };
-      fetchLikes();
-    }
-  }, [matchEnded, scoreboard]);
 
-  // Fullscreen listener
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+        const isTimeOut = (newWhiteTime !== null && newWhiteTime <= 0) || (newBlackTime !== null && newBlackTime <= 0);
+
+        if (isTimeOut) {
+          const winnerId = newWhiteTime === 0 ? prev.blackPlayerId : prev.whitePlayerId;
+          const winnerName = newWhiteTime === 0 ? prev.blackUsername : prev.whiteUsername;
+
+          setMatchEnded(true);
+          setScoreboard([
+            { userId: winnerId, username: winnerName, placement: 1, xpEarned: 50, coinsEarned: 100 },
+            {
+              userId: winnerId === prev.whitePlayerId ? prev.blackPlayerId : prev.whitePlayerId,
+              username: winnerId === prev.whitePlayerId ? prev.blackUsername : prev.whiteUsername,
+              placement: 2,
+              xpEarned: 15,
+              coinsEarned: 20,
+            },
+          ]);
+
+          return {
+            ...prev,
+            whiteTimeLeft: newWhiteTime,
+            blackTimeLeft: newBlackTime,
+            isGameOver: true,
+            winnerId,
+            resultType: 'TIMEOUT',
+            drawReason: `Timeout - ${winnerName} Wins`,
+          };
+        }
+
+        return {
+          ...prev,
+          whiteTimeLeft: newWhiteTime,
+          blackTimeLeft: newBlackTime,
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(timerInterval);
+  }, [isPassMode, gameState]);
+
+  // Handle Pass & Play Game Start Initialization
+  const handleStartPassAndPlay = () => {
+    let wName = p1Name || 'Player 1';
+    let bName = p2Name || 'Player 2';
+
+    if (colorSelection === 'BLACK') {
+      [wName, bName] = [bName, wName];
+    } else if (colorSelection === 'RANDOM') {
+      if (Math.random() > 0.5) {
+        [wName, bName] = [bName, wName];
+      }
+    }
+
+    const initialSecs = typeof timerSelection === 'number' ? timerSelection * 60 : null;
+
+    const chess = new Chess();
+    const initialState: ChessState = {
+      fen: chess.fen(),
+      turn: 'w',
+      whitePlayerId: 'p1_local',
+      blackPlayerId: 'p2_local',
+      whiteUsername: wName,
+      blackUsername: bName,
+      timeControl: timerSelection,
+      whiteTimeLeft: initialSecs,
+      blackTimeLeft: initialSecs,
+      timerStarted: false,
+      lastMoveTimestamp: Date.now(),
+      capturedPieces: [],
+      lastMove: null,
+      moveHistory: [],
+      isGameOver: false,
+      winnerId: null,
+      drawReason: null,
+      isCheck: false,
+      isCheckmate: false,
+      isStalemate: false,
     };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
+
+    setChessInstance(chess);
+    setGameState(initialState);
+    setPassSetupOpen(false);
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.error('Error enabling fullscreen:', err);
-      });
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen();
     }
   };
 
-  const handleLike = async (username: string) => {
-    try {
-      const token = localStorage.getItem('gravityx_token');
-      const res = await fetch(getApiUrl('/api/social/like'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ targetUsername: username }),
+  // Trigger Resignation
+  const handleConfirmResign = () => {
+    setShowResignConfirmModal(false);
+    if (!gameState) return;
+
+    if (isPassMode) {
+      const currentActiveId = gameState.turn === 'w' ? gameState.whitePlayerId : gameState.blackPlayerId;
+      const winnerId = currentActiveId === gameState.whitePlayerId ? gameState.blackPlayerId : gameState.whitePlayerId;
+      const winnerName = winnerId === gameState.whitePlayerId ? gameState.whiteUsername : gameState.blackUsername;
+      const loserName = currentActiveId === gameState.whitePlayerId ? gameState.whiteUsername : gameState.blackUsername;
+
+      setGameState({
+        ...gameState,
+        isGameOver: true,
+        winnerId,
+        resultType: 'RESIGNATION',
+        drawReason: `${loserName} Resigned`,
       });
-      if (res.ok) {
-        const data = await res.json();
-        setLikesMap((prev) => ({ ...prev, [username]: data.likesCount }));
-      }
-    } catch (e) {
-      console.error(e);
+
+      setMatchEnded(true);
+      setScoreboard([
+        { userId: winnerId, username: winnerName, placement: 1, xpEarned: 50, coinsEarned: 100 },
+        { userId: currentActiveId, username: loserName, placement: 2, xpEarned: 15, coinsEarned: 20 },
+      ]);
+    } else if (socket && roomCode) {
+      socket.emit('chess_resign', roomCode);
     }
   };
 
-  const handleSaveReview = async (username: string) => {
-    try {
-      const token = localStorage.getItem('gravityx_token');
-      const res = await fetch(getApiUrl('/api/social/review'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          targetUsername: username,
-          rating: reviewRating,
-          comment: reviewComment,
-        }),
-      });
-      if (res.ok) {
-        setReviewModalUser(null);
-        setReviewComment('');
-        setReviewRating(5);
-        alert(`Feedback saved successfully for ${username}!`);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  // Pass & Play Setup Dialog Overlay
+  if (isPassMode && passSetupOpen) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4 bg-slate-950">
+        <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-xs font-bold uppercase tracking-wider">
+              Pass & Play Setup
+            </span>
+            <h2 className="text-2xl font-black text-white">Local 2-Player Chess</h2>
+            <p className="text-xs text-slate-400">Configure players and timer to play on a single device</p>
+          </div>
 
-  const handleAddFriendClick = async (friendUsername: string) => {
-    try {
-      setFriendStatus((prev) => ({ ...prev, [friendUsername]: 'sending' }));
-      const token = localStorage.getItem('gravityx_token');
-      const res = await fetch(getApiUrl('/api/social/request'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friendUsername }),
-      });
-      if (res.ok) {
-        setFriendStatus((prev) => ({ ...prev, [friendUsername]: 'sent' }));
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to send friend request');
-        setFriendStatus((prev) => ({ ...prev, [friendUsername]: 'error' }));
-      }
-    } catch (err) {
-      console.error(err);
-      setFriendStatus((prev) => ({ ...prev, [friendUsername]: 'error' }));
-    }
-  };
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Player 1 Name</label>
+              <input
+                type="text"
+                value={p1Name}
+                onChange={(e) => setP1Name(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Player 2 Name</label>
+              <input
+                type="text"
+                value={p2Name}
+                onChange={(e) => setP2Name(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Color Assignment</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['WHITE', 'BLACK', 'RANDOM'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setColorSelection(mode)}
+                    className={`py-2 rounded-xl border font-bold transition-all ${
+                      colorSelection === mode
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Timer Selection</label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Unlimited', val: 'UNLIMITED' },
+                  { label: '1m', val: 60 },
+                  { label: '3m', val: 180 },
+                  { label: '5m', val: 300 },
+                  { label: '10m', val: 600 },
+                  { label: '15m', val: 900 },
+                  { label: '30m', val: 1800 },
+                ].map((tc) => (
+                  <button
+                    key={tc.label}
+                    onClick={() => setTimerSelection(tc.val as any)}
+                    className={`py-2 rounded-xl border text-[11px] font-bold transition-all ${
+                      timerSelection === tc.val
+                        ? 'bg-indigo-600 border-indigo-500 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tc.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleStartPassAndPlay}
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 font-bold text-white shadow-lg shadow-indigo-500/25 hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Play className="w-4 h-4 fill-white" /> Start Game
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!gameState || !chessInstance) {
     return (
@@ -302,36 +438,57 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
 
   // Determine player colors & turn
   const myId = user.id;
-  const isWhite = myId === gameState.whitePlayerId;
-  const isBlack = myId === gameState.blackPlayerId;
+  const isWhite = isPassMode ? gameState.turn === 'w' : myId === gameState.whitePlayerId;
+  const isBlack = isPassMode ? gameState.turn === 'b' : myId === gameState.blackPlayerId;
   const myColor = isWhite ? 'w' : isBlack ? 'b' : 'spectator';
-  const isMyTurn = gameState.turn === myColor;
+  const isMyTurn = isPassMode ? true : gameState.turn === myColor;
 
-  // Board flip perspective: Black plays from bottom
-  const isFlipped = myColor === 'b';
+  // Board flip perspective
+  const isFlipped = isPassMode ? gameState.turn === 'b' : myColor === 'b';
+
+  // Find King Square of Resigned Player for the ABANDONED overlay badge on board
+  const getKingSquare = (color: 'w' | 'b'): string | null => {
+    if (!chessInstance) return null;
+    const board = chessInstance.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board[r][c];
+        if (piece && piece.type === 'k' && piece.color === color) {
+          const file = String.fromCharCode(97 + c);
+          const rank = 8 - r;
+          return `${file}${rank}`;
+        }
+      }
+    }
+    return null;
+  };
+
+  let abandonedSquare: string | null = null;
+  if (gameState.resultType === 'RESIGNATION' || gameState.drawReason?.toLowerCase().includes('resigned')) {
+    const resignedColor = gameState.winnerId === gameState.whitePlayerId ? 'b' : 'w';
+    abandonedSquare = getKingSquare(resignedColor);
+  }
 
   // Handle Square Selection & Moves
   const handleSquareClick = (squareName: string) => {
-    if (matchEnded || gameState.isGameOver || myColor === 'spectator' || !isMyTurn) return;
+    if (matchEnded || gameState.isGameOver) return;
 
+    const currentActiveColor = gameState.turn;
     const targetSquare = chessInstance.get(squareName as Square);
 
-    // If square contains our own piece, select it and show legal moves
-    if (targetSquare && targetSquare.color === myColor) {
+    if (targetSquare && targetSquare.color === currentActiveColor) {
       setSelectedSquare(squareName);
       const moves = chessInstance.moves({ square: squareName as Square, verbose: true });
       setPossibleMoves(moves.map((m) => m.to));
     } else if (selectedSquare) {
-      // If piece is selected and target is a legal destination
       if (possibleMoves.includes(squareName)) {
         const selectedPiece = chessInstance.get(selectedSquare as Square);
         const targetRank = squareName[1];
 
-        // Check if move is a Pawn Promotion (Pawn reaching rank 8 for White, rank 1 for Black)
         const isPromotion =
           selectedPiece &&
           selectedPiece.type === 'p' &&
-          ((myColor === 'w' && targetRank === '8') || (myColor === 'b' && targetRank === '1'));
+          ((currentActiveColor === 'w' && targetRank === '8') || (currentActiveColor === 'b' && targetRank === '1'));
 
         if (isPromotion) {
           setPendingPromotionMove({ from: selectedSquare, to: squareName });
@@ -348,26 +505,91 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
   const executeMove = (from: string, to: string, promotionChoice: string = 'q') => {
     const isCapture = !!chessInstance.get(to as Square);
 
-    socket.emit('chess_move', {
-      roomCode,
-      from,
-      to,
-      promotion: promotionChoice,
-    });
+    if (!isPassMode && socket && roomCode) {
+      socket.emit('chess_move', { roomCode, from, to, promotion: promotionChoice });
+    }
 
-    // Optimistic local move execution
     try {
       const moveResult = chessInstance.move({ from, to, promotion: promotionChoice as any });
       if (moveResult) {
-        setChessInstance(new Chess(chessInstance.fen()));
-        if (isCapture) {
-          playAudioEffect('capture');
-        } else {
-          playAudioEffect('move');
+        const newFen = chessInstance.fen();
+        const nextTurn = chessInstance.turn();
+
+        setChessInstance(new Chess(newFen));
+
+        if (isCapture) playAudioEffect('capture');
+        else playAudioEffect('move');
+
+        const capturedList = [...gameState.capturedPieces];
+        if (moveResult.captured) {
+          capturedList.push({
+            piece: moveResult.captured,
+            color: moveResult.color === 'w' ? 'b' : 'w',
+            capturedBy: gameState.turn === 'w' ? gameState.whitePlayerId : gameState.blackPlayerId,
+            sequence: capturedList.length + 1,
+          });
         }
+
+        const newHistory = [...gameState.moveHistory, moveResult.san];
+        const isCheck = chessInstance.inCheck();
+        const isGameOver = chessInstance.isGameOver();
+
+        let isCheckmate = false;
+        let isStalemate = false;
+        let winnerId: string | null = null;
+        let drawReason: string | null = null;
+        let resultType: string | undefined = undefined;
+
+        if (isGameOver) {
+          if (chessInstance.isCheckmate()) {
+            isCheckmate = true;
+            winnerId = nextTurn === 'w' ? gameState.blackPlayerId : gameState.whitePlayerId;
+            resultType = 'CHECKMATE';
+          } else {
+            if (chessInstance.isStalemate()) {
+              isStalemate = true;
+              drawReason = 'Stalemate';
+              resultType = 'STALEMATE';
+            } else if (chessInstance.isThreefoldRepetition()) {
+              drawReason = 'Threefold Repetition';
+              resultType = 'DRAW_THREEFOLD';
+            } else if (chessInstance.isInsufficientMaterial()) {
+              drawReason = 'Insufficient Material';
+              resultType = 'DRAW_INSUFFICIENT';
+            } else {
+              drawReason = 'Draw';
+              resultType = 'DRAW_MUTUAL';
+            }
+          }
+
+          setMatchEnded(true);
+          const winnerName = winnerId === gameState.whitePlayerId ? gameState.whiteUsername : gameState.blackUsername;
+          const loserName = winnerId === gameState.whitePlayerId ? gameState.blackUsername : gameState.whiteUsername;
+
+          setScoreboard([
+            { userId: winnerId || 'draw', username: winnerId ? winnerName : gameState.whiteUsername, placement: 1, xpEarned: 50, coinsEarned: 100 },
+            { userId: winnerId ? (winnerId === gameState.whitePlayerId ? gameState.blackPlayerId : gameState.whitePlayerId) : 'draw2', username: winnerId ? loserName : gameState.blackUsername, placement: winnerId ? 2 : 1, xpEarned: 25, coinsEarned: 40 },
+          ]);
+        }
+
+        setGameState({
+          ...gameState,
+          fen: newFen,
+          turn: nextTurn,
+          capturedPieces: capturedList,
+          lastMove: { from: moveResult.from, to: moveResult.to, piece: moveResult.piece, san: moveResult.san },
+          moveHistory: newHistory,
+          isCheck,
+          isGameOver,
+          isCheckmate,
+          isStalemate,
+          winnerId,
+          drawReason,
+          resultType,
+        });
       }
     } catch (e) {
-      // Server will correct invalid state
+      console.error(e);
     }
 
     setSelectedSquare(null);
@@ -375,54 +597,89 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
     setPendingPromotionMove(null);
   };
 
-  // Top player (Opponent) and Bottom player (You)
   const topUsername = isFlipped ? gameState.whiteUsername : gameState.blackUsername;
   const topColor: 'w' | 'b' = isFlipped ? 'w' : 'b';
   const topTimeLeft = isFlipped ? gameState.whiteTimeLeft : gameState.blackTimeLeft;
   const topIsTurn = gameState.turn === topColor;
   const topIsCheck = gameState.isCheck && topIsTurn;
-  const topIsSelf = false;
 
   const bottomUsername = isFlipped ? gameState.blackUsername : gameState.whiteUsername;
   const bottomColor: 'w' | 'b' = isFlipped ? 'b' : 'w';
   const bottomTimeLeft = isFlipped ? gameState.blackTimeLeft : gameState.whiteTimeLeft;
   const bottomIsTurn = gameState.turn === bottomColor;
   const bottomIsCheck = gameState.isCheck && bottomIsTurn;
-  const bottomIsSelf = true;
+
+  // Format Result Header Text
+  const getResultHeaderLabels = () => {
+    const resType = gameState.resultType;
+    const winnerName = gameState.winnerId === gameState.whitePlayerId ? gameState.whiteUsername : gameState.blackUsername;
+
+    if (resType === 'CHECKMATE' || gameState.isCheckmate) {
+      return { main: 'CHECKMATE', sub: `${winnerName} Wins` };
+    }
+    if (resType === 'STALEMATE' || gameState.isStalemate) {
+      return { main: 'STALEMATE', sub: 'Draw' };
+    }
+    if (resType === 'RESIGNATION') {
+      return { main: 'ABANDONED', sub: `${gameState.drawReason || 'Player Resigned'}` };
+    }
+    if (resType === 'TIMEOUT') {
+      return { main: 'TIMEOUT', sub: `${winnerName} Wins` };
+    }
+    if (resType === 'DRAW_INSUFFICIENT') {
+      return { main: 'DRAW', sub: 'Insufficient Material' };
+    }
+    if (resType === 'DRAW_THREEFOLD') {
+      return { main: 'DRAW', sub: 'Threefold Repetition' };
+    }
+    if (resType === 'DRAW_MUTUAL') {
+      return { main: 'DRAW', sub: 'Mutual Agreement' };
+    }
+    return { main: 'MATCH COMPLETED', sub: gameState.drawReason || 'Game Over' };
+  };
+
+  const resultLabels = getResultHeaderLabels();
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-start p-3 sm:p-5 overflow-y-auto">
-      {/* Top Header Bar */}
+    <div className="flex-1 flex flex-col items-center justify-start p-3 sm:p-5 overflow-y-auto bg-slate-950 text-white min-h-screen">
+      {/* Header Bar */}
       <div className="w-full max-w-[560px] flex justify-between items-center mb-3">
         <div className="flex items-center gap-2">
-          <Trophy className="text-cybergold" size={18} />
-          <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-white">
-            {t('chessTacticalArena', 'Tactical Chess Arena')}
+          <Trophy className="text-amber-400" size={18} />
+          <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider">
+            {isPassMode ? 'Pass & Play Chess' : t('chessTacticalArena', 'Tactical Chess Arena')}
           </h2>
         </div>
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowResignConfirmModal(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-600 hover:text-white text-red-400 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
+          >
+            <Flag size={14} />
+            <span>Resign</span>
+          </button>
+
+          <button
             onClick={() => onReturnToLobby && onReturnToLobby()}
-            className="px-2.5 py-1.5 rounded-lg bg-cybererror/10 border border-cybererror/30 hover:bg-cybererror hover:text-white text-cybererror text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95 shadow-sm"
-            title="Return to Lobby"
+            className="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 active:scale-95"
           >
             <LogOut size={14} />
-            <span>Return to Lobby</span>
+            <span>Exit</span>
           </button>
+
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-            title="Toggle Fullscreen"
+            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
           >
             {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
           </button>
         </div>
       </div>
 
-      {/* Main Centered Tactical Stack Layout */}
-      <div className="w-full max-w-[560px] flex flex-col gap-3">
-        {/* 1. TOP PLAYER PANEL (Opponent) & Captured Pieces */}
+      {/* Main Board Stack */}
+      <div className="w-full max-w-[560px] flex flex-col gap-3 relative">
+        {/* 1. TOP PLAYER PANEL */}
         <ChessPlayerPanel
           username={topUsername}
           color={topColor}
@@ -431,13 +688,13 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           isCheck={topIsCheck}
           capturedPieces={gameState.capturedPieces}
           rating={1200}
-          isSelf={topIsSelf}
+          isSelf={false}
         />
 
-        {/* 2. HORIZONTAL MOVE HISTORY BAR (Fixed above board) */}
+        {/* 2. MOVE HISTORY BAR */}
         <ChessMoveHistory moveHistory={gameState.moveHistory} />
 
-        {/* 3. CENTERED CHESS BOARD */}
+        {/* 3. CHESS BOARD */}
         <ChessBoard
           chessInstance={chessInstance}
           isFlipped={isFlipped}
@@ -447,9 +704,10 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           isMyTurn={isMyTurn}
           onSquareClick={handleSquareClick}
           boardTheme={user?.boardTheme}
+          abandonedSquare={abandonedSquare}
         />
 
-        {/* 4. BOTTOM PLAYER PANEL (White/You) & Captured Pieces */}
+        {/* 4. BOTTOM PLAYER PANEL */}
         <ChessPlayerPanel
           username={bottomUsername}
           color={bottomColor}
@@ -458,29 +716,12 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
           isCheck={bottomIsCheck}
           capturedPieces={gameState.capturedPieces}
           rating={1200}
-          isSelf={bottomIsSelf}
+          isSelf={true}
           profileFrame={user?.profileFrame}
         />
-
-        {/* Return to Lobby / Host controls footer */}
-        <div className="mt-2 flex items-center justify-between">
-          {isHost ? (
-            <button
-              onClick={() => onReturnToLobby && onReturnToLobby()}
-              className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-black uppercase tracking-wider text-white transition-all active:scale-95 flex items-center justify-center gap-2"
-            >
-              <RefreshCw size={14} />
-              <span>{t('chessReturnLobby', 'Return to Lobby')}</span>
-            </button>
-          ) : (
-            <div className="w-full text-center py-2 text-[11px] text-gray-500 font-bold uppercase tracking-wider animate-pulse">
-              {t('chessWaitingHost', 'Waiting for host to return...')}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Pawn Promotion Modal Dialog */}
+      {/* Pawn Promotion Modal */}
       {pendingPromotionMove && (
         <ChessPromotionModal
           color={myColor as 'w' | 'b'}
@@ -493,162 +734,153 @@ export default function ChessGame({ roomCode, user, socket, isHost, matchEndedDa
         />
       )}
 
-      {/* Match Results & Scoreboard Modal Overlay */}
+      {/* Resignation Confirmation Modal */}
+      {showResignConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center shadow-2xl space-y-4">
+            <h4 className="text-xl font-black text-white">Are you sure you want to resign?</h4>
+            <p className="text-xs text-slate-400">Resigning will immediately declare your opponent the winner.</p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowResignConfirmModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResign}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30"
+              >
+                Resign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Professional Match Results Overlay */}
       {matchEnded && scoreboard.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-6 border border-white/10 relative overflow-hidden shadow-neon-purple animate-float-slow">
-            <div className="absolute -top-10 -left-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl"></div>
-            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-cyberpink/10 rounded-full blur-2xl"></div>
-
-            <div className="text-center mb-5 relative">
-              <span className="text-[10px] font-black uppercase text-cyberblue tracking-widest">
-                {gameState.drawReason ? `RESULT: ${gameState.drawReason.toUpperCase()}` : t('chessEnded', 'MATCH TERMINAL COMPLETED')}
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 relative overflow-hidden shadow-2xl space-y-5">
+            <div className="text-center relative">
+              <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 text-[10px] font-black uppercase tracking-widest inline-block mb-1">
+                {resultLabels.main}
               </span>
-              <h3 className="text-3xl font-extrabold text-white mt-1">{t('chessStandings', 'Match Standings')}</h3>
-              <p className="text-xs text-gray-400 mt-1">{t('chessPlacementsLocked', 'Placements locked. Transmitting rewards.')}</p>
+              <h3 className="text-2xl font-extrabold text-white">{resultLabels.sub}</h3>
             </div>
 
-            <div className="space-y-3 mb-6 relative overflow-y-auto max-h-[45vh] pr-1">
-              <div className="divide-y divide-white/5 bg-white/5 border border-white/5 rounded-2xl p-4 space-y-3">
-                {scoreboard.map((row) => {
-                  const isSelf = row.username === user.username;
-                  const isFriendAdded = friendStatus[row.username] === 'sent';
-                  const isFriendSending = friendStatus[row.username] === 'sending';
+            {/* Automatic Move Quality & Accuracy Summary Card */}
+            {reviewResultData && (
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+                <div className="text-xs font-bold text-slate-300 flex items-center justify-between border-b border-slate-800/80 pb-2">
+                  <span className="flex items-center gap-1.5"><Zap className="w-4 h-4 text-amber-400" /> Automatic Move Telemetry</span>
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold">Engine Analysis</span>
+                </div>
 
-                  return (
-                    <div key={row.userId} className="flex flex-col py-2.5 first:pt-0 last:pb-0 gap-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`font-black w-4 ${
-                              row.placement === 1 ? 'text-cybergold' : 'text-gray-500'
-                            }`}
-                          >
-                            #{row.placement}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs uppercase font-bold border border-white/10 bg-primary/20 text-white">
-                              {row.username[0]}
-                            </div>
-                            <div>
-                              <span className="font-extrabold text-gray-200">{row.username}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-3 items-center shrink-0">
-                          <span className="text-[10px] font-bold text-gray-400">+{row.xpEarned} XP</span>
-                          <span className="text-xs font-black text-cybergold">+{row.coinsEarned} 🪙</span>
-                        </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {/* White Telemetry */}
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5">
+                    <div className="font-bold text-slate-200 flex items-center justify-between">
+                      <span className="truncate">{gameState.whiteUsername} (W)</span>
+                      <span className="text-emerald-400 font-extrabold">{reviewResultData.summary.whiteAccuracy}%</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-[10px] text-center pt-1">
+                      <div className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.white.Brilliant || 0}</div>
+                        <div className="text-[8px] uppercase">Brilliant</div>
                       </div>
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.white['Best Move'] || 0}</div>
+                        <div className="text-[8px] uppercase">Best</div>
+                      </div>
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.white.Blunder || 0}</div>
+                        <div className="text-[8px] uppercase">Blunder</div>
+                      </div>
+                    </div>
+                  </div>
 
-                      {/* Social Actions */}
-                      <div className="flex flex-wrap gap-2 items-center pl-7 mt-1">
-                        <button
-                          onClick={() => handleLike(row.username)}
-                          className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberpink text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all active:scale-90"
-                        >
-                          <Heart size={12} className="fill-cyberpink text-cyberpink" />
-                          <span>{t('like', 'Like')} ({likesMap[row.username] || 0})</span>
-                        </button>
+                  {/* Black Telemetry */}
+                  <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5">
+                    <div className="font-bold text-slate-200 flex items-center justify-between">
+                      <span className="truncate">{gameState.blackUsername} (B)</span>
+                      <span className="text-indigo-400 font-extrabold">{reviewResultData.summary.blackAccuracy}%</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-[10px] text-center pt-1">
+                      <div className="bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.black.Brilliant || 0}</div>
+                        <div className="text-[8px] uppercase">Brilliant</div>
+                      </div>
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.black['Best Move'] || 0}</div>
+                        <div className="text-[8px] uppercase">Best</div>
+                      </div>
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded p-1">
+                        <div className="font-bold">{reviewResultData.summary.classificationsCount.black.Blunder || 0}</div>
+                        <div className="text-[8px] uppercase">Blunder</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-                        {!isSelf && (
-                          <button
-                            onClick={() => handleAddFriendClick(row.username)}
-                            disabled={isFriendAdded || isFriendSending}
-                            className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cyberblue text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all disabled:opacity-50"
-                          >
-                            <UserPlus size={12} className="text-cyberblue" />
-                            <span>
-                              {isFriendAdded
-                                ? t('friendRequestSent', 'Request Sent')
-                                : isFriendSending
-                                ? 'Sending...'
-                                : t('addFriendBtn', 'Add Friend')}
+            {/* Standings List */}
+            <div className="space-y-3 relative overflow-y-auto max-h-[30vh]">
+              <div className="divide-y divide-slate-800 bg-slate-950/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+                {scoreboard.map((row) => (
+                  <div key={row.userId} className="flex justify-between items-center text-sm py-2">
+                    <div className="flex items-center gap-3">
+                      <span className={`font-black w-4 ${row.placement === 1 ? 'text-amber-400' : 'text-slate-500'}`}>
+                        #{row.placement}
+                      </span>
+                      <div>
+                        <span className="font-extrabold text-slate-200">{row.username}</span>
+                        {row.ratingAfter && (
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                            <span>Rating: {row.ratingAfter}</span>
+                            <span className={row.ratingChange >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                              ({row.ratingChange >= 0 ? `+${row.ratingChange}` : row.ratingChange})
                             </span>
-                          </button>
-                        )}
-
-                        {!user.isGuest && !isSelf && (
-                          <button
-                            onClick={() => setReviewModalUser(row.username)}
-                            className="px-2.5 py-1 rounded bg-white/5 border border-white/10 hover:border-cybergold text-[10px] font-bold text-gray-300 flex items-center gap-1.5 transition-all"
-                          >
-                            <MessageSquare size={12} className="text-cybergold" />
-                            <span>{t('reviewPlayer', 'Review Player')}</span>
-                          </button>
+                          </div>
                         )}
                       </div>
                     </div>
-                  );
-                })}
+                    <div className="flex gap-2 items-center">
+                      <span className="text-[10px] font-bold text-slate-400">+{row.xpEarned} XP</span>
+                      <span className="text-xs font-black text-amber-400">+{row.coinsEarned} 🪙</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {isHost ? (
-              <button
-                onClick={() => onReturnToLobby && onReturnToLobby()}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold shadow-neon-blue hover:opacity-90 active:scale-95 transition-all text-center relative text-xs uppercase tracking-wider"
-              >
-                {t('chessReturnLobby', 'Return to Lobby')}
-              </button>
-            ) : (
-              <div className="text-center py-3 text-xs text-gray-500 font-bold animate-pulse">
-                {t('chessWaitingHost', 'Waiting for host to return...')}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Review Modal popup */}
-      {reviewModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="w-full max-w-sm glass-panel rounded-3xl p-6 border border-white/10 relative shadow-neon-blue">
-            <button onClick={() => setReviewModalUser(null)} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-              <X size={16} />
+            {/* AI Review Agent Button */}
+            <button
+              onClick={() => setShowAiReviewModal(true)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 font-bold text-white text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/25 hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-300" /> Analyze Deeply with AI Review
             </button>
-            <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">
-              {t('writeReview', 'Write Review for')} {reviewModalUser}
-            </h4>
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                  {t('selectRating', 'Select Star Rating')}
-                </label>
-                <div className="flex items-center gap-1 mt-1">
-                  {[1, 2, 3, 4, 5].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setReviewRating(val)}
-                      className={`text-xl ${val <= reviewRating ? 'text-cybergold' : 'text-gray-600'}`}
-                    >
-                      ★
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                  {t('commentFeedback', 'Comment/Feedback')}
-                </label>
-                <textarea
-                  value={reviewComment}
-                  onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder={t('reviewPlaceholder', 'Tell others how this user played...')}
-                  className="w-full h-24 mt-1 bg-white/5 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:border-cyberblue focus:outline-none"
-                />
-              </div>
-              <button
-                onClick={() => handleSaveReview(reviewModalUser)}
-                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue font-bold text-xs uppercase tracking-wider shadow-md hover:opacity-90 active:scale-95 transition-all"
-              >
-                {t('saveReview', 'Save Review')}
-              </button>
-            </div>
+
+            <button
+              onClick={() => onReturnToLobby && onReturnToLobby()}
+              className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-white text-xs uppercase tracking-wider shadow-lg transition-all"
+            >
+              Return to Menu / Lobby
+            </button>
           </div>
         </div>
       )}
+
+      {/* AI Review Modal */}
+      <ChessReviewModal
+        isOpen={showAiReviewModal}
+        onClose={() => setShowAiReviewModal(false)}
+        reviewData={reviewResultData}
+        whiteUsername={gameState.whiteUsername}
+        blackUsername={gameState.blackUsername}
+      />
     </div>
   );
 }

@@ -11,8 +11,11 @@ import { useTranslation } from '../../hooks/useTranslation';
 import { 
   Trophy, Coins, LogOut, Settings, ShoppingBag, 
   Plus, Users, Flame, PlusCircle, HelpCircle, Gamepad2, ShieldAlert, Edit3, CheckCircle2,
-  Volume2, Lock
+  Volume2, Lock, Sparkles, Target, Play
 } from 'lucide-react';
+import { PuzzleModal } from '../../components/chess/PuzzleModal';
+import ChessGame from '../../components/ChessGame';
+import LudoGame from '../../components/LudoGame';
 
 const AVATAR_GRAPHICS: { [key: string]: string } = {
   astronaut: '👨‍🚀',
@@ -38,6 +41,8 @@ export default function Dashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showSocialDrawer, setShowSocialDrawer] = useState(false);
+  const [showPuzzleModal, setShowPuzzleModal] = useState(false);
+  const [localGameMode, setLocalGameMode] = useState<'NONE' | 'CHESS_PASS' | 'LUDO_PASS'>('NONE');
 
   // Form states
   const [roomName, setRoomName] = useState('');
@@ -378,7 +383,25 @@ export default function Dashboard() {
             </h3>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2.5">
+            {expandedGame === 'CHESS' && (
+              <button
+                onClick={() => setShowPuzzleModal(true)}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-purple-500/20 border border-amber-500/40 hover:border-amber-400 text-amber-300 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" /> Puzzle Mode
+              </button>
+            )}
+
+            {(expandedGame === 'CHESS' || expandedGame === 'LUDO') && (
+              <button
+                onClick={() => setLocalGameMode(expandedGame === 'CHESS' ? 'CHESS_PASS' : 'LUDO_PASS')}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-emerald-600/20"
+              >
+                <Play className="w-4 h-4 fill-white" /> Pass & Play Mode
+              </button>
+            )}
+
             <button
               onClick={() => { setSelectedGame(expandedGame); setShowCreateModal(true); }}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-cyberblue hover:opacity-90 text-xs font-black uppercase tracking-wider shadow-neon-blue"
@@ -485,6 +508,22 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col flex-grow">
+      {/* Local Pass & Play Mode Overlay Container */}
+      {localGameMode === 'CHESS_PASS' && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          <ChessGame user={user} isPassAndPlay={true} onReturnToLobby={() => setLocalGameMode('NONE')} />
+        </div>
+      )}
+
+      {localGameMode === 'LUDO_PASS' && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          <LudoGame roomCode="PASS_PLAY" user={user} isPassAndPlay={true} onReturnToLobby={() => setLocalGameMode('NONE')} />
+        </div>
+      )}
+
+      {/* Future-ready Puzzle Mode Modal */}
+      <PuzzleModal isOpen={showPuzzleModal} onClose={() => setShowPuzzleModal(false)} />
+
       {/* ═══ COMMAND BAR NAVIGATION ═══ */}
       <nav className="w-full glass-panel py-3.5 px-6 md:px-10 flex flex-col sm:flex-row items-center justify-between border-b border-white/[0.06] gap-4">
         

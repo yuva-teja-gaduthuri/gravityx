@@ -30,6 +30,8 @@ model User {
   verificationToken String?
   resetPasswordToken String?
   resetPasswordExpires DateTime?
+  ratingChess    Int               @default(1200)
+  ratingLudo     Int               @default(1200)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   
@@ -71,26 +73,46 @@ model Message {
 
 model Match {
   id              String        @id @default(uuid())
-  gameType        String        // RAMUDU_SEETHA or LUDO
+  gameType        String        // RAMUDU_SEETHA, LUDO, CHESS
   status          String        @default("COMPLETED") // COMPLETED, ABANDONED
   durationSeconds Int           @default(0)
   winnerId        String?
+  pgn             String?
+  movesJson       String?
+  resultType      String?       // CHECKMATE, STALEMATE, RESIGNATION, TIMEOUT, DRAW_MUTUAL, DRAW_INSUFFICIENT, DRAW_THREEFOLD
+  reason          String?
+  whiteAccuracy   Float?
+  blackAccuracy   Float?
+  reviewDataJson  String?
   createdAt       DateTime      @default(now())
   
   players         MatchPlayer[]
 }
 
 model MatchPlayer {
-  id          String   @id @default(uuid())
-  matchId     String
-  userId      String
-  score       Int      @default(0)
-  coinsEarned Int      @default(0)
-  placement   Int      @default(1)
-  createdAt   DateTime @default(now())
+  id           String   @id @default(uuid())
+  matchId      String
+  userId       String
+  score        Int      @default(0)
+  coinsEarned  Int      @default(0)
+  placement    Int      @default(1)
+  ratingBefore Int?
+  ratingAfter  Int?
+  ratingChange Int?
+  createdAt    DateTime @default(now())
   
-  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match        Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Puzzle {
+  id          String   @id @default(uuid())
+  fen         String
+  moves       String   // e.g. "e2e4 e7e5 g1f3"
+  rating      Int      @default(1500)
+  difficulty  String   @default("MEDIUM") // EASY, MEDIUM, HARD
+  themes      String   // JSON string: ["Mate in 1", "Fork", "Pin"]
+  createdAt   DateTime @default(now())
 }
 
 model Achievement {

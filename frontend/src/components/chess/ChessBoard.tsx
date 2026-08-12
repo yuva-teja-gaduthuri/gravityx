@@ -11,6 +11,7 @@ interface ChessBoardProps {
   isMyTurn: boolean;
   onSquareClick: (square: string) => void;
   boardTheme?: string;
+  abandonedSquare?: string | null;
 }
 
 interface VisualPiece {
@@ -46,6 +47,7 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
   isMyTurn,
   onSquareClick,
   boardTheme,
+  abandonedSquare,
 }) => {
   const board = chessInstance.board();
   const isCheck = chessInstance.inCheck();
@@ -343,8 +345,13 @@ export const ChessBoard: React.FC<ChessBoardProps> = ({
                   e.stopPropagation();
                   onSquareClick(piece.square);
                 }}
-                className="w-[85%] h-[85%] transition-transform duration-150 active:scale-95 hover:scale-105 pointer-events-auto cursor-pointer"
+                className="w-[85%] h-[85%] transition-transform duration-150 active:scale-95 hover:scale-105 pointer-events-auto cursor-pointer relative"
               >
+                {abandonedSquare && piece.square === abandonedSquare && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-40 px-1.5 py-0.5 bg-gradient-to-r from-red-600 to-rose-700 border border-red-400 text-white font-black text-[8px] sm:text-[10px] uppercase tracking-wider rounded-md shadow-2xl animate-bounce pointer-events-none whitespace-nowrap">
+                    ABANDONED
+                  </div>
+                )}
                 <ChessSVG 
                   type={piece.type} 
                   color={piece.color} 

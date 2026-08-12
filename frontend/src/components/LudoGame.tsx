@@ -37,10 +37,11 @@ interface LudoState {
 }
 
 interface LudoGameProps {
-  roomCode: string;
+  roomCode?: string;
   user: { id: string; username: string; isGuest?: boolean; boardTheme?: string; diceSkin?: string; profileFrame?: string };
-  socket: Socket;
-  isHost: boolean;
+  socket?: Socket;
+  isHost?: boolean;
+  isPassAndPlay?: boolean;
   matchEndedData?: any;
   onReturnToLobby?: () => void;
 }
@@ -996,7 +997,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
 
     setIsRolling(true);
     audioRef.current?.playRoll();
-    socket.emit('ludo_roll_dice', roomCode);
+    if (socket) socket.emit('ludo_roll_dice', roomCode);
   };
 
   const handleMoveToken = (tokenId: number) => {
@@ -1006,7 +1007,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
     if (!validTokensRef.current.includes(tokenId)) return;
 
     audioRef.current?.playSelect();
-    socket.emit('ludo_move_token', { roomCode, tokenId });
+    if (socket) socket.emit('ludo_move_token', { roomCode, tokenId });
   };
 
   const handleBaseYardClick = (color: 'red' | 'green' | 'yellow' | 'blue') => {
@@ -1026,6 +1027,7 @@ export default function LudoGame({ roomCode, user, socket, isHost, matchEndedDat
   }, [gameState]);
 
   useEffect(() => {
+    if (!socket) return;
     socket.on('ludo_game_started', (data: any) => {
       setGameState(data.gameState);
       setMatchEnded(false);

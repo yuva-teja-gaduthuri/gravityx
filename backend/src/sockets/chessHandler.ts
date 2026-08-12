@@ -2,6 +2,8 @@ import { Server, Socket } from 'socket.io';
 import { Chess } from 'chess.js';
 import { roomStore } from '../models/roomStore';
 import prisma from '../utils/prisma';
+import { calculateElo } from '../utils/ratingCalculator';
+import { ChessReviewAgent } from '../utils/chessReviewAgent';
 
 export interface CapturedPiece {
   piece: string; // 'p' | 'r' | 'n' | 'b' | 'q'
@@ -113,6 +115,83 @@ export function handleChess(io: Server, socket: Socket) {
       room.gameState = null;
 
       io.to(upperCode).emit('room_state_updated', room);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  // Handle Chess Resignation
+  socket.on('chess_resign', (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room || room.status !== 'PLAYING' || !room.gameState) {
+        return socket.emit('error', 'Active game not found');
+      }
+
+      const gameState = room.gameState as ChessState;
+      if (gameState.isGameOver) return;
+
+      const myId = socket.data.user?.id || room.players.find((p) => p.socketId === socket.id)?.id;
+      if (!myId) return socket.emit('error', 'Player identity not found');
+
+      if (myId !== gameState.whitePlayerId && myId !== gameState.blackPlayerId) return;
+
+      const winnerId = myId === gameState.whitePlayerId ? gameState.blackPlayerId : gameState.whitePlayerId;
+      const resigningUsername = myId === gameState.whitePlayerId ? gameState.whiteUsername : gameState.blackUsername;
+
+      gameState.isGameOver = true;
+      gameState.winnerId = winnerId;
+      (gameState as any).resultType = 'RESIGNATION';
+      gameState.drawReason = `${resigningUsername} Resigned`;
+
+      if (activeChessTimers[upperCode]) {
+        clearInterval(activeChessTimers[upperCode]);
+        delete activeChessTimers[upperCode];
+      }
+
+      io.to(upperCode).emit('chess_state_sync', gameState);
+      triggerChessMatchEnd(io, upperCode, room, gameState);
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  // Handle Offer Draw
+  socket.on('chess_offer_draw', (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room || room.status !== 'PLAYING') return;
+      const myId = socket.data.user?.id || room.players.find((p) => p.socketId === socket.id)?.id;
+      socket.to(upperCode).emit('chess_draw_offered', { offeredBy: myId });
+    } catch (err: any) {
+      socket.emit('error', err.message);
+    }
+  });
+
+  // Handle Accept Draw
+  socket.on('chess_accept_draw', (roomCode: string) => {
+    try {
+      const upperCode = roomCode.trim().toUpperCase();
+      const room = roomStore.getRoom(upperCode);
+      if (!room || room.status !== 'PLAYING' || !room.gameState) return;
+
+      const gameState = room.gameState as ChessState;
+      if (gameState.isGameOver) return;
+
+      gameState.isGameOver = true;
+      gameState.winnerId = null;
+      (gameState as any).resultType = 'DRAW_MUTUAL';
+      gameState.drawReason = 'Mutual Agreement';
+
+      if (activeChessTimers[upperCode]) {
+        clearInterval(activeChessTimers[upperCode]);
+        delete activeChessTimers[upperCode];
+      }
+
+      io.to(upperCode).emit('chess_state_sync', gameState);
+      triggerChessMatchEnd(io, upperCode, room, gameState);
     } catch (err: any) {
       socket.emit('error', err.message);
     }
@@ -440,21 +519,76 @@ async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gam
       delete activeChessTimers[roomCode];
     }
 
-    const scoreboardData: any[] = [];
+    // Determine result type
+    let resultType = (gameState as any).resultType;
+    if (!resultType) {
+      if (gameState.isCheckmate) {
+        resultType = 'CHECKMATE';
+      } else if (gameState.isStalemate) {
+        resultType = 'STALEMATE';
+      } else if (gameState.drawReason && gameState.drawReason.toLowerCase().includes('time out')) {
+        resultType = 'TIMEOUT';
+      } else if (gameState.drawReason === 'Insufficient Material') {
+        resultType = 'DRAW_INSUFFICIENT';
+      } else if (gameState.drawReason === 'Threefold Repetition') {
+        resultType = 'DRAW_THREEFOLD';
+      } else if (gameState.drawReason) {
+        resultType = 'DRAW_MUTUAL';
+      } else {
+        resultType = 'CHECKMATE';
+      }
+    }
+
+    // Trigger AI Game Review Agent
+    const reviewResult = ChessReviewAgent.reviewGame(gameState.moveHistory || []);
+
+    // Get White and Black Player User records
+    const whitePlayer = room.players.find((p: any) => p.id === gameState.whitePlayerId);
+    const blackPlayer = room.players.find((p: any) => p.id === gameState.blackPlayerId);
+
+    let whiteUser = whitePlayer && !whitePlayer.isBot ? await prisma.user.findUnique({ where: { id: whitePlayer.id } }) : null;
+    let blackUser = blackPlayer && !blackPlayer.isBot ? await prisma.user.findUnique({ where: { id: blackPlayer.id } }) : null;
+
+    const whiteRating = whiteUser?.ratingChess ?? 1200;
+    const blackRating = blackUser?.ratingChess ?? 1200;
+
+    let scoreWhite = 0.5;
+    if (gameState.winnerId === gameState.whitePlayerId) {
+      scoreWhite = 1;
+    } else if (gameState.winnerId === gameState.blackPlayerId) {
+      scoreWhite = 0;
+    }
+
+    const ratingCalc = calculateElo(whiteRating, blackRating, scoreWhite);
 
     const dbMatch = await prisma.match.create({
       data: {
         gameType: 'CHESS',
         status: 'COMPLETED',
+        winnerId: gameState.winnerId,
+        pgn: gameState.moveHistory.join(' '),
+        movesJson: JSON.stringify(gameState.moveHistory),
+        resultType,
+        reason: gameState.drawReason || (gameState.isCheckmate ? 'Checkmate' : 'Match Ended'),
+        whiteAccuracy: reviewResult.summary.whiteAccuracy,
+        blackAccuracy: reviewResult.summary.blackAccuracy,
+        reviewDataJson: JSON.stringify(reviewResult),
       },
     });
 
+    const scoreboardData: any[] = [];
+
     for (const p of room.players) {
+      const isWhite = p.id === gameState.whitePlayerId;
       const isWinner = gameState.winnerId === p.id;
       const isDraw = gameState.isGameOver && !gameState.winnerId;
       const xpEarned = isWinner ? 50 : isDraw ? 25 : 15;
       const coinsEarned = isWinner ? 100 : isDraw ? 40 : 20;
       const placement = isWinner ? 1 : isDraw ? 1 : 2;
+
+      const ratingBefore = isWhite ? whiteRating : blackRating;
+      const ratingChange = isWhite ? ratingCalc.changeA : ratingCalc.changeB;
+      const ratingAfter = isWhite ? ratingCalc.newRatingA : ratingCalc.newRatingB;
 
       scoreboardData.push({
         userId: p.id,
@@ -462,6 +596,10 @@ async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gam
         placement,
         xpEarned,
         coinsEarned,
+        ratingBefore,
+        ratingAfter,
+        ratingChange,
+        accuracy: isWhite ? reviewResult.summary.whiteAccuracy : reviewResult.summary.blackAccuracy,
       });
 
       if (!p.isBot) {
@@ -471,6 +609,7 @@ async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gam
             xp: { increment: xpEarned },
             coins: { increment: coinsEarned },
             level: { increment: Math.floor(xpEarned / 100) },
+            ratingChess: ratingAfter,
           },
         });
 
@@ -481,6 +620,9 @@ async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gam
             score: xpEarned * 2,
             coinsEarned,
             placement,
+            ratingBefore,
+            ratingAfter,
+            ratingChange,
           },
         });
       }
@@ -491,6 +633,8 @@ async function triggerChessMatchEnd(io: Server, roomCode: string, room: any, gam
       scoreboard: scoreboardData,
       drawReason: gameState.drawReason,
       winnerId: gameState.winnerId,
+      resultType,
+      reviewResult,
     });
   } catch (err) {
     console.error('Failed to end chess game:', err);
